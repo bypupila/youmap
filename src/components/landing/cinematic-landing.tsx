@@ -121,9 +121,6 @@ export function CinematicLanding() {
           actions={
             <>
               <div className="hidden items-center gap-2 md:flex">
-                <button type="button" className="yt-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "es"} onClick={() => setLocale("es")}>
-                  ES
-                </button>
                 <button
                   type="button"
                   className="yt-nav-pill relative z-[322] pointer-events-auto border-2 border-[#ff0000] !text-[#ff0000]"
@@ -131,6 +128,9 @@ export function CinematicLanding() {
                   onClick={() => setLocale("en")}
                 >
                   EN
+                </button>
+                <button type="button" className="yt-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "es"} onClick={() => setLocale("es")}>
+                  ES
                 </button>
               </div>
               <Link href="/auth" className="yt-btn-primary relative z-[322] pointer-events-auto">

@@ -84,6 +84,30 @@ Minimo para pipeline real:
 - `DATABASE_URL`
 - `AUTH_SESSION_SECRET`
 
+Opcionales de facturacion Polar:
+
+- `POLAR_ACCESS_TOKEN`
+- `POLAR_WEBHOOK_SECRET`
+- `POLAR_TRIAL_DISCOUNT_ID`
+
+Verificacion rapida local:
+
+```bash
+npm run validate:env
+```
+
+## Vercel (produccion)
+
+En Vercel, `Project Settings > Environment Variables`, configura las mismas claves requeridas de `.env.example` para `Production` y `Preview`, especialmente:
+
+- `DATABASE_URL`
+- `AUTH_SESSION_SECRET` (o `SESSION_SECRET`)
+- `YOUTUBE_API_KEY`
+- `GEMINI_API_KEY`
+- `NOMINATIM_USER_AGENT`
+- `NOMINATIM_EMAIL`
+- `NEXT_PUBLIC_APP_URL`
+
 ## Estructura
 
 - `src/app`: rutas y API routes.

@@ -49,3 +49,22 @@ No external CLI or linked project is required for local bootstrap anymore.
 4. Public map renders videos.
 5. Sponsor click tracking works.
 6. Polar checkout and webhook persist a subscription.
+
+## Vercel checklist
+
+For stable deploys, configure this in Vercel Project Settings:
+
+1. Production branch: `main`.
+2. Git integration enabled with your GitHub repo.
+3. Environment variables for `Production` and `Preview`:
+   - `NEXT_PUBLIC_APP_URL`
+   - `DATABASE_URL`
+   - `AUTH_SESSION_SECRET` (or `SESSION_SECRET`)
+   - `YOUTUBE_API_KEY`
+   - `GEMINI_API_KEY`
+   - `NOMINATIM_USER_AGENT`
+   - `NOMINATIM_EMAIL`
+4. Optional billing envs if checkout is enabled:
+   - `POLAR_ACCESS_TOKEN`
+   - `POLAR_WEBHOOK_SECRET`
+   - `POLAR_TRIAL_DISCOUNT_ID`

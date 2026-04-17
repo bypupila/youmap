@@ -112,19 +112,29 @@ function createMiniFlagPin(point: MiniMapPoint) {
   const marker = document.createElement("div");
   marker.style.transform = "translate(-50%, -50%)";
   marker.style.pointerEvents = "none";
-  marker.style.display = "grid";
-  marker.style.placeItems = "center";
-  marker.style.width = "18px";
-  marker.style.height = "18px";
+  marker.style.position = "relative";
+  marker.style.display = "inline-block";
+  marker.style.width = "20px";
+  marker.style.height = "20px";
   marker.style.borderRadius = "999px";
   marker.style.background = "rgba(4,7,14,0.75)";
   marker.style.border = "1px solid rgba(255,255,255,0.22)";
   marker.style.boxShadow = "0 6px 12px rgba(2,6,23,0.45)";
-  marker.style.fontSize = "10px";
-  marker.style.lineHeight = "1";
-  marker.style.textAlign = "center";
-  marker.style.fontFamily = "\"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif";
-  marker.textContent = countryCodeToFlag(point.countryCode);
+
+  const flag = document.createElement("span");
+  flag.textContent = countryCodeToFlag(point.countryCode);
+  flag.style.position = "absolute";
+  flag.style.left = "50%";
+  flag.style.top = "50%";
+  flag.style.transform = "translate(-50%, -52%)";
+  flag.style.display = "block";
+  flag.style.width = "100%";
+  flag.style.textAlign = "center";
+  flag.style.fontSize = "10px";
+  flag.style.lineHeight = "1";
+  flag.style.fontFamily = "\"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif";
+  marker.appendChild(flag);
+
   return marker;
 }
 
