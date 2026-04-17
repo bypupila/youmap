@@ -21,8 +21,6 @@ interface YoutubeImportStepProps {
 const copyByLocale: Record<
   Locale,
   {
-    displayNameLabel: string;
-    displayNamePlaceholder: string;
     usernameLabel: string;
     usernamePlaceholder: string;
     emailLabel: string;
@@ -32,8 +30,6 @@ const copyByLocale: Record<
   }
 > = {
   es: {
-    displayNameLabel: "Nombre",
-    displayNamePlaceholder: "Tu nombre o marca",
     usernameLabel: "Usuario",
     usernamePlaceholder: "tu_usuario_publico",
     emailLabel: "Email",
@@ -42,8 +38,6 @@ const copyByLocale: Record<
     channelUrlPlaceholder: "https://www.youtube.com/@tu_canal",
   },
   en: {
-    displayNameLabel: "Name",
-    displayNamePlaceholder: "Your name or brand",
     usernameLabel: "Username",
     usernamePlaceholder: "your_public_username",
     emailLabel: "Email",
@@ -65,15 +59,6 @@ export function YoutubeImportStep({ demo = false, locale, value, onChange }: You
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block sm:col-span-1">
-          <span className="sr-only">{copy.displayNameLabel}</span>
-          <input
-            value={draft.displayName}
-            onChange={(event) => onChange({ ...draft, displayName: event.target.value })}
-            placeholder={copy.displayNamePlaceholder}
-            className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#ff0000]"
-          />
-        </label>
         <label className="block sm:col-span-1">
           <span className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-[#8f8f8f]">{copy.usernameLabel}</span>
           <input

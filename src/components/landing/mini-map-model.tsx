@@ -112,16 +112,18 @@ function createMiniFlagPin(point: MiniMapPoint) {
   const marker = document.createElement("div");
   marker.style.transform = "translate(-50%, -50%)";
   marker.style.pointerEvents = "none";
-  marker.style.display = "inline-flex";
-  marker.style.alignItems = "center";
-  marker.style.justifyContent = "center";
+  marker.style.display = "grid";
+  marker.style.placeItems = "center";
   marker.style.width = "18px";
   marker.style.height = "18px";
   marker.style.borderRadius = "999px";
   marker.style.background = "rgba(4,7,14,0.75)";
   marker.style.border = "1px solid rgba(255,255,255,0.22)";
   marker.style.boxShadow = "0 6px 12px rgba(2,6,23,0.45)";
-  marker.style.fontSize = "11px";
+  marker.style.fontSize = "10px";
+  marker.style.lineHeight = "1";
+  marker.style.textAlign = "center";
+  marker.style.fontFamily = "\"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif";
   marker.textContent = countryCodeToFlag(point.countryCode);
   return marker;
 }

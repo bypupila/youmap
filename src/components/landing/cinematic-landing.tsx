@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
-import { FloatingTopBar, MetricPill, SignalPill } from "@/components/design-system/chrome";
+import { FloatingTopBar, SignalPill } from "@/components/design-system/chrome";
 import { MapExperience } from "@/components/map/map-experience";
 import { MiniMapModel } from "@/components/landing/mini-map-model";
 import { DEMO_CHANNEL, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
@@ -64,9 +64,8 @@ export function CinematicLanding() {
     () =>
       locale === "es"
         ? {
-            topTitle: "tu mapa de YouTube.",
+            topTitle: "Tu Mapa de Contenido",
             searchPlaceholder: "Busca videos, países o creadores",
-            metricCreators: "Creadores",
             signalPills: ["Mapa interactivo", "Analítica por país", "Sponsor hub"],
             headline: "Tu canal convertido en una pagina web interactiva.",
             body: "Importa tu canal, detecta países y lee el rendimiento por destino con una capa visual limpia.",
@@ -77,9 +76,8 @@ export function CinematicLanding() {
             countriesLabel: "países",
           }
         : {
-            topTitle: "your YouTube map.",
+            topTitle: "Tu Mapa de Contenido",
             searchPlaceholder: "Search across videos, countries, or creators",
-            metricCreators: "Travel creators",
             signalPills: ["Interactive map", "Country analytics", "Sponsor hub"],
             headline: "Your channel turned into an interactive web page.",
             body: "Import your channel, detect countries, and read destination performance in one visual layer.",
@@ -126,11 +124,15 @@ export function CinematicLanding() {
                 <button type="button" className="yt-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "es"} onClick={() => setLocale("es")}>
                   ES
                 </button>
-                <button type="button" className="yt-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "en"} onClick={() => setLocale("en")}>
+                <button
+                  type="button"
+                  className="yt-nav-pill relative z-[322] pointer-events-auto border-2 border-[#ff0000] !text-[#ff0000]"
+                  data-active={locale === "en"}
+                  onClick={() => setLocale("en")}
+                >
                   EN
                 </button>
               </div>
-              <MetricPill text={copy.metricCreators} />
               <Link href="/auth" className="yt-btn-primary relative z-[322] pointer-events-auto">
                 Login
               </Link>

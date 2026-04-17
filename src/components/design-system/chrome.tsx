@@ -21,8 +21,10 @@ export function FloatingTopBar({
     <div className={cn("mx-auto yt-navbar pointer-events-auto", className)}>
       <div className="yt-logo-lockup">
         <div className="yt-logo-badge" aria-hidden="true">
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
-            <path d="M8 6.5v11l9-5.5-9-5.5Z" />
+          <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#ff0000]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M3.5 12h17" />
+            <path d="M12 3.5c2.6 2.2 3.9 5 3.9 8.5s-1.3 6.3-3.9 8.5c-2.6-2.2-3.9-5-3.9-8.5s1.3-6.3 3.9-8.5Z" />
           </svg>
         </div>
         <div className="min-w-0">

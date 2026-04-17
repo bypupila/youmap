@@ -102,22 +102,22 @@ const localizedPlanDetails: Record<OnboardingLocale, Record<PlanDefinition["slug
       description: "Plan core para creadores individuales.",
       features: ["Videos ilimitados", "1 sponsor", "Analytics básicos", "Mapa limpio"],
       badge: "Recomendado",
-      trialCopy: "7 días incluidos",
+      trialCopy: "7 dias gratis",
     },
     creator_pro: {
       name: "Creator Pro",
       price: "$79/mes",
-      description: "Multi-canal, sponsor hub y analytics más vendible.",
-      features: ["Multi-canal", "Competitor analytics", "Sponsor hub", "Sync prioritaria"],
+      description: "Sponsor hub y analytics más vendible.",
+      features: ["Videos ilimitados", "Competitor analytics", "Sponsor hub", "Sync prioritaria"],
       badge: "Más vendido",
-      trialCopy: "7 días incluidos",
+      trialCopy: "7 dias gratis",
     },
     agency: {
       name: "Agency",
       price: "$199/mes",
       description: "Para agencias y marcas con portafolios.",
       features: ["Portafolio de canales", "API", "Portal de marcas", "Soporte dedicado"],
-      trialCopy: "7 días incluidos",
+      trialCopy: "7 dias gratis",
     },
   },
   en: {
@@ -139,8 +139,8 @@ const localizedPlanDetails: Record<OnboardingLocale, Record<PlanDefinition["slug
     creator_pro: {
       name: "Creator Pro",
       price: "$79/mo",
-      description: "Multi-channel, sponsor hub, and stronger analytics.",
-      features: ["Multi-channel", "Competitor analytics", "Sponsor hub", "Priority sync"],
+      description: "Sponsor hub and stronger analytics.",
+      features: ["Unlimited videos", "Competitor analytics", "Sponsor hub", "Priority sync"],
       badge: "Best seller",
       trialCopy: "7 days included",
     },
@@ -179,7 +179,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
       1: {
         eyebrow: "Tu canal",
         title: "Conecta el canal que vas a publicar.",
-        description: "Nombre, usuario, email y URL real bastan para continuar.",
+        description: "en 5 minutos, tienes tu mapa interactivo.",
       },
       2: {
         eyebrow: "Importación",
@@ -193,8 +193,8 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
       },
       4: {
         eyebrow: "Brand deals",
-        title: "Convierte destinos en inventario.",
-        description: "Las marcas se asocian a países y rutas concretas.",
+        title: "Muestras tus sponsors en tu mapa",
+        description: "Genera mas dinero promocionando empresas.",
       },
       5: {
         eyebrow: "Señal de audiencia",
@@ -239,7 +239,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     accountEmailPlaceholder: "Email",
     accountUsernamePlaceholder: "Usuario",
     accountPasswordPlaceholder: "Contraseña",
-    channelStepRequiredError: "Completa nombre, usuario, email y un canal real para continuar.",
+    channelStepRequiredError: "Completa usuario, email y un canal real para continuar.",
     channelNotFoundError: "No pudimos verificar ese canal.",
     choosePlanError: "Primero elige un plan.",
     registerFallbackError: "No se pudo crear la cuenta.",
@@ -250,7 +250,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     preparingCheckout: "Abriendo Polar...",
     startTrial: "Empezar prueba de 7 días",
     payWithPolar: "Continuar con Polar",
-    trialBadge: "7 días incluidos",
+    trialBadge: "7 dias gratis",
     trialNote: "Todos los planes arrancan con una prueba de 7 días.",
     processingPhrases: [
       "Conectando tu canal...",
@@ -348,7 +348,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     accountEmailPlaceholder: "Email",
     accountUsernamePlaceholder: "Username",
     accountPasswordPlaceholder: "Password",
-    channelStepRequiredError: "Complete name, username, email, and a real channel to continue.",
+    channelStepRequiredError: "Complete username, email, and a real channel to continue.",
     channelNotFoundError: "We couldn't verify that channel.",
     choosePlanError: "Choose a plan first.",
     registerFallbackError: "Could not create the account.",
@@ -387,7 +387,7 @@ const visiblePlans = PLAN_DEFINITIONS.filter((plan) => plan.slug !== "free");
 export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; locale: OnboardingLocale }) {
   const router = useRouter();
   const [step, setStep] = useState<OnboardingStep>(0);
-  const [selectedPlan, setSelectedPlan] = useState<string>(isDemoMode ? "creator_pro" : "creator");
+  const [selectedPlan, setSelectedPlan] = useState<string>("creator_pro");
   const [channelDraft, setChannelDraft] = useState<ChannelDraft>(() => ({
     displayName: isDemoMode ? DEMO_USER.displayName : "",
     email: isDemoMode ? DEMO_USER.email : "",
@@ -582,7 +582,17 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
 
       <div className="pointer-events-none absolute inset-x-0 bottom-4 z-40 px-4">
         <div className="mx-auto flex max-w-[1040px] items-center justify-between rounded-full border border-white/10 bg-[#181818]/96 px-4 py-3 pointer-events-auto backdrop-blur">
-          <Button type="button" variant="secondary" onClick={handleBack} disabled={step === 0 || activationState !== "idle"}>
+          <Button
+            type="button"
+            variant="secondary"
+            className="disabled:pointer-events-auto"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleBack();
+            }}
+            disabled={step === 0 || activationState !== "idle"}
+          >
             {copy.footerBack}
           </Button>
           <p className="hidden text-[12px] text-[#aaaaaa] sm:block">
@@ -592,6 +602,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
             type={step === 6 ? "submit" : "button"}
             form={step === 6 ? "plan-activation-form" : undefined}
             onClick={step === 6 ? undefined : handleNext}
+            className="disabled:pointer-events-auto"
             disabled={activationState !== "idle" || (step === 1 && channelValidationState === "checking")}
           >
             {activationState === "registering"

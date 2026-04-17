@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     const planRow = planRows[0] || null;
 
     if (!planRow?.polar_price_id) {
-      return NextResponse.redirect(new URL("/pricing?error=plan_unavailable", url.origin));
+      return NextResponse.redirect(new URL(`/onboarding?lang=${encodeURIComponent(lang || "es")}&error=plan_unavailable`, url.origin));
     }
 
     const checkout = await createPolarCheckoutSession({
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     });
 
     if (!checkout.url) {
-      return NextResponse.redirect(new URL("/pricing?error=checkout_failed", url.origin));
+      return NextResponse.redirect(new URL(`/onboarding?lang=${encodeURIComponent(lang || "es")}&error=checkout_failed`, url.origin));
     }
 
     return NextResponse.redirect(checkout.url);

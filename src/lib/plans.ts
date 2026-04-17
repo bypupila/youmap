@@ -37,8 +37,8 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     badge: "Más Vendido",
     featured: true,
     tone: "pro",
-    description: "Multi-canal, sponsor hub y analytics más vendible.",
-    features: ["Multi-canal", "Competitor analytics", "Sponsor hub", "Sync prioritaria"],
+    description: "Sponsor hub y analytics más vendible.",
+    features: ["Videos ilimitados", "Competitor analytics", "Sponsor hub", "Sync prioritaria"],
   },
   {
     slug: "agency",

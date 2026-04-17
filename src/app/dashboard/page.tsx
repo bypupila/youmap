@@ -8,6 +8,7 @@ import { loadMapDataByChannelId, type MapDataPayload } from "@/lib/map-data";
 import { readPreviewSession } from "@/lib/preview-session";
 import { getSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
+import { resolveCheckoutPlanSlug } from "@/lib/plans";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
 interface DashboardPageProps {
@@ -30,7 +31,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const userId = await getSessionUserIdFromServerCookies();
     if (!userId) redirect("/auth");
     const hasSubscription = await userHasActiveSubscription(userId);
-    if (!hasSubscription) redirect("/pricing");
+    if (!hasSubscription) redirect(await resolveCheckoutRedirectPath(userId));
     fallbackChannelId = await resolveUserChannelId(userId);
   }
 
@@ -140,4 +141,21 @@ async function resolveUserChannelId(userId: string) {
     limit 1
   `;
   return channels[0]?.id || "";
+}
+
+async function resolveCheckoutRedirectPath(userId: string) {
+  const onboardingRows = await sql<Array<{ selected_plan: string | null }>>`
+    select selected_plan
+    from public.onboarding_state
+    where user_id = ${userId}
+    limit 1
+  `;
+
+  const selectedPlan = String(onboardingRows[0]?.selected_plan || "").trim();
+  if (!selectedPlan) {
+    return "/onboarding";
+  }
+
+  const checkoutPlan = resolveCheckoutPlanSlug(selectedPlan) || selectedPlan;
+  return `/api/billing/polar/checkout?plan=${encodeURIComponent(checkoutPlan)}&lang=es`;
 }
