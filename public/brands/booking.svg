@@ -1,0 +1,12 @@
+<svg width="800" height="450" viewBox="0 0 800 450" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="booking-bg" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B4BFF"/>
+      <stop offset="1" stop-color="#0A1F6B"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" rx="36" fill="url(#booking-bg)"/>
+  <circle cx="132" cy="136" r="48" fill="#F1F1F1" fill-opacity="0.18"/>
+  <circle cx="702" cy="330" r="62" fill="#F1F1F1" fill-opacity="0.14"/>
+  <text x="72" y="262" fill="#FFFFFF" font-size="92" font-family="Inter, Arial, sans-serif" font-weight="700">Booking.com</text>
+</svg>

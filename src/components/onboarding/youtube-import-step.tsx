@@ -1,144 +1,109 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
-import { DEMO_CHANNEL, DEMO_USER, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
-import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
+import { DEMO_USER } from "@/lib/demo-data";
 
-export interface YoutubeImportResult {
-  import_run_id: string;
-  channel: TravelChannel;
-  videoLocations: TravelVideoLocation[];
-  importedVideos: number;
-  mappedVideos: number;
-  skippedVideos: number;
-  channelSource?: {
-    youtube_channel_id?: string;
-    channel_handle?: string | null;
-    uploads_playlist_id?: string;
-  };
-  submitted?: {
-    displayName: string;
-    email: string;
-    username: string;
-    channelUrl: string;
-  };
-  preview_session_id?: string;
-  preview_mode?: boolean;
+type Locale = "es" | "en";
+
+export interface ChannelDraft {
+  displayName: string;
+  email: string;
+  username: string;
+  channelUrl: string;
 }
 
 interface YoutubeImportStepProps {
   demo?: boolean;
-  onImported: (result: YoutubeImportResult) => void;
+  locale: Locale;
+  value: ChannelDraft;
+  onChange: (next: ChannelDraft) => void;
 }
 
-export function YoutubeImportStep({ demo = false, onImported }: YoutubeImportStepProps) {
-  const [channelUrl, setChannelUrl] = useState(demo ? "https://www.youtube.com/@pupilanomad" : "");
-  const [displayName, setDisplayName] = useState(demo ? DEMO_USER.displayName : "");
-  const [email, setEmail] = useState(demo ? DEMO_USER.email : "");
-  const [username, setUsername] = useState(demo ? DEMO_USER.username : "");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const response = await fetch(demo ? "/api/youtube/import?demo=1" : "/api/youtube/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channelUrl, displayName, email }),
-    });
-
-    setLoading(false);
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      setError(payload?.error || "No se pudo importar el canal");
-      return;
-    }
-
-    const payload = (await response.json()) as YoutubeImportResult;
-    onImported(
-      demo
-        ? {
-            ...payload,
-            channel: DEMO_CHANNEL,
-            videoLocations: DEMO_VIDEO_LOCATIONS,
-            submitted: {
-              displayName,
-              email,
-              username,
-              channelUrl,
-            },
-          }
-        : {
-            ...payload,
-            submitted: {
-              displayName,
-              email,
-              username,
-              channelUrl,
-            },
-          }
-    );
+const copyByLocale: Record<
+  Locale,
+  {
+    displayNameLabel: string;
+    displayNamePlaceholder: string;
+    usernameLabel: string;
+    usernamePlaceholder: string;
+    emailLabel: string;
+    emailPlaceholder: string;
+    channelUrlLabel: string;
+    channelUrlPlaceholder: string;
   }
+> = {
+  es: {
+    displayNameLabel: "Nombre",
+    displayNamePlaceholder: "Tu nombre o marca",
+    usernameLabel: "Usuario",
+    usernamePlaceholder: "tu_usuario_publico",
+    emailLabel: "Email",
+    emailPlaceholder: "tu@email.com",
+    channelUrlLabel: "Canal de YouTube",
+    channelUrlPlaceholder: "https://www.youtube.com/@tu_canal",
+  },
+  en: {
+    displayNameLabel: "Name",
+    displayNamePlaceholder: "Your name or brand",
+    usernameLabel: "Username",
+    usernamePlaceholder: "your_public_username",
+    emailLabel: "Email",
+    emailPlaceholder: "you@email.com",
+    channelUrlLabel: "YouTube channel",
+    channelUrlPlaceholder: "https://www.youtube.com/@your_channel",
+  },
+};
+
+export function YoutubeImportStep({ demo = false, locale, value, onChange }: YoutubeImportStepProps) {
+  const copy = copyByLocale[locale];
+  const draft: ChannelDraft = {
+    displayName: value.displayName || (demo ? DEMO_USER.displayName : ""),
+    email: value.email || (demo ? DEMO_USER.email : ""),
+    username: value.username || (demo ? DEMO_USER.username : ""),
+    channelUrl: value.channelUrl || (demo ? "https://www.youtube.com/@pupilanomad" : ""),
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-2 block text-[12px] font-medium text-[#aaaaaa]">Display name</span>
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block sm:col-span-1">
+          <span className="sr-only">{copy.displayNameLabel}</span>
           <input
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            placeholder="Tu nombre o marca"
-            className="h-10 w-full rounded-xl border border-white/10 bg-[#121212] px-3.5 text-sm text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#3ea6ff]"
+            value={draft.displayName}
+            onChange={(event) => onChange({ ...draft, displayName: event.target.value })}
+            placeholder={copy.displayNamePlaceholder}
+            className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#ff0000]"
           />
         </label>
-        <label className="block">
-          <span className="mb-2 block text-[12px] font-medium text-[#aaaaaa]">Username</span>
+        <label className="block sm:col-span-1">
+          <span className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-[#8f8f8f]">{copy.usernameLabel}</span>
           <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="tu_usuario_publico"
-            className="h-10 w-full rounded-xl border border-white/10 bg-[#121212] px-3.5 text-sm text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#3ea6ff]"
+            value={draft.username}
+            onChange={(event) => onChange({ ...draft, username: event.target.value })}
+            placeholder={copy.usernamePlaceholder}
+            className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#ff0000]"
           />
         </label>
-        <label className="block">
-          <span className="mb-2 block text-[12px] font-medium text-[#aaaaaa]">Email</span>
+        <label className="block sm:col-span-1">
+          <span className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-[#8f8f8f]">{copy.emailLabel}</span>
           <input
             type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="tu@email.com"
-            className="h-10 w-full rounded-xl border border-white/10 bg-[#121212] px-3.5 text-sm text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#3ea6ff]"
+            value={draft.email}
+            onChange={(event) => onChange({ ...draft, email: event.target.value })}
+            placeholder={copy.emailPlaceholder}
+            className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#ff0000]"
           />
         </label>
       </div>
 
       <label className="block">
-        <span className="mb-2 block text-[12px] font-medium text-[#aaaaaa]">YouTube channel URL</span>
+        <span className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-[#8f8f8f]">{copy.channelUrlLabel}</span>
         <input
-          value={channelUrl}
-          onChange={(event) => setChannelUrl(event.target.value)}
-          placeholder="https://www.youtube.com/@tu_canal"
-          className="h-10 w-full rounded-xl border border-white/10 bg-[#121212] px-3.5 text-sm text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#3ea6ff]"
+          value={draft.channelUrl}
+          onChange={(event) => onChange({ ...draft, channelUrl: event.target.value })}
+          placeholder={copy.channelUrlPlaceholder}
+          className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#ff0000]"
         />
-        <p className="mt-2 text-[12px] text-[#aaaaaa]">
-          Accepts `@handle` or `/channel/ID`.
-        </p>
       </label>
-
-      <button
-        type="submit"
-        disabled={loading || !channelUrl.trim() || !email.trim() || !username.trim() || !displayName.trim()}
-        className="yt-btn-primary"
-      >
-        {loading ? "Importing channel..." : "Import channel"}
-      </button>
-
-      {error ? <p className="text-sm text-[#ff8b8b]">{error}</p> : null}
-    </form>
+    </div>
   );
 }

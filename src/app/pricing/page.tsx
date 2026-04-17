@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { PLAN_DEFINITIONS, resolveCheckoutPlanSlug } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
+const visiblePlans = PLAN_DEFINITIONS.filter((plan) => plan.slug !== "free");
+
 export default function PricingPage() {
   return (
     <main className="min-h-[100dvh] bg-[#0f0f0f] text-[#f1f1f1]">
@@ -28,14 +30,14 @@ export default function PricingPage() {
 
       <div className="mx-auto max-w-[1360px] px-4 py-10">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <h1 className="yt-display">Pricing rebuilt around how YouTube creators actually buy.</h1>
+          <h1 className="yt-display">Pricing built around a 7-day trial on every plan.</h1>
           <p className="mt-3 max-w-2xl text-[14px] leading-6 text-[#aaaaaa]">
-            Free hooks creators into the map. Creator Pro is the featured upsell. Agency supports portfolios and brand workflows.
+            Every visible plan starts with a trial. The selected plan is the one that bills after the trial ends.
           </p>
         </motion.div>
 
         <section className="grid gap-5 lg:grid-cols-4">
-          {PLAN_DEFINITIONS.map((plan, index) => {
+          {visiblePlans.map((plan, index) => {
             const checkoutSlug = resolveCheckoutPlanSlug(plan.slug);
             return (
               <motion.article
@@ -73,13 +75,9 @@ export default function PricingPage() {
                 </ul>
 
                 <div className="mt-7">
-                  {plan.slug === "free" ? (
-                    <Link href="/onboarding" className="yt-btn-secondary w-full">
-                      Start free
-                    </Link>
-                  ) : checkoutSlug ? (
+                  {checkoutSlug ? (
                     <Link href={`/api/billing/polar/checkout?plan=${encodeURIComponent(checkoutSlug)}`} className={cn("w-full", plan.featured ? "yt-btn-primary" : "yt-btn-secondary")}>
-                      Choose {plan.name}
+                      Start trial
                     </Link>
                   ) : (
                     <Link href="/onboarding" className="yt-btn-secondary w-full">
@@ -93,9 +91,9 @@ export default function PricingPage() {
         </section>
 
         <div className="mt-8 rounded-2xl border border-[#3ea6ff]/20 bg-[#141a20] p-5">
-          <p className="yt-overline text-[#3ea6ff]">Temporary test flow</p>
+          <p className="yt-overline text-[#3ea6ff]">Trial note</p>
           <p className="mt-2 max-w-2xl text-[14px] leading-6 text-[#c9dfff]">
-            While validating extraction and auth end-to-end, the onboarding keeps a temporary button to process without payment. The production path remains Polar.
+            The free plan is no longer public. Checkout now starts a 7-day trial and bills the selected tier when the trial ends.
           </p>
         </div>
       </div>

@@ -33,7 +33,7 @@ function buildChannelInput(payload: z.infer<typeof payloadSchema>) {
 
 async function upsertTrialSubscription(args: { userId: string; selectedPlan: string }) {
   const now = new Date();
-  const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const manualSubscriptionId = `manual-test-${args.userId}`;
 
   const planRows = await sql<Array<{ id: string }>>`
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
         'plan',
         array['welcome', 'youtube']::text[],
         ${selectedPlan},
-        ${String(payload.youtubeChannelId || "").trim() || null},
+        ${channelInput},
         false,
         false,
         ${nowIso},

@@ -64,32 +64,47 @@ export function CinematicLanding() {
     () =>
       locale === "es"
         ? {
-            headline: "TravelMap para YouTube. Tu aventura digital por el mundo.",
-            body: "Importa el canal, detecta países, entiende rendimiento por destino y abre una capa visual que se siente nativa para cualquier creador.",
-            ctaPrimary: "Probar gratis",
+            topTitle: "tu mapa de YouTube.",
+            searchPlaceholder: "Busca videos, países o creadores",
+            metricCreators: "Creadores",
+            signalPills: ["Mapa interactivo", "Analítica por país", "Sponsor hub"],
+            headline: "Tu canal convertido en una pagina web interactiva.",
+            body: "Importa tu canal, detecta países y lee el rendimiento por destino con una capa visual limpia.",
+            ctaPrimary: "Empezar",
             cardTitle: activeCreator.name,
             ctaDemo: "Ver Demo",
+            videosLabel: "videos",
+            countriesLabel: "países",
           }
         : {
-            headline: "TravelMap for YouTube. Your digital adventure across the world.",
-            body: "Import your channel, detect countries, understand destination performance, and open a creator layer that feels native to YouTube.",
-            ctaPrimary: "Try free",
+            topTitle: "your YouTube map.",
+            searchPlaceholder: "Search across videos, countries, or creators",
+            metricCreators: "Travel creators",
+            signalPills: ["Interactive map", "Country analytics", "Sponsor hub"],
+            headline: "Your channel turned into an interactive web page.",
+            body: "Import your channel, detect countries, and read destination performance in one visual layer.",
+            ctaPrimary: "Get started",
             cardTitle: activeCreator.name,
             ctaDemo: "View Demo",
+            videosLabel: "videos",
+            countriesLabel: "countries",
           },
     [activeCreator.name, locale]
   );
 
   const mapPath = `/map?channelId=${encodeURIComponent(activeCreator.channelId)}`;
+  const onboardingPath = `/onboarding?lang=${locale}`;
+  const localeTag = locale === "es" ? "es-ES" : "en-US";
   const totalVideos = mapVideos.length;
   const totalCountries = new Set(mapVideos.map((video) => video.country_code).filter(Boolean)).size;
 
   return (
     <main className="relative isolate h-[100dvh] overflow-hidden bg-[#0f0f0f] text-[#f1f1f1]">
-      <div className="pointer-events-none absolute inset-0 z-0">
+      <div className="pointer-events-none absolute inset-0 z-0 [&_*]:pointer-events-none">
         <MapExperience
           channel={mapChannel}
           videoLocations={mapVideos}
+          interactive={false}
           allowRefresh={false}
           showLegend={false}
           showOperationsPanel={false}
@@ -102,7 +117,8 @@ export function CinematicLanding() {
       <header className="absolute inset-x-0 top-0 z-[320] px-4 py-3 pointer-events-auto">
         <FloatingTopBar
           eyebrow="YOUMAP - BY PUPILA"
-          title="tu mapa de Youtube."
+          title={copy.topTitle}
+          searchPlaceholder={copy.searchPlaceholder}
           className="pointer-events-auto relative z-[321]"
           actions={
             <>
@@ -114,9 +130,9 @@ export function CinematicLanding() {
                   EN
                 </button>
               </div>
-              <MetricPill text="Travel creators" />
+              <MetricPill text={copy.metricCreators} />
               <Link href="/auth" className="yt-btn-primary relative z-[322] pointer-events-auto">
-                Sign in
+                Login
               </Link>
             </>
           }
@@ -132,18 +148,18 @@ export function CinematicLanding() {
             className="w-full min-w-0"
           >
             <div className="mb-5 flex flex-wrap gap-2">
-              <SignalPill text="Mapa Interactivo" />
-              <SignalPill text="Country analytics" />
-              <SignalPill text="Sponsor hub" />
+              {copy.signalPills.map((pill) => (
+                <SignalPill key={pill} text={pill} />
+              ))}
             </div>
 
             <h1 className="yt-display text-[clamp(2.5rem,6vw,4.6rem)] leading-[0.95]">
               {copy.headline}
             </h1>
-            <p className="mt-4 max-w-[520px] text-[15px] leading-6 text-[#aaaaaa]">{copy.body}</p>
+            <p className="mt-4 max-w-[460px] text-[15px] leading-6 text-[#aaaaaa]">{copy.body}</p>
 
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/onboarding" className="yt-btn-primary relative z-[322] pointer-events-auto">
+              <Link href={onboardingPath} className="yt-btn-primary relative z-[322] pointer-events-auto">
                 {copy.ctaPrimary}
               </Link>
             </div>
@@ -157,7 +173,7 @@ export function CinematicLanding() {
           >
             <Link href={mapPath} className="pointer-events-auto relative z-[322] block w-full rounded-2xl border border-white/10 bg-[#181818]/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur hover:bg-[#1f1f1f]/95">
               <div className="yt-video-thumb aspect-video bg-[radial-gradient(circle_at_30%_30%,#2c2c2c,#111)]">
-                <MiniMapModel />
+                <MiniMapModel videoLocations={mapVideos} />
               </div>
 
               <div className="mt-4 flex items-start gap-3">
@@ -166,7 +182,7 @@ export function CinematicLanding() {
                 <div className="min-w-0">
                   <p className="text-[15px] leading-5 font-medium text-[#f1f1f1]">{copy.cardTitle}</p>
                   <p className="mt-1 text-[12px] leading-4 text-[#aaaaaa]">
-                    {totalVideos.toLocaleString("en-US")} videos • {totalCountries.toLocaleString("en-US")} countries
+                    {totalVideos.toLocaleString(localeTag)} {copy.videosLabel} • {totalCountries.toLocaleString(localeTag)} {copy.countriesLabel}
                   </p>
                   <p className="mt-1 text-[12px] leading-4 text-[#aaaaaa]">{activeCreator.handle}</p>
                 </div>

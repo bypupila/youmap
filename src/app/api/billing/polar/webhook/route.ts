@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { Webhook, WebhookVerificationError } from "standardwebhooks";
-import { importYoutubeChannel } from "@/lib/youtube-import";
 import { sql } from "@/lib/neon";
 
 export const runtime = "nodejs";
@@ -98,35 +97,7 @@ async function upsertSubscription(payload: PolarSubscriptionWebhookData) {
   `;
 
   if (payload.status === "active" || payload.status === "trialing") {
-    await triggerInitialImportIfNeeded(userId);
-  }
-}
-
-async function triggerInitialImportIfNeeded(userId: string) {
-  const existingChannel = await sql<Array<{ id: string }>>`
-    select id
-    from public.channels
-    where user_id = ${userId}
-    limit 1
-  `;
-  if (existingChannel[0]?.id) return;
-
-  const onboarding = await sql<Array<{ youtube_channel_id: string | null }>>`
-    select youtube_channel_id
-    from public.onboarding_state
-    where user_id = ${userId}
-    limit 1
-  `;
-  const channelReference = String(onboarding[0]?.youtube_channel_id || "").trim();
-  if (!channelReference) return;
-
-  try {
-    await importYoutubeChannel({
-      userId,
-      channelUrl: channelReference,
-    });
-  } catch (error) {
-    console.error("[polar webhook] initial import failed", error);
+    return;
   }
 }
 

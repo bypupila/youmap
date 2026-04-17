@@ -74,6 +74,7 @@ const geminiJsonSchema = {
 interface ImportYoutubeChannelInput {
   userId: string;
   channelUrl: string;
+  importRunId?: string;
 }
 
 export interface ImportYoutubeChannelResult {
@@ -169,6 +170,72 @@ async function upsertExtractionRun(input: {
   const row = inserted[0];
   if (!row?.id) throw new Error("Could not create extraction run");
   return row.id;
+}
+
+async function upsertChannelImportRun(input: {
+  importRunId: string;
+  channelId: string;
+  status: string;
+  source: string;
+  inputPayload: Record<string, unknown>;
+  outputPayload: Record<string, unknown>;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}) {
+  const existingRows = await sql<Array<{ id: string }>>`
+    select id
+    from public.channel_import_runs
+    where id = ${input.importRunId}
+    limit 1
+  `;
+  const existing = existingRows[0] || null;
+
+  if (existing?.id) {
+    await sql`
+      update public.channel_import_runs
+      set
+        channel_id = ${input.channelId},
+        status = ${input.status},
+        source = ${input.source},
+        input = ${JSON.stringify(input.inputPayload || {})}::jsonb,
+        output = ${JSON.stringify(input.outputPayload || {})}::jsonb,
+        error_message = ${input.errorMessage || null},
+        started_at = ${input.startedAt || null},
+        finished_at = ${input.finishedAt || null},
+        updated_at = ${new Date().toISOString()}
+      where id = ${existing.id}
+    `;
+    return existing.id;
+  }
+
+  await sql`
+    insert into public.channel_import_runs (
+      id,
+      channel_id,
+      status,
+      source,
+      input,
+      output,
+      error_message,
+      started_at,
+      finished_at,
+      updated_at
+    )
+    values (
+      ${input.importRunId},
+      ${input.channelId},
+      ${input.status},
+      ${input.source},
+      ${JSON.stringify(input.inputPayload || {})}::jsonb,
+      ${JSON.stringify(input.outputPayload || {})}::jsonb,
+      ${input.errorMessage || null},
+      ${input.startedAt || null},
+      ${input.finishedAt || null},
+      ${new Date().toISOString()}
+    )
+  `;
+  return input.importRunId;
 }
 
 async function extractLocationForVideo(channel: { channel_name: string; description: string | null }, video: {
@@ -346,8 +413,8 @@ export async function importYoutubeChannelPreview(channelUrl: string): Promise<I
 export async function importYoutubeChannel({
   userId,
   channelUrl,
+  importRunId = randomUUID(),
 }: ImportYoutubeChannelInput): Promise<ImportYoutubeChannelResult> {
-  const importRunId = randomUUID();
   const startedAt = new Date().toISOString();
 
   try {
@@ -403,34 +470,54 @@ export async function importYoutubeChannel({
     const uploadChannel = channelRows[0];
     if (!uploadChannel) throw new Error("Could not save channel");
 
-    await sql`
-      insert into public.channel_import_runs (
-        id,
-        channel_id,
-        status,
-        source,
-        input,
-        output,
-        started_at,
-        updated_at
-      )
-      values (
-        ${importRunId},
-        ${uploadChannel.id},
-        'running',
-        'youtube',
-        ${JSON.stringify({ channelUrl })}::jsonb,
-        '{}'::jsonb,
-        ${startedAt},
-        ${startedAt}
-      )
-    `;
+    const initialOutput = {
+      totalVideos: 0,
+      processedVideos: 0,
+      mappedVideos: 0,
+      skippedVideos: 0,
+      stage: "starting",
+      progress: 0,
+    };
+
+    await upsertChannelImportRun({
+      importRunId,
+      channelId: uploadChannel.id,
+      status: "running",
+      source: "youtube",
+      inputPayload: { channelUrl },
+      outputPayload: initialOutput,
+      startedAt,
+    });
 
     const playlistVideos = await loadUploadsPlaylistVideos(source.uploads_playlist_id);
     const videoIds = playlistVideos.map((video) => video.contentDetails?.videoId).filter(Boolean) as string[];
     const videoDetails = videoIds.length ? await loadVideoDetails(videoIds) : new Map();
     const eligiblePlaylistVideos = filterOutShortPlaylistItems(playlistVideos, videoDetails);
     const eligibleVideoCount = eligiblePlaylistVideos.length;
+    let processedVideos = 0;
+    let mappedVideos = 0;
+    let skippedVideos = 0;
+
+    async function updateProgress(stage: string) {
+      await upsertChannelImportRun({
+        importRunId,
+        channelId: uploadChannel.id,
+        status: "running",
+        source: "youtube",
+        inputPayload: { channelUrl },
+        outputPayload: {
+          totalVideos: eligibleVideoCount,
+          processedVideos,
+          mappedVideos,
+          skippedVideos,
+          stage,
+          progress: eligibleVideoCount > 0 ? Number((processedVideos / eligibleVideoCount).toFixed(4)) : 1,
+        },
+        startedAt,
+      });
+    }
+
+    await updateProgress("loading");
 
     await processVideosInBatches(eligiblePlaylistVideos, 3, async (playlistItem) => {
       const videoId = playlistItem.contentDetails?.videoId;
@@ -517,6 +604,9 @@ export async function importYoutubeChannel({
             updated_at = ${now}
           where id = ${videoRecordId}
         `;
+        processedVideos += 1;
+        skippedVideos += 1;
+        await updateProgress("mapping");
 
         await upsertExtractionRun({
           channelId: uploadChannel.id,
@@ -546,6 +636,9 @@ export async function importYoutubeChannel({
             updated_at = ${now}
           where id = ${videoRecordId}
         `;
+        processedVideos += 1;
+        skippedVideos += 1;
+        await updateProgress("geocoding");
 
         await upsertExtractionRun({
           channelId: uploadChannel.id,
@@ -675,6 +768,9 @@ export async function importYoutubeChannel({
           updated_at = ${now}
         where id = ${videoRecordId}
       `;
+      processedVideos += 1;
+      mappedVideos += 1;
+      await updateProgress("done");
 
       await upsertExtractionRun({
         channelId: uploadChannel.id,
@@ -760,17 +856,18 @@ export async function importYoutubeChannel({
       subscriber_count: uploadChannel.subscriber_count,
     };
 
-    const skippedVideos = eligibleVideoCount - normalizedLocations.length;
-
     await sql`
       update public.channel_import_runs
       set
         status = 'completed',
         output = ${JSON.stringify({
-          importedVideos: eligibleVideoCount,
+          totalVideos: eligibleVideoCount,
+          processedVideos: eligibleVideoCount,
           mappedVideos: normalizedLocations.length,
           skippedVideos,
           channel: source,
+          stage: "completed",
+          progress: 1,
         })}::jsonb,
         finished_at = ${new Date().toISOString()},
         updated_at = ${new Date().toISOString()}

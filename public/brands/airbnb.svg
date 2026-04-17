@@ -1,0 +1,11 @@
+<svg width="800" height="450" viewBox="0 0 800 450" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="airbnb-bg" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF5A5F"/>
+      <stop offset="1" stop-color="#B02A3C"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" rx="36" fill="url(#airbnb-bg)"/>
+  <path d="M398 106c28 0 44 19 57 50l67 160h-59l-20-49h-90l-20 49h-59l67-160c13-31 29-50 57-50Zm0 58c-8 0-14 6-20 20l-19 47h78l-19-47c-6-14-12-20-20-20Z" fill="#FFFFFF" fill-opacity="0.88"/>
+  <text x="290" y="366" fill="#FFFFFF" font-size="64" font-family="Inter, Arial, sans-serif" font-weight="700">Airbnb</text>
+</svg>

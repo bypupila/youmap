@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getPolarClient } from "@/lib/polar";
+import { createPolarCheckoutSession } from "@/lib/polar";
 import { getSessionUserById, getSessionUserIdFromRequest } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 
@@ -8,12 +8,16 @@ export const dynamic = "force-dynamic";
 
 const querySchema = z.object({
   plan: z.string().min(2),
+  lang: z.enum(["es", "en"]).optional(),
 });
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const { plan } = querySchema.parse({ plan: url.searchParams.get("plan") || "" });
+    const { plan, lang } = querySchema.parse({
+      plan: url.searchParams.get("plan") || "",
+      lang: url.searchParams.get("lang") === "en" ? "en" : "es",
+    });
     const userId = getSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.redirect(new URL(`/onboarding?plan=${encodeURIComponent(plan)}`, url.origin));
@@ -44,21 +48,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL("/pricing?error=plan_unavailable", url.origin));
     }
 
-    const channelRows = await sql<Array<{ id: string }>>`
-      select id
-      from public.channels
-      where user_id = ${userId}
-      limit 1
-    `;
-    const channelRow = channelRows[0] || null;
-
-    const polar = getPolarClient();
-    const checkout = await polar.checkouts.create({
+    const checkout = await createPolarCheckoutSession({
       productPriceId: planRow.polar_price_id,
-      successUrl: channelRow?.id
-        ? `${url.origin}/dashboard?channelId=${channelRow.id}&checkout=success`
-        : `${url.origin}/dashboard?checkout=success`,
+      successUrl: `${url.origin}/onboarding/processing?checkout=success&plan=${encodeURIComponent(plan)}&lang=${encodeURIComponent(lang || "es")}`,
       customerEmail: users.email || undefined,
+      externalCustomerId: userId,
+      discountId: process.env.POLAR_TRIAL_DISCOUNT_ID || null,
     });
 
     if (!checkout.url) {

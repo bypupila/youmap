@@ -29,6 +29,7 @@ interface TravelGlobeProps {
   initialCountryCode?: string | null;
   focusCountryCode?: string | null;
   selectedCountryCode?: string | null;
+  interactive?: boolean;
   showControls?: boolean;
   minimalOverlay?: boolean;
   showSponsorBanner?: boolean;
@@ -48,6 +49,7 @@ export function TravelGlobe({
   initialCountryCode = null,
   focusCountryCode = null,
   selectedCountryCode = null,
+  interactive = true,
   showControls = true,
   minimalOverlay = false,
   showSponsorBanner = true,
@@ -241,7 +243,11 @@ export function TravelGlobe({
   }
 
   return (
-    <div className={`relative w-full overflow-hidden bg-[#04070E] ${compact ? "h-[620px] rounded-[28px]" : "h-[100dvh]"}`}>
+    <div
+      className={`relative w-full overflow-hidden bg-[#04070E] ${compact ? "h-[620px] rounded-[28px]" : "h-[100dvh]"} ${
+        interactive ? "" : "pointer-events-none [&_*]:pointer-events-none [&_.scene-nav-info]:hidden"
+      }`}
+    >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_20%,rgba(255,107,53,0.22),transparent_28%),radial-gradient(circle_at_78%_16%,rgba(0,212,255,0.18),transparent_30%)]" />
 
       {GlobeComponent ? (
@@ -271,15 +277,23 @@ export function TravelGlobe({
           }}
           polygonSideColor={() => "rgba(15,23,42,0.25)"}
           polygonStrokeColor={() => "rgba(125,211,252,0.35)"}
-          onPolygonHover={(polygon) => {
-            const name = String((polygon as { properties?: { name?: string } } | null)?.properties?.name || "");
-            setHoveredPolygonName(name || null);
-            const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, countryNameIndex) : null;
-            setHoveredPolygonCode(code);
-          }}
-          onPolygonClick={(polygon) => {
-            handleCountryPolygonSelection((polygon as object | null) || null);
-          }}
+          onPolygonHover={
+            interactive
+              ? (polygon) => {
+                  const name = String((polygon as { properties?: { name?: string } } | null)?.properties?.name || "");
+                  setHoveredPolygonName(name || null);
+                  const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, countryNameIndex) : null;
+                  setHoveredPolygonCode(code);
+                }
+              : undefined
+          }
+          onPolygonClick={
+            interactive
+              ? (polygon) => {
+                  handleCountryPolygonSelection((polygon as object | null) || null);
+                }
+              : undefined
+          }
           pointsData={pointsData}
           pointLat={(d) => (d as GlobePoint).lat}
           pointLng={(d) => (d as GlobePoint).lng}
@@ -301,7 +315,7 @@ export function TravelGlobe({
               onHoverEnd: (point) => {
                 setHoveredPoint((previous) => (previous?.point_id === point.point_id ? null : previous));
               },
-            })
+            }, interactive)
           }
           arcsData={arcData}
           arcStartLat={(d) => (d as { startLat: number }).startLat}
@@ -313,21 +327,33 @@ export function TravelGlobe({
           arcDashGap={0.16}
           arcDashAnimateTime={2800}
           arcStroke={0.45}
-          onPointClick={(point) => {
-            handlePointSelection(point as GlobePoint);
-          }}
-          onPointHover={(point) => {
-            const hovered = (point as GlobePoint | undefined) || null;
-            setHoveredPoint(hovered);
-          }}
-          onGlobeClick={() => {
-            setRotationEnabled(false);
-            setHoveredPoint(null);
-            setHoveredPolygonName(null);
-            setHoveredPolygonCode(null);
-            setSelectedPoint(null);
-            onPinnedVideoChange?.(null);
-          }}
+          onPointClick={
+            interactive
+              ? (point) => {
+                  handlePointSelection(point as GlobePoint);
+                }
+              : undefined
+          }
+          onPointHover={
+            interactive
+              ? (point) => {
+                  const hovered = (point as GlobePoint | undefined) || null;
+                  setHoveredPoint(hovered);
+                }
+              : undefined
+          }
+          onGlobeClick={
+            interactive
+              ? () => {
+                  setRotationEnabled(false);
+                  setHoveredPoint(null);
+                  setHoveredPolygonName(null);
+                  setHoveredPolygonCode(null);
+                  setSelectedPoint(null);
+                  onPinnedVideoChange?.(null);
+                }
+              : undefined
+          }
         />
       ) : null}
 
@@ -636,17 +662,18 @@ function createFlagPinElement(
     onClick: (point: GlobePoint) => void;
     onHoverStart: (point: GlobePoint) => void;
     onHoverEnd: (point: GlobePoint) => void;
-  }
+  },
+  interactive = true
 ) {
-  const marker = document.createElement("button");
-  marker.type = "button";
-  marker.style.cursor = "pointer";
+  const marker = document.createElement(interactive ? "button" : "div");
+  if (interactive) marker.setAttribute("type", "button");
+  marker.style.cursor = interactive ? "pointer" : "default";
   marker.style.border = "0";
   marker.style.padding = "0";
   marker.style.background = "transparent";
   marker.style.lineHeight = "1";
   marker.style.transform = "translate(-50%, -50%)";
-  marker.style.pointerEvents = "auto";
+  marker.style.pointerEvents = interactive ? "auto" : "none";
 
   marker.style.width = "20px";
   marker.style.height = "20px";
@@ -660,13 +687,15 @@ function createFlagPinElement(
   marker.style.fontSize = "13px";
   marker.textContent = countryCodeToFlag(point.country_code);
 
-  marker.addEventListener("mouseenter", () => handlers.onHoverStart(point));
-  marker.addEventListener("mouseleave", () => handlers.onHoverEnd(point));
-  marker.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    handlers.onClick(point);
-  });
+  if (interactive) {
+    marker.addEventListener("mouseenter", () => handlers.onHoverStart(point));
+    marker.addEventListener("mouseleave", () => handlers.onHoverEnd(point));
+    marker.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      handlers.onClick(point);
+    });
+  }
 
   return marker;
 }

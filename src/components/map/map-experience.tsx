@@ -16,6 +16,7 @@ import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type FilterWindow = "30" | "90" | "365" | "all";
+const EMPTY_MANUAL_QUEUE: ManualVerificationItem[] = [];
 
 interface MapExperienceProps {
   channel: TravelChannel;
@@ -27,6 +28,7 @@ interface MapExperienceProps {
   showLegend?: boolean;
   showOperationsPanel?: boolean;
   showActiveVideoCard?: boolean;
+  interactive?: boolean;
 }
 
 type SyncSummary = {
@@ -42,16 +44,18 @@ type SyncSummary = {
 export function MapExperience({
   channel,
   videoLocations,
-  manualQueue = [],
+  manualQueue,
   summary = null,
   channelId = null,
   allowRefresh = false,
   showLegend = true,
   showOperationsPanel = true,
   showActiveVideoCard = true,
+  interactive = true,
 }: MapExperienceProps) {
+  const incomingManualQueue = manualQueue ?? EMPTY_MANUAL_QUEUE;
   const [items, setItems] = useState<TravelVideoLocation[]>(videoLocations);
-  const [pendingManual, setPendingManual] = useState<ManualVerificationItem[]>(manualQueue);
+  const [pendingManual, setPendingManual] = useState<ManualVerificationItem[]>(incomingManualQueue);
   const [windowFilter, setWindowFilter] = useState<FilterWindow>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileLegendOpen, setMobileLegendOpen] = useState(false);
@@ -71,10 +75,11 @@ export function MapExperience({
   }, [videoLocations]);
 
   useEffect(() => {
-    setPendingManual(manualQueue);
-  }, [manualQueue]);
+    setPendingManual(incomingManualQueue);
+  }, [incomingManualQueue]);
 
   useEffect(() => {
+    if (!interactive) return;
     const root = rootRef.current;
     if (!root) return;
 
@@ -87,7 +92,7 @@ export function MapExperience({
 
     root.addEventListener("wheel", handleWheel, { passive: false, capture: true });
     return () => root.removeEventListener("wheel", handleWheel, true);
-  }, []);
+  }, [interactive]);
 
   const timeFilteredVideos = useMemo(() => {
     if (windowFilter === "all") return items;
@@ -244,10 +249,11 @@ export function MapExperience({
   }
 
   return (
-    <div ref={rootRef} className="relative h-[100dvh] w-full overflow-hidden bg-[#0f0f0f]">
+    <div ref={rootRef} className={cn("relative h-[100dvh] w-full overflow-hidden bg-[#0f0f0f]", !interactive && "pointer-events-none")}>
       <TravelGlobe
         channelData={channel}
         videoLocations={filteredVideos}
+        interactive={interactive}
         showControls={false}
         showSponsorBanner={false}
         pointMode="video"

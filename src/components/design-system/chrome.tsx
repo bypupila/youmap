@@ -7,9 +7,16 @@ interface FloatingTopBarProps {
   title: string;
   actions?: ReactNode;
   className?: string;
+  searchPlaceholder?: string;
 }
 
-export function FloatingTopBar({ eyebrow, title, actions, className }: FloatingTopBarProps) {
+export function FloatingTopBar({
+  eyebrow,
+  title,
+  actions,
+  className,
+  searchPlaceholder = "Search across videos, countries, or creators",
+}: FloatingTopBarProps) {
   return (
     <div className={cn("mx-auto yt-navbar pointer-events-auto", className)}>
       <div className="yt-logo-lockup">
@@ -27,7 +34,7 @@ export function FloatingTopBar({ eyebrow, title, actions, className }: FloatingT
       <div className="hidden flex-1 justify-center lg:flex">
         <div className="yt-search" aria-hidden="true">
           <div className="flex h-full min-w-0 flex-1 items-center px-4 text-[13px] text-[#aaaaaa]">
-            Search across videos, countries, or creators
+            {searchPlaceholder}
           </div>
           <div className="flex h-full min-w-16 items-center justify-center border-l border-white/10 bg-[#222222] text-[#aaaaaa]">
             <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
@@ -39,9 +46,6 @@ export function FloatingTopBar({ eyebrow, title, actions, className }: FloatingT
 
       <div className="ml-auto flex items-center gap-2">
         {actions}
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#272727] text-[11px] font-medium text-[#f1f1f1]">
-          TM
-        </div>
       </div>
     </div>
   );
