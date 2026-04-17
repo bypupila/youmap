@@ -239,7 +239,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     accountEmailPlaceholder: "Email",
     accountUsernamePlaceholder: "Usuario",
     accountPasswordPlaceholder: "Contraseña",
-    channelStepRequiredError: "Completa usuario, email y un canal real para continuar.",
+    channelStepRequiredError: "Completa nombre, email y un canal real para continuar.",
     channelNotFoundError: "No pudimos verificar ese canal.",
     choosePlanError: "Primero elige un plan.",
     registerFallbackError: "No se pudo crear la cuenta.",
@@ -288,7 +288,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
       1: {
         eyebrow: "Your channel",
         title: "Connect the channel you want to publish.",
-        description: "Name, username, email, and a real URL are enough to continue.",
+        description: "Name, email, and a real channel URL are enough to continue.",
       },
       2: {
         eyebrow: "Import",
@@ -348,7 +348,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     accountEmailPlaceholder: "Email",
     accountUsernamePlaceholder: "Username",
     accountPasswordPlaceholder: "Password",
-    channelStepRequiredError: "Complete username, email, and a real channel to continue.",
+    channelStepRequiredError: "Complete name, email, and a real channel to continue.",
     channelNotFoundError: "We couldn't verify that channel.",
     choosePlanError: "Choose a plan first.",
     registerFallbackError: "Could not create the account.",
@@ -408,6 +408,8 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   const currentMeta = copy.stepMeta[step];
 
   async function validateChannelDraft() {
+    setStepError(null);
+
     if (isDemoMode) {
       setChannelValidationState("valid");
       setChannelValidationMessage(null);
@@ -417,7 +419,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
     const channelUrl = channelDraft.channelUrl.trim();
     if (!channelUrl) {
       setChannelValidationState("invalid");
-      setChannelValidationMessage(copy.channelStepRequiredError);
+      setChannelValidationMessage(copy.channelNotFoundError);
       return false;
     }
 
@@ -448,6 +450,14 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
 
   async function handleNext() {
     if (step === 1) {
+      const displayName = channelDraft.displayName.trim();
+      const email = channelDraft.email.trim();
+      const channelUrl = channelDraft.channelUrl.trim();
+      if (!displayName || !email || !channelUrl) {
+        setStepError(copy.channelStepRequiredError);
+        return;
+      }
+
       const isValid = await validateChannelDraft();
       if (!isValid) return;
     }
@@ -560,6 +570,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
                   analytics,
                   selectedPlan,
                   setSelectedPlan,
+                  validateChannelDraft,
                   locale,
                   copy,
                   channelDraft,
@@ -626,6 +637,7 @@ function renderStepBody(
     analytics: ChannelAnalytics;
     selectedPlan: string;
     setSelectedPlan: (value: string) => void;
+    validateChannelDraft: () => Promise<boolean>;
     locale: OnboardingLocale;
     copy: OnboardingCopy;
     channelDraft: ChannelDraft;
@@ -663,18 +675,20 @@ function renderStepBody(
   }
 
   if (step === 1) {
-    const statusClass =
-      ctx.channelValidationState === "valid"
-        ? "text-[#8dd7a6]"
-        : ctx.channelValidationState === "checking"
-          ? "text-[#9fc4ff]"
-          : "text-[#ff8b8b]";
-
     return (
       <div className="space-y-4">
-        <YoutubeImportStep demo={ctx.isDemoMode} locale={ctx.locale} value={ctx.channelDraft} onChange={ctx.setChannelDraft} />
+        <YoutubeImportStep
+          demo={ctx.isDemoMode}
+          locale={ctx.locale}
+          value={ctx.channelDraft}
+          onChange={ctx.setChannelDraft}
+          channelValidationState={ctx.channelValidationState}
+          channelValidationMessage={ctx.channelValidationMessage}
+          onValidateChannel={() => {
+            void ctx.validateChannelDraft();
+          }}
+        />
         {ctx.stepError ? <p className="text-[12px] text-[#ff8b8b]">{ctx.stepError}</p> : null}
-        {ctx.channelValidationMessage ? <p className={cn("text-[12px]", statusClass)}>{ctx.channelValidationMessage}</p> : null}
       </div>
     );
   }
