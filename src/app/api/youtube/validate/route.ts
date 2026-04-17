@@ -22,6 +22,8 @@ export async function POST(request: Request) {
           channel_name: channel.channelName,
           canonical_url: channel.canonicalUrl,
           total_videos_sampled: channel.videosSampled,
+          total_videos: channel.totalVideos,
+          total_views: channel.totalViews,
         },
         { status: 400 }
       );
@@ -33,6 +35,8 @@ export async function POST(request: Request) {
       channel_name: channel.channelName,
       canonical_url: channel.canonicalUrl,
       total_videos_sampled: channel.videosSampled,
+      total_videos: channel.totalVideos,
+      total_views: channel.totalViews,
     });
   } catch (error) {
     return NextResponse.json(

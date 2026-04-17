@@ -7,7 +7,6 @@ type Locale = "es" | "en";
 export interface ChannelDraft {
   displayName: string;
   email: string;
-  username: string;
   channelUrl: string;
 }
 
@@ -75,7 +74,6 @@ export function YoutubeImportStep({
   const draft: ChannelDraft = {
     displayName: value.displayName || (demo ? DEMO_USER.displayName : ""),
     email: value.email || (demo ? DEMO_USER.email : ""),
-    username: value.username || (demo ? DEMO_USER.username : ""),
     channelUrl: value.channelUrl || (demo ? "https://www.youtube.com/@pupilanomad" : ""),
   };
   const showValidationBadge = channelValidationState === "valid" || channelValidationState === "invalid";

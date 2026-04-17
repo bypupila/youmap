@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Handshake, MapPinned, PlaneTakeoff } from "lucide-react";
 import { FloatingTopBar, SignalPill } from "@/components/design-system/chrome";
@@ -10,7 +10,6 @@ import { MapExperience } from "@/components/map/map-experience";
 import { YoutubeImportStep, type ChannelDraft } from "@/components/onboarding/youtube-import-step";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { DEMO_ANALYTICS, DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_USER, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import { PLAN_DEFINITIONS, resolveCheckoutPlanSlug, type PlanDefinition } from "@/lib/plans";
 import { cn } from "@/lib/utils";
@@ -21,6 +20,16 @@ type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 type OnboardingLocale = "es" | "en";
 type ActivationState = "idle" | "registering" | "checkout";
 type StepState = "upcoming" | "active" | "done";
+type ChannelValidationState = "idle" | "checking" | "valid" | "invalid";
+
+type ChannelValidationMetrics = {
+  youtubeChannelId: string | null;
+  channelName: string | null;
+  canonicalUrl: string | null;
+  totalVideos: number | null;
+  totalViews: number | null;
+  videosSampled: number;
+};
 
 type LocalizedPlanDetails = {
   name: string;
@@ -69,6 +78,7 @@ type OnboardingCopy = {
   accountPasswordPlaceholder: string;
   channelStepRequiredError: string;
   channelNotFoundError: string;
+  planUnavailableError: string;
   choosePlanError: string;
   registerFallbackError: string;
   accountActivated: string;
@@ -81,10 +91,10 @@ type OnboardingCopy = {
   trialBadge: string;
   trialNote: string;
   processingPhrases: string[];
-  profileComplete: string;
-  profileTitle: string;
-  profileBody: string;
-  profileContinue: string;
+  unavailablePlanBadge: string;
+  unavailablePlanCopy: string;
+  importRealStatsNote: string;
+  importDemoStatsNote: string;
 };
 
 const localizedPlanDetails: Record<OnboardingLocale, Record<PlanDefinition["slug"], LocalizedPlanDetails>> = {
@@ -117,7 +127,8 @@ const localizedPlanDetails: Record<OnboardingLocale, Record<PlanDefinition["slug
       price: "$199/mes",
       description: "Para agencias y marcas con portafolios.",
       features: ["Portafolio de canales", "API", "Portal de marcas", "Soporte dedicado"],
-      trialCopy: "7 dias gratis",
+      badge: "Próximamente",
+      trialCopy: "",
     },
   },
   en: {
@@ -149,7 +160,8 @@ const localizedPlanDetails: Record<OnboardingLocale, Record<PlanDefinition["slug
       price: "$199/mo",
       description: "For agencies and brands with portfolios.",
       features: ["Channel portfolio", "API", "Brand portal", "Dedicated support"],
-      trialCopy: "7 days included",
+      badge: "Coming soon",
+      trialCopy: "",
     },
   },
 };
@@ -241,6 +253,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     accountPasswordPlaceholder: "Contraseña",
     channelStepRequiredError: "Completa nombre, email y un canal real para continuar.",
     channelNotFoundError: "No pudimos verificar ese canal.",
+    planUnavailableError: "Agency está en preparación y todavía no se puede contratar.",
     choosePlanError: "Primero elige un plan.",
     registerFallbackError: "No se pudo crear la cuenta.",
     accountActivated: "Cuenta lista.",
@@ -259,10 +272,10 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
       "Preparando tu analítica...",
       "Afinando sponsors y crecimiento...",
     ],
-    profileComplete: "Perfil listo",
-    profileTitle: "Completa tu perfil para entrar.",
-    profileBody: "Confirmamos tus datos y dejamos el acceso ordenado antes de abrir tu mundo.",
-    profileContinue: "Entrar a tu mundo",
+    unavailablePlanBadge: "Próximamente",
+    unavailablePlanCopy: "No disponible por el momento.",
+    importRealStatsNote: "Videos y views vienen del canal real (sin API key). Países se mantienen demo hasta completar importación.",
+    importDemoStatsNote: "La vista usa ejemplo visual. El loader ejecuta la importación real después de Polar.",
   },
   en: {
     topbarEyebrow: "TravelMap setup",
@@ -350,6 +363,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     accountPasswordPlaceholder: "Password",
     channelStepRequiredError: "Complete name, email, and a real channel to continue.",
     channelNotFoundError: "We couldn't verify that channel.",
+    planUnavailableError: "Agency is still in preparation and cannot be purchased yet.",
     choosePlanError: "Choose a plan first.",
     registerFallbackError: "Could not create the account.",
     accountActivated: "Account ready.",
@@ -368,10 +382,10 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
       "Preparing your analytics...",
       "Sharpening sponsors and growth...",
     ],
-    profileComplete: "Profile ready",
-    profileTitle: "Complete your profile to enter.",
-    profileBody: "We confirm your details and keep access tidy before opening your world.",
-    profileContinue: "Enter your world",
+    unavailablePlanBadge: "Coming soon",
+    unavailablePlanCopy: "Not available for now.",
+    importRealStatsNote: "Videos and views come from the real channel (no API key). Countries stay demo until import finishes.",
+    importDemoStatsNote: "This view uses visual sample data while real import runs after Polar.",
   },
 };
 
@@ -383,6 +397,7 @@ const sponsorCards = [
 ] as const;
 
 const visiblePlans = PLAN_DEFINITIONS.filter((plan) => plan.slug !== "free");
+const unavailablePlanSlugs = new Set<PlanDefinition["slug"]>(["agency"]);
 
 export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; locale: OnboardingLocale }) {
   const router = useRouter();
@@ -391,12 +406,12 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   const [channelDraft, setChannelDraft] = useState<ChannelDraft>(() => ({
     displayName: isDemoMode ? DEMO_USER.displayName : "",
     email: isDemoMode ? DEMO_USER.email : "",
-    username: isDemoMode ? DEMO_USER.username : "",
     channelUrl: isDemoMode ? "https://www.youtube.com/@pupilanomad" : "",
   }));
   const [stepError, setStepError] = useState<string | null>(null);
-  const [channelValidationState, setChannelValidationState] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
+  const [channelValidationState, setChannelValidationState] = useState<ChannelValidationState>("idle");
   const [channelValidationMessage, setChannelValidationMessage] = useState<string | null>(null);
+  const [channelValidationMetrics, setChannelValidationMetrics] = useState<ChannelValidationMetrics | null>(null);
   const [activationState, setActivationState] = useState<ActivationState>("idle");
 
   const copy = onboardingCopy[locale];
@@ -407,12 +422,124 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
 
   const currentMeta = copy.stepMeta[step];
 
+  function normalizeUsernameSeed(input: string) {
+    const normalized = String(input || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    return normalized.replace(/^@+/, "").replace(/[^a-z0-9._-]+/g, "-").replace(/^[^a-z0-9]+/, "").replace(/[^a-z0-9]+$/, "");
+  }
+
+  function generateUsernameCandidates() {
+    const emailHandle = channelDraft.email.split("@")[0] || "";
+    const preferred = normalizeUsernameSeed(emailHandle) || normalizeUsernameSeed(channelDraft.displayName) || "creator";
+    const baseCore = preferred.length >= 3 ? preferred : `${preferred}map`;
+    const base = baseCore.slice(0, 24);
+    const fallbackToken = () =>
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID().replace(/-/g, "").slice(0, 6)
+        : Math.random().toString(36).slice(2, 8);
+
+    const attempts = [base];
+    for (let index = 0; index < 4; index += 1) {
+      attempts.push(`${base.slice(0, 22)}${fallbackToken()}`.slice(0, 30));
+    }
+
+    return Array.from(
+      new Set(
+        attempts
+          .map((value) => value.replace(/^[^a-z0-9]+/, "").replace(/[^a-z0-9]+$/, ""))
+          .filter((value) => value.length >= 3)
+      )
+    );
+  }
+
+  async function activateAndOpenCheckout() {
+    if (!selectedPlan) {
+      setStepError(copy.choosePlanError);
+      return;
+    }
+
+    if (unavailablePlanSlugs.has(selectedPlan as PlanDefinition["slug"])) {
+      setStepError(copy.planUnavailableError);
+      return;
+    }
+
+    if (isDemoMode) {
+      router.push(`/dashboard?channelId=${DEMO_CHANNEL_SLUG}&demo=1`);
+      return;
+    }
+
+    const checkoutSlug = resolveCheckoutPlanSlug(selectedPlan);
+    if (!checkoutSlug) {
+      setStepError(copy.missingCheckoutError);
+      return;
+    }
+
+    setActivationState("registering");
+    setStepError(null);
+
+    try {
+      const usernameCandidates = generateUsernameCandidates();
+      const generatedPassword = `tm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+      let registered = false;
+      let lastErrorMessage = copy.registerFallbackError;
+
+      for (const username of usernameCandidates) {
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName: channelDraft.displayName.trim(),
+            email: channelDraft.email.trim(),
+            username,
+            password: generatedPassword,
+            selectedPlan,
+            channelUrl: channelDraft.channelUrl.trim() || null,
+            youtubeChannelId: channelValidationMetrics?.youtubeChannelId || null,
+            activateWithoutPayment: false,
+          }),
+        });
+
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        if (response.ok) {
+          registered = true;
+          break;
+        }
+
+        lastErrorMessage = payload?.error || copy.registerFallbackError;
+        const usernameTaken = response.status === 409 || /usuario|username/i.test(lastErrorMessage);
+        if (usernameTaken) continue;
+
+        throw new Error(lastErrorMessage);
+      }
+
+      if (!registered) {
+        throw new Error(lastErrorMessage);
+      }
+
+      setActivationState("checkout");
+      window.location.assign(`/api/billing/polar/checkout?plan=${encodeURIComponent(checkoutSlug)}&lang=${encodeURIComponent(locale)}`);
+    } catch (error) {
+      setActivationState("idle");
+      setStepError(error instanceof Error ? error.message : copy.registerFallbackError);
+    }
+  }
+
   async function validateChannelDraft() {
     setStepError(null);
 
     if (isDemoMode) {
       setChannelValidationState("valid");
       setChannelValidationMessage(null);
+      setChannelValidationMetrics({
+        youtubeChannelId: DEMO_CHANNEL.id,
+        channelName: DEMO_CHANNEL.channel_name,
+        canonicalUrl: null,
+        totalVideos: DEMO_VIDEO_LOCATIONS.length,
+        totalViews: DEMO_VIDEO_LOCATIONS.reduce((sum, video) => sum + Number(video.view_count || 0), 0),
+        videosSampled: DEMO_VIDEO_LOCATIONS.length,
+      });
       return true;
     }
 
@@ -420,6 +547,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
     if (!channelUrl) {
       setChannelValidationState("invalid");
       setChannelValidationMessage(copy.channelNotFoundError);
+      setChannelValidationMetrics(null);
       return false;
     }
 
@@ -433,22 +561,53 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
         body: JSON.stringify({ channelUrl }),
       });
 
-      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; channel_name?: string } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            error?: string;
+            youtube_channel_id?: string;
+            channel_name?: string;
+            canonical_url?: string;
+            total_videos?: number | null;
+            total_views?: number | null;
+            total_videos_sampled?: number;
+          }
+        | null;
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.error || copy.channelNotFoundError);
       }
 
+      const metrics: ChannelValidationMetrics = {
+        youtubeChannelId: payload.youtube_channel_id || null,
+        channelName: payload.channel_name || null,
+        canonicalUrl: payload.canonical_url || null,
+        totalVideos: typeof payload.total_videos === "number" ? payload.total_videos : null,
+        totalViews: typeof payload.total_views === "number" ? payload.total_views : null,
+        videosSampled: typeof payload.total_videos_sampled === "number" ? payload.total_videos_sampled : 0,
+      };
+
+      const metricsSummary = [
+        typeof metrics.totalVideos === "number" ? `${formatNumber(metrics.totalVideos)} videos` : null,
+        typeof metrics.totalViews === "number" ? `${formatNumber(metrics.totalViews)} views` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
       setChannelValidationState("valid");
-      setChannelValidationMessage(payload.channel_name ? payload.channel_name : null);
+      setChannelValidationMetrics(metrics);
+      setChannelValidationMessage(metrics.channelName ? `${metrics.channelName}${metricsSummary ? ` · ${metricsSummary}` : ""}` : metricsSummary || null);
       return true;
     } catch (error) {
       setChannelValidationState("invalid");
+      setChannelValidationMetrics(null);
       setChannelValidationMessage(error instanceof Error ? error.message : copy.channelNotFoundError);
       return false;
     }
   }
 
   async function handleNext() {
+    if (activationState !== "idle") return;
+
     if (step === 1) {
       const displayName = channelDraft.displayName.trim();
       const email = channelDraft.email.trim();
@@ -467,10 +626,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
       setStep((current) => (current + 1) as OnboardingStep);
       return;
     }
-
-    if (isDemoMode) {
-      router.push(`/dashboard?channelId=${DEMO_CHANNEL_SLUG}&demo=1`);
-    }
+    await activateAndOpenCheckout();
   }
 
   function handleBack() {
@@ -578,12 +734,13 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
                     setChannelDraft(next);
                     setChannelValidationState("idle");
                     setChannelValidationMessage(null);
+                    setChannelValidationMetrics(null);
                   },
+                  channelValidationMetrics,
                   channelValidationState,
                   channelValidationMessage,
                   stepError,
                   activationState,
-                  setActivationState,
                 })}
               </div>
             </motion.div>
@@ -610,9 +767,8 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
             {copy.footerStep} {step + 1} {copy.footerOf} {copy.stepLabels.length}
           </p>
           <Button
-            type={step === 6 ? "submit" : "button"}
-            form={step === 6 ? "plan-activation-form" : undefined}
-            onClick={step === 6 ? undefined : handleNext}
+            type="button"
+            onClick={handleNext}
             className="disabled:pointer-events-auto"
             disabled={activationState !== "idle" || (step === 1 && channelValidationState === "checking")}
           >
@@ -621,7 +777,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
               : activationState === "checkout"
                 ? copy.preparingCheckout
                 : step === 6
-                  ? copy.footerReviewAccount
+                  ? copy.payWithPolar
                   : copy.footerContinue}
           </Button>
         </div>
@@ -642,11 +798,11 @@ function renderStepBody(
     copy: OnboardingCopy;
     channelDraft: ChannelDraft;
     setChannelDraft: (next: ChannelDraft) => void;
-    channelValidationState: "idle" | "checking" | "valid" | "invalid";
+    channelValidationMetrics: ChannelValidationMetrics | null;
+    channelValidationState: ChannelValidationState;
     channelValidationMessage: string | null;
     stepError: string | null;
     activationState: ActivationState;
-    setActivationState: (state: ActivationState) => void;
   }
 ) {
   if (step === 0) {
@@ -694,10 +850,13 @@ function renderStepBody(
   }
 
   if (step === 2) {
-    const imported = ctx.isDemoMode ? DEMO_VIDEO_LOCATIONS.length : DEMO_VIDEO_LOCATIONS.length;
-    const mapped = imported;
+    const mapped =
+      typeof ctx.channelValidationMetrics?.videosSampled === "number" && ctx.channelValidationMetrics.videosSampled > 0
+        ? ctx.channelValidationMetrics.videosSampled
+        : ctx.channelValidationMetrics?.totalVideos ?? DEMO_VIDEO_LOCATIONS.length;
     const countries = new Set(DEMO_VIDEO_LOCATIONS.map((video) => video.country_code)).size;
-    const views = DEMO_VIDEO_LOCATIONS.reduce((sum, video) => sum + Number(video.view_count || 0), 0);
+    const views = ctx.channelValidationMetrics?.totalViews ?? DEMO_VIDEO_LOCATIONS.reduce((sum, video) => sum + Number(video.view_count || 0), 0);
+    const hasRealStats = typeof ctx.channelValidationMetrics?.totalVideos === "number" || typeof ctx.channelValidationMetrics?.totalViews === "number";
 
     return (
       <div className="space-y-5">
@@ -715,7 +874,7 @@ function renderStepBody(
             <StudioMetric label={ctx.copy.importMetricMapped} value={mapped} />
             <StudioMetric label={ctx.copy.importMetricViews} value={views} />
           </div>
-          <p className="mt-4 text-[12px] text-[#9a9a9a]">La vista usa ejemplo visual. El loader ejecuta la importación real después de Polar.</p>
+          <p className="mt-4 text-[12px] text-[#9a9a9a]">{hasRealStats ? ctx.copy.importRealStatsNote : ctx.copy.importDemoStatsNote}</p>
         </div>
       </div>
     );
@@ -806,15 +965,22 @@ function renderStepBody(
         {visiblePlans.map((plan) => {
           const active = ctx.selectedPlan === plan.slug;
           const localizedPlan = localizedPlanDetails[ctx.locale][plan.slug];
+          const unavailable = unavailablePlanSlugs.has(plan.slug);
+          const badgeLabel = unavailable ? ctx.copy.unavailablePlanBadge : localizedPlan.badge;
 
           return (
             <button
               key={plan.slug}
               type="button"
-              onClick={() => ctx.setSelectedPlan(plan.slug)}
+              onClick={() => {
+                if (!unavailable) ctx.setSelectedPlan(plan.slug);
+              }}
+              disabled={unavailable}
               className={cn(
                 "rounded-[28px] border p-5 text-left transition-colors",
-                active ? "border-[#ff0000] bg-[#2a1212]" : "border-white/10 bg-[#212121] hover:bg-[#272727]"
+                unavailable && "cursor-not-allowed border-white/10 bg-[#1b1b1b] opacity-70",
+                !unavailable && active && "border-[#ff0000] bg-[#2a1212]",
+                !unavailable && !active && "border-white/10 bg-[#212121] hover:bg-[#272727]"
               )}
             >
               <div className="flex items-start justify-between gap-3">
@@ -822,10 +988,10 @@ function renderStepBody(
                   <p className="yt-overline text-[#aaaaaa]">{localizedPlan.name}</p>
                   <p className="mt-2 text-[24px] leading-[26px] font-bold text-[#f1f1f1]">{localizedPlan.price}</p>
                 </div>
-                {localizedPlan.badge ? <Badge variant="secondary">{localizedPlan.badge}</Badge> : null}
+                {badgeLabel ? <Badge variant={unavailable ? "outline" : "secondary"}>{badgeLabel}</Badge> : null}
               </div>
               <p className="mt-3 text-[13px] leading-5 text-[#aaaaaa]">{localizedPlan.description}</p>
-              <p className="mt-3 text-[12px] font-medium text-[#ff6a6a]">{localizedPlan.trialCopy}</p>
+              {localizedPlan.trialCopy ? <p className="mt-3 text-[12px] font-medium text-[#ff6a6a]">{localizedPlan.trialCopy}</p> : null}
               <ul className="mt-4 space-y-1.5 text-[12px] leading-5 text-[#d5d5d5]">
                 {localizedPlan.features.map((feature) => (
                   <li key={`${plan.slug}-${feature}`} className="flex items-start gap-2">
@@ -834,146 +1000,17 @@ function renderStepBody(
                   </li>
                 ))}
               </ul>
+              {unavailable ? <p className="mt-4 text-[12px] font-medium text-[#ff8b8b]">{ctx.copy.unavailablePlanCopy}</p> : null}
             </button>
           );
         })}
       </div>
-
-      <PlansActivationPanel
-        selectedPlan={ctx.selectedPlan}
-        channelDraft={ctx.channelDraft}
-        locale={ctx.locale}
-        copy={ctx.copy}
-        isDemoMode={ctx.isDemoMode}
-        onActivationStateChange={ctx.setActivationState}
-      />
-    </div>
-  );
-}
-
-function PlansActivationPanel({
-  selectedPlan,
-  channelDraft,
-  locale,
-  copy,
-  isDemoMode,
-  onActivationStateChange,
-}: {
-  selectedPlan: string;
-  channelDraft: ChannelDraft;
-  locale: OnboardingLocale;
-  copy: OnboardingCopy;
-  isDemoMode: boolean;
-  onActivationStateChange: (state: ActivationState) => void;
-}) {
-  const [displayName, setDisplayName] = useState(channelDraft.displayName);
-  const [email, setEmail] = useState(channelDraft.email);
-  const [username, setUsername] = useState(channelDraft.username);
-  const [password, setPassword] = useState("");
-  const [processing, setProcessing] = useState<ActivationState>("idle");
-  const [activationError, setActivationError] = useState<string | null>(null);
-  const [successHint, setSuccessHint] = useState<string | null>(null);
-
-  useEffect(() => {
-    setDisplayName(channelDraft.displayName);
-    setEmail(channelDraft.email);
-    setUsername(channelDraft.username);
-  }, [channelDraft]);
-
-  useEffect(() => {
-    onActivationStateChange(processing);
-  }, [onActivationStateChange, processing]);
-
-  async function activate() {
-    if (!selectedPlan) {
-      setActivationError(copy.choosePlanError);
-      return;
-    }
-
-    setProcessing("registering");
-    setActivationError(null);
-    setSuccessHint(null);
-
-    try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          displayName,
-          email,
-          username,
-          password,
-          selectedPlan,
-          channelUrl: channelDraft.channelUrl || null,
-          youtubeChannelId: null,
-          activateWithoutPayment: false,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            error?: string;
-            email?: string;
-            channel_id?: string | null;
-            public_map_path?: string | null;
-            import_error?: string | null;
-          }
-        | null;
-
-      if (!response.ok) throw new Error(payload?.error || copy.registerFallbackError);
-
-      setSuccessHint(payload?.public_map_path ? `${copy.publicUrlReservedPrefix} ${payload.public_map_path}` : copy.accountActivated);
-      setProcessing("checkout");
-
-      const checkoutSlug = resolveCheckoutPlanSlug(selectedPlan);
-      if (!checkoutSlug) {
-        throw new Error(copy.missingCheckoutError);
-      }
-
-      window.location.assign(`/api/billing/polar/checkout?plan=${encodeURIComponent(checkoutSlug)}&lang=${encodeURIComponent(locale)}`);
-    } catch (error) {
-      setProcessing("idle");
-      setActivationError(error instanceof Error ? error.message : copy.registerFallbackError);
-    }
-  }
-
-  return (
-    <div className="rounded-[28px] border border-white/10 bg-[#212121] p-5">
-      <p className="yt-overline text-[#aaaaaa]">{copy.accountSetup}</p>
-      <p className="mt-2 text-[13px] leading-6 text-[#aaaaaa]">{copy.trialNote}</p>
-
-      <form id="plan-activation-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(event) => {
-        event.preventDefault();
-        void activate();
-      }}>
-        <Input required value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={copy.accountDisplayNamePlaceholder} />
-        <Input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={copy.accountEmailPlaceholder} />
-        <Input required value={username} onChange={(event) => setUsername(event.target.value)} placeholder={copy.accountUsernamePlaceholder} />
-        <Input required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={copy.accountPasswordPlaceholder} type="password" />
-        <button type="submit" className="sr-only">
-          {copy.footerReviewAccount}
-        </button>
-      </form>
-
-      <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#ff0000]/15 bg-[#1a1414] px-4 py-3 text-[13px] text-[#f1f1f1]">
-        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#ff0000]" />
-        <span>
-          {copy.trialBadge} · {visiblePlanLabel(selectedPlan, locale)}
-        </span>
+      <div className="rounded-2xl border border-[#ff0000]/15 bg-[#1a1414] px-4 py-3 text-[13px] text-[#f1f1f1]">
+        {ctx.copy.trialBadge} · {ctx.copy.trialNote}
       </div>
-
-      {successHint ? <p className="mt-3 text-[12px] text-[#9cd5ff]">{successHint}</p> : null}
-      {activationError ? <p className="mt-3 text-[12px] text-[#ff8b8b]">{activationError}</p> : null}
-      {processing !== "idle" ? <p className="mt-3 text-[12px] text-[#9a9a9a]">{processing === "registering" ? copy.creatingAccount : copy.preparingCheckout}</p> : null}
-      {isDemoMode ? <p className="mt-2 text-[12px] text-[#9a9a9a]">Demo mode keeps the flow local.</p> : null}
+      {ctx.stepError ? <p className="text-[12px] text-[#ff8b8b]">{ctx.stepError}</p> : null}
     </div>
   );
-}
-
-function visiblePlanLabel(selectedPlan: string, locale: OnboardingLocale) {
-  const plan = visiblePlans.find((item) => item.slug === selectedPlan) || visiblePlans[0];
-  if (!plan) return "";
-  return localizedPlanDetails[locale][plan.slug].name;
 }
 
 function StudioMetric({ label, value }: { label: string; value: number }) {

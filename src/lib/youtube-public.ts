@@ -10,6 +10,8 @@ export interface PublicYouTubeChannelValidation {
   inputUrl: string;
   hasVideos: boolean;
   videosSampled: number;
+  totalVideos: number | null;
+  totalViews: number | null;
 }
 
 function normalizeYoutubeChannelUrl(input: string) {
@@ -113,25 +115,98 @@ async function fetchChannelPage(urlValue: string) {
 
 async function countVideosFromFeed(channelId: string) {
   const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
-  const response = await fetch(feedUrl, { cache: "no-store" });
-  if (!response.ok) return 0;
+  const response = await fetch(feedUrl, {
+    cache: "no-store",
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
+    },
+  });
+  if (!response.ok) return null;
   const xml = await response.text();
   const entries = xml.match(/<entry\b/g);
   return entries ? entries.length : 0;
+}
+
+function parseLocalizedCount(input: string) {
+  const raw = sanitizeEnvValue(input);
+  if (!raw) return null;
+
+  const compact = raw.match(/(\d[\d.,\s]*)\s*([kmb])\b/i);
+  if (compact) {
+    let numberToken = compact[1].replace(/\s+/g, "");
+    const suffix = compact[2].toLowerCase();
+
+    if (numberToken.includes(",") && numberToken.includes(".")) {
+      if (numberToken.lastIndexOf(",") > numberToken.lastIndexOf(".")) {
+        numberToken = numberToken.replace(/\./g, "").replace(",", ".");
+      } else {
+        numberToken = numberToken.replace(/,/g, "");
+      }
+    } else if (numberToken.includes(",")) {
+      const parts = numberToken.split(",");
+      numberToken = parts.length === 2 && parts[1].length <= 2 ? `${parts[0]}.${parts[1]}` : numberToken.replace(/,/g, "");
+    } else if (numberToken.includes(".")) {
+      const parts = numberToken.split(".");
+      numberToken = parts.length === 2 && parts[1].length <= 2 ? numberToken : numberToken.replace(/\./g, "");
+    }
+
+    const base = Number.parseFloat(numberToken);
+    if (!Number.isFinite(base)) return null;
+
+    const multiplier = suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : 1_000_000_000;
+    return Math.round(base * multiplier);
+  }
+
+  const digitsOnly = raw.replace(/[^\d]/g, "");
+  if (!digitsOnly) return null;
+  const parsed = Number.parseInt(digitsOnly, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseChannelStatsFromAbout(html: string) {
+  const aboutStart = html.indexOf('"aboutChannelViewModel":{');
+  const scope = aboutStart === -1 ? html : html.slice(aboutStart, aboutStart + 10_000);
+
+  const viewCountText = extractMatch(/"viewCountText":"([^"]+)"/i, scope);
+  const videoCountText = extractMatch(/"videoCountText":"([^"]+)"/i, scope);
+
+  return {
+    totalViews: parseLocalizedCount(viewCountText),
+    totalVideos: parseLocalizedCount(videoCountText),
+  };
+}
+
+async function fetchChannelAboutStats(channelId: string) {
+  try {
+    const aboutUrl = `https://www.youtube.com/channel/${encodeURIComponent(channelId)}/about`;
+    const { html } = await fetchChannelPage(aboutUrl);
+    return parseChannelStatsFromAbout(html);
+  } catch {
+    return {
+      totalViews: null,
+      totalVideos: null,
+    };
+  }
 }
 
 export async function validateYouTubeChannelWithoutApiKey(input: string): Promise<PublicYouTubeChannelValidation> {
   const inputUrl = normalizeYoutubeChannelUrl(input);
   const { html, resolvedUrl } = await fetchChannelPage(inputUrl);
   const parsed = parseChannelPage(html, resolvedUrl);
-  const videosSampled = await countVideosFromFeed(parsed.channelId);
+  const [videosSampledRaw, channelStats] = await Promise.all([countVideosFromFeed(parsed.channelId), fetchChannelAboutStats(parsed.channelId)]);
+  const videosSampled = videosSampledRaw ?? 0;
+  const hasVideos = videosSampled > 0 || (channelStats.totalVideos ?? 0) > 0;
 
   return {
     channelId: parsed.channelId,
     channelName: parsed.channelName,
     canonicalUrl: parsed.canonicalUrl,
     inputUrl,
-    hasVideos: videosSampled > 0,
+    hasVideos,
     videosSampled,
+    totalVideos: channelStats.totalVideos,
+    totalViews: channelStats.totalViews,
   };
 }
