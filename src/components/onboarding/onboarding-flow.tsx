@@ -439,9 +439,9 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
       setChannelValidationState("valid");
       setChannelValidationMessage(payload.channel_name ? payload.channel_name : null);
       return true;
-    } catch {
+    } catch (error) {
       setChannelValidationState("invalid");
-      setChannelValidationMessage(copy.channelNotFoundError);
+      setChannelValidationMessage(error instanceof Error ? error.message : copy.channelNotFoundError);
       return false;
     }
   }

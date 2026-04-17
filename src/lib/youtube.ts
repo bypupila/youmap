@@ -14,6 +14,13 @@ export interface YouTubeChannelResolution {
   raw: unknown;
 }
 
+export interface ChannelImportReadiness {
+  totalVideosSampled: number;
+  extractableVideosSampled: number;
+  hasAnyVideos: boolean;
+  hasExtractableVideos: boolean;
+}
+
 export interface YouTubeVideoRecord {
   youtube_video_id: string;
   title: string;
@@ -74,6 +81,29 @@ interface YouTubeVideoItem {
       longitude?: number;
     };
     locationDescription?: string;
+  };
+}
+
+interface YouTubeChannelItem {
+  id?: string;
+  snippet?: {
+    title?: string;
+    description?: string;
+    publishedAt?: string;
+    customUrl?: string;
+    thumbnails?: {
+      high?: { url?: string };
+      medium?: { url?: string };
+      default?: { url?: string };
+    };
+  };
+  statistics?: {
+    subscriberCount?: string;
+  };
+  contentDetails?: {
+    relatedPlaylists?: {
+      uploads?: string;
+    };
   };
 }
 
@@ -212,43 +242,19 @@ async function youtubeFetch<T>(path: string, params: Record<string, string | num
   return (await response.json()) as T;
 }
 
-async function resolveChannelById(channelId: string): Promise<YouTubeChannelResolution | null> {
-  const response = await youtubeFetch<{
-    items?: Array<{
-      id?: string;
-      snippet?: {
-        title?: string;
-        description?: string;
-        publishedAt?: string;
-        thumbnails?: {
-          high?: { url?: string };
-          medium?: { url?: string };
-          default?: { url?: string };
-        };
-      };
-      statistics?: {
-        subscriberCount?: string;
-      };
-      contentDetails?: {
-        relatedPlaylists?: {
-          uploads?: string;
-        };
-      };
-    }>;
-  }>("channels", {
-    part: "snippet,statistics,contentDetails",
-    id: channelId,
-    maxResults: 1,
-  });
-
-  const channel = response.items?.[0];
+function toChannelResolution(channel: YouTubeChannelItem | null | undefined, fallbackHandle?: string | null): YouTubeChannelResolution | null {
   const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads || "";
   if (!channel?.id || !uploadsPlaylistId) return null;
+
+  const normalizedCustomUrl = sanitizeEnvValue(channel.snippet?.customUrl || "");
+  const handleFromCustomUrl = normalizedCustomUrl.startsWith("@") ? normalizedCustomUrl : normalizedCustomUrl ? `@${normalizedCustomUrl}` : null;
+  const normalizedFallbackHandle = sanitizeEnvValue(fallbackHandle || "");
+  const fallbackWithAt = normalizedFallbackHandle ? (normalizedFallbackHandle.startsWith("@") ? normalizedFallbackHandle : `@${normalizedFallbackHandle}`) : null;
 
   return {
     youtube_channel_id: channel.id,
     channel_name: channel.snippet?.title || "YouTube channel",
-    channel_handle: null,
+    channel_handle: handleFromCustomUrl || fallbackWithAt || null,
     thumbnail_url:
       channel.snippet?.thumbnails?.high?.url ||
       channel.snippet?.thumbnails?.medium?.url ||
@@ -260,6 +266,38 @@ async function resolveChannelById(channelId: string): Promise<YouTubeChannelReso
     published_at: channel.snippet?.publishedAt || null,
     raw: channel,
   };
+}
+
+async function resolveChannelById(channelId: string): Promise<YouTubeChannelResolution | null> {
+  const response = await youtubeFetch<{
+    items?: YouTubeChannelItem[];
+  }>("channels", {
+    part: "snippet,statistics,contentDetails",
+    id: channelId,
+    maxResults: 1,
+  });
+
+  return toChannelResolution(response.items?.[0] || null);
+}
+
+async function resolveChannelByHandle(handle: string): Promise<YouTubeChannelResolution | null> {
+  const normalized = sanitizeEnvValue(handle).replace(/^@+/, "");
+  if (!normalized) return null;
+
+  const candidates = [`@${normalized}`, normalized];
+  for (const candidate of candidates) {
+    const response = await youtubeFetch<{
+      items?: YouTubeChannelItem[];
+    }>("channels", {
+      part: "snippet,statistics,contentDetails",
+      forHandle: candidate,
+      maxResults: 1,
+    });
+    const resolved = toChannelResolution(response.items?.[0] || null, `@${normalized}`);
+    if (resolved) return resolved;
+  }
+
+  return null;
 }
 
 async function searchChannelByHandleOrName(query: string): Promise<YouTubeChannelResolution | null> {
@@ -287,7 +325,7 @@ async function searchChannelByHandleOrName(query: string): Promise<YouTubeChanne
 
   return {
     ...resolved,
-    channel_handle: query.startsWith("@") ? query : `@${normalized}`,
+    channel_handle: resolved.channel_handle || (query.startsWith("@") ? query : `@${normalized}`),
   };
 }
 
@@ -300,11 +338,69 @@ export async function resolveYouTubeChannel(input: string): Promise<YouTubeChann
 
   const handle = extractHandleFromInput(input);
   if (handle) {
+    const resolvedByHandle = await resolveChannelByHandle(handle);
+    if (resolvedByHandle) return resolvedByHandle;
+
     const resolved = await searchChannelByHandleOrName(handle);
     if (resolved) return resolved;
   }
 
   throw new Error("No pudimos resolver el canal de YouTube. Usa un enlace a /channel/... o /@handle.");
+}
+
+export async function getChannelImportReadiness(channel: Pick<YouTubeChannelResolution, "uploads_playlist_id">): Promise<ChannelImportReadiness> {
+  const sampledVideoIds: string[] = [];
+  let pageToken: string | undefined;
+  let pagesRead = 0;
+
+  do {
+    const response = await youtubeFetch<{
+      items?: Array<{
+        contentDetails?: {
+          videoId?: string;
+        };
+      }>;
+      nextPageToken?: string;
+    }>("playlistItems", {
+      part: "contentDetails",
+      playlistId: channel.uploads_playlist_id,
+      maxResults: 50,
+      pageToken,
+    });
+
+    for (const item of response.items || []) {
+      const videoId = sanitizeEnvValue(item.contentDetails?.videoId || "");
+      if (!videoId) continue;
+      sampledVideoIds.push(videoId);
+      if (sampledVideoIds.length >= 150) break;
+    }
+
+    pagesRead += 1;
+    if (sampledVideoIds.length >= 150) break;
+    if (pagesRead >= 3) break;
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+
+  const uniqueVideoIds = Array.from(new Set(sampledVideoIds));
+  if (uniqueVideoIds.length === 0) {
+    return {
+      totalVideosSampled: 0,
+      extractableVideosSampled: 0,
+      hasAnyVideos: false,
+      hasExtractableVideos: false,
+    };
+  }
+
+  const detailsMap = await loadVideoDetails(uniqueVideoIds);
+  const detailedVideos = Array.from(detailsMap.values());
+  const extractableVideos = detailedVideos.filter((video) => !video.is_short).length;
+
+  return {
+    totalVideosSampled: detailedVideos.length,
+    extractableVideosSampled: extractableVideos,
+    hasAnyVideos: detailedVideos.length > 0,
+    hasExtractableVideos: extractableVideos > 0,
+  };
 }
 
 export async function loadUploadsPlaylistVideos(playlistId: string) {
