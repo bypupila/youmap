@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-server";
+import { getSessionUserIdFromRequest } from "@/lib/current-user";
 import { DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
+import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
@@ -17,38 +18,35 @@ export async function GET(request: Request) {
       });
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const userId = getSessionUserIdFromRequest(request);
+    if (!userId) {
       return NextResponse.json({ active: false, plan: null, current_period_end: null }, { status: 401 });
     }
 
-    const { data } = await supabase
-      .from("subscriptions")
-      .select("status,current_period_end,subscription_plans(name,price_usd)")
-      .eq("user_id", user.id)
-      .in("status", ["active", "trialing", "past_due"])
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const planRelation = data?.subscription_plans as
-      | { name?: string | null }
-      | Array<{ name?: string | null }>
-      | null
-      | undefined;
-    const planName = Array.isArray(planRelation)
-      ? planRelation[0]?.name || null
-      : planRelation?.name || null;
+    const rows = await sql<
+      Array<{
+        status: string;
+        current_period_end: string | null;
+        plan_name: string | null;
+      }>
+    >`
+      select
+        s.status,
+        s.current_period_end,
+        p.name as plan_name
+      from public.subscriptions s
+      left join public.subscription_plans p on p.id = s.plan_id
+      where s.user_id = ${userId}
+        and s.status in ('active', 'trialing', 'past_due')
+      order by s.updated_at desc
+      limit 1
+    `;
+    const data = rows[0] || null;
 
     return NextResponse.json({
       active: Boolean(data && (data.status === "active" || data.status === "trialing")),
       status: data?.status || null,
-      plan: planName,
+      plan: data?.plan_name || null,
       current_period_end: data?.current_period_end || null,
     });
   } catch (error) {

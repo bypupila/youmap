@@ -5,7 +5,7 @@ TravelMap convierte un canal de viajes en un globo 3D interactivo con analytics,
 ## Estado actual
 
 - Landing, onboarding, dashboard, explore, perfil publico y `/map` usan la misma base `MapExperience` sobre globo fullscreen.
-- Hay flujo demo funcional y flujo real con import de YouTube + geolocalizacion + persistencia en Supabase.
+- Hay flujo demo funcional y flujo real con import de YouTube + geolocalizacion + persistencia en Neon Postgres.
 - Auth actualizado:
   - login con `email` o `username` en `/auth`
   - onboarding captura `nombre + email + username + canal`
@@ -61,13 +61,15 @@ npm install
 npm run dev
 ```
 
-## Bootstrap de Supabase
+## Bootstrap de Neon
 
-Si tienes la CLI instalada y el proyecto vinculado, ejecuta:
+Con `DATABASE_URL` configurado en `.env.local`, ejecuta:
 
 ```bash
 ./scripts/bootstrap-local.sh
 ```
+
+Ese script delega en `scripts/bootstrap-neon.mjs` y aplica migraciones + seed sobre Neon.
 
 ## Variables de entorno
 
@@ -79,7 +81,8 @@ Minimo para pipeline real:
 - `GEMINI_API_KEY`
 - `NOMINATIM_USER_AGENT`
 - `NOMINATIM_EMAIL`
-- credenciales Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`)
+- `DATABASE_URL`
+- `AUTH_SESSION_SECRET`
 
 ## Estructura
 
@@ -88,12 +91,13 @@ Minimo para pipeline real:
 - `src/components/design-system`: primitives visuales compartidos (`FloatingTopBar`, pills, etc.).
 - `src/components/ui`: componentes `shadcn` instalados como source code.
 - `src/lib`: clientes, helpers, demo data y validación.
-- `supabase/migrations`: esquema SQL del proyecto.
-- `supabase/seed`: datos de prueba para desarrollo local.
+- `neon/migrations`: esquema SQL del proyecto.
+- `neon/seed`: datos de prueba para desarrollo local.
 - `data/processed`: datasets exportados (`json/csv`) para mapas locales.
 - `scripts`: extracción local de canales y generación de datasets de demo.
 - `docs/design-system.md`: reglas del sistema visual.
 - `docs/apple-ui-principles.md`: traducción de principios Apple a parámetros implementables.
+- `docs/PROJECT_MEMORY.md`: memoria viva de procesos de desarrollo, QA, operación y release.
 
 ## APIs de mapa (operacion)
 
@@ -105,7 +109,7 @@ Minimo para pipeline real:
 
 ## Siguiente fase recomendada
 
-1. Aplicar `supabase/migrations/0002_map_sync_and_verification.sql` y `0003_video_classification_and_recording_details.sql` en todos los entornos.
+1. Aplicar `neon/migrations/0001_initial.sql` en todos los entornos Neon no inicializados.
 2. Agregar polling de `runId` en frontend para progreso en tiempo real.
 3. Endurecer tests de integración de sync incremental + manual verify.
 4. Instrumentar métricas de costos (YouTube/Nominatim/Gemini) por corrida.

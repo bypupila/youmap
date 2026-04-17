@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DEMO_ANALYTICS, DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
-import { createClient as createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { buildAnalyticsFromVideoLocations } from "@/lib/analytics";
 import { PLAN_DEFINITIONS, resolveCheckoutPlanSlug } from "@/lib/plans";
 import { cn } from "@/lib/utils";
@@ -426,7 +425,6 @@ function PlansActivationPanel({
     setSuccessHint(null);
 
     try {
-      const supabase = createSupabaseBrowserClient();
       const shouldSkipPayment = withoutPayment || selectedPlan === "free";
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -454,12 +452,6 @@ function PlansActivationPanel({
         | null;
 
       if (!response.ok) throw new Error(payload?.error || "Could not create the account.");
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: payload?.email || email,
-        password,
-      });
-      if (signInError) throw new Error(signInError.message);
 
       if (shouldSkipPayment) {
         setSuccessHint(payload?.public_map_path ? `Public URL reserved: ${payload.public_map_path}` : "Account activated.");

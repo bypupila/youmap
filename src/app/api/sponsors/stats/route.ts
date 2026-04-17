@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-server";
-import { createServiceRoleClient } from "@/lib/supabase-service";
+import { getSessionUserIdFromRequest } from "@/lib/current-user";
 import { DEMO_ANALYTICS } from "@/lib/demo-data";
+import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
@@ -34,24 +34,18 @@ export async function GET(request: Request) {
       });
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const userId = getSessionUserIdFromRequest(request);
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const service = createServiceRoleClient();
-
-    const { data: sponsors } = await service
-      .from("sponsors")
-      .select("id,brand_name")
-      .eq("user_id", user.id)
-      .eq("active", true)
-      .limit(100);
+    const sponsors = await sql<Array<{ id: string; brand_name: string }>>`
+      select id, brand_name
+      from public.sponsors
+      where user_id = ${userId}
+        and active = true
+      limit 100
+    `;
 
     if (!sponsors?.length) {
       return NextResponse.json({ sponsors: [] });
@@ -59,11 +53,12 @@ export async function GET(request: Request) {
 
     const sponsorIds = sponsors.map((s) => s.id);
 
-    const { data: clicks } = await service
-      .from("sponsor_clicks")
-      .select("sponsor_id,clicked_at,ip_hash")
-      .in("sponsor_id", sponsorIds)
-      .gte("clicked_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+    const clicks = await sql<Array<{ sponsor_id: string; clicked_at: string; ip_hash: string | null }>>`
+      select sponsor_id, clicked_at, ip_hash
+      from public.sponsor_clicks
+      where sponsor_id = any(${sponsorIds})
+        and clicked_at >= ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()}
+    `;
 
     const grouped = new Map<string, { clicks: number; unique: Set<string> }>();
 

@@ -1,19 +1,49 @@
 create extension if not exists pgcrypto;
 
-create type public.video_location_status as enum ('pending', 'processing', 'mapped', 'no_location', 'failed');
-create type public.import_run_status as enum ('queued', 'running', 'completed', 'failed', 'canceled');
-create type public.job_status as enum ('queued', 'running', 'completed', 'failed', 'canceled');
-create type public.subscription_status as enum ('trialing', 'active', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'paused');
-
-create or replace function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
+do $$
 begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
+  if not exists (select 1 from pg_type where typname = 'video_location_status') then
+    create type public.video_location_status as enum (
+      'pending',
+      'processing',
+      'mapped',
+      'no_location',
+      'failed',
+      'verified_auto',
+      'needs_manual',
+      'verified_manual'
+    );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'import_run_status') then
+    create type public.import_run_status as enum ('queued', 'running', 'completed', 'failed', 'canceled');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'job_status') then
+    create type public.job_status as enum ('queued', 'running', 'completed', 'failed', 'canceled');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'subscription_status') then
+    create type public.subscription_status as enum (
+      'trialing',
+      'active',
+      'past_due',
+      'canceled',
+      'incomplete',
+      'incomplete_expired',
+      'paused'
+    );
+  end if;
+end $$;
 
 create table if not exists public.users (
   id uuid primary key,
@@ -22,6 +52,13 @@ create table if not exists public.users (
   display_name text not null,
   avatar_url text,
   google_id text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.user_credentials (
+  user_id uuid primary key references public.users(id) on delete cascade,
+  password_hash text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -37,6 +74,7 @@ create table if not exists public.channels (
   description text,
   is_public boolean not null default true,
   published_at timestamptz,
+  last_synced_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -68,8 +106,23 @@ create table if not exists public.videos (
   view_count bigint not null default 0,
   like_count bigint,
   comment_count bigint,
+  duration_seconds integer,
+  is_short boolean not null default false,
+  is_travel boolean not null default true,
+  travel_score numeric(4,3),
+  travel_signals jsonb not null default '[]'::jsonb,
+  inclusion_reason text,
+  exclusion_reason text,
+  recording_lat numeric,
+  recording_lng numeric,
+  recording_location_description text,
   travel_type text,
   location_status public.video_location_status not null default 'pending',
+  verification_source text,
+  location_score numeric(4,3),
+  location_evidence jsonb not null default '{}'::jsonb,
+  needs_manual_reason text,
+  last_location_checked_at timestamptz,
   source_payload jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -78,6 +131,10 @@ create table if not exists public.videos (
 create unique index if not exists videos_channel_youtube_key on public.videos (channel_id, youtube_video_id);
 create index if not exists videos_channel_id_idx on public.videos (channel_id);
 create index if not exists videos_location_status_idx on public.videos (location_status);
+create index if not exists videos_verification_source_idx on public.videos (verification_source);
+create index if not exists videos_is_travel_idx on public.videos (is_travel);
+create index if not exists videos_is_short_idx on public.videos (is_short);
+create index if not exists videos_duration_seconds_idx on public.videos (duration_seconds);
 
 create table if not exists public.video_locations (
   id uuid primary key default gen_random_uuid(),
@@ -92,6 +149,10 @@ create table if not exists public.video_locations (
   lat numeric not null,
   lng numeric not null,
   confidence_score numeric(4,3),
+  location_score numeric(4,3),
+  verification_source text,
+  location_evidence jsonb not null default '{}'::jsonb,
+  needs_manual_reason text,
   travel_type text,
   source text not null default 'gemini',
   raw_payload jsonb not null default '{}'::jsonb,
@@ -228,160 +289,27 @@ create table if not exists public.channel_monthly_metrics (
 create unique index if not exists channel_monthly_metrics_unique_month on public.channel_monthly_metrics (channel_id, metric_month);
 create index if not exists channel_monthly_metrics_channel_id_idx on public.channel_monthly_metrics (channel_id);
 
-alter table public.users enable row level security;
-alter table public.channels enable row level security;
-alter table public.channel_import_runs enable row level security;
-alter table public.videos enable row level security;
-alter table public.video_locations enable row level security;
-alter table public.location_extraction_runs enable row level security;
-alter table public.onboarding_state enable row level security;
-alter table public.subscription_plans enable row level security;
-alter table public.subscriptions enable row level security;
-alter table public.sponsors enable row level security;
-alter table public.sponsor_geo_rules enable row level security;
-alter table public.sponsor_clicks enable row level security;
-alter table public.channel_monthly_metrics enable row level security;
+create table if not exists public.map_sync_runs (
+  id uuid primary key default gen_random_uuid(),
+  channel_id uuid not null references public.channels(id) on delete cascade,
+  status public.job_status not null default 'queued',
+  source text not null default 'manual_refresh',
+  videos_scanned integer not null default 0,
+  videos_extracted integer not null default 0,
+  videos_verified_auto integer not null default 0,
+  videos_needs_manual integer not null default 0,
+  videos_verified_manual integer not null default 0,
+  input jsonb not null default '{}'::jsonb,
+  output jsonb not null default '{}'::jsonb,
+  error_message text,
+  started_at timestamptz,
+  finished_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
-create policy users_select_own on public.users
-  for select using (auth.uid() = id);
-
-create policy users_insert_own on public.users
-  for insert with check (auth.uid() = id);
-
-create policy users_update_own on public.users
-  for update using (auth.uid() = id) with check (auth.uid() = id);
-
-create policy channels_owner_access on public.channels
-  for all using (
-    exists (
-      select 1 from public.users u where u.id = public.channels.user_id and u.id = auth.uid()
-    )
-  ) with check (
-    exists (
-      select 1 from public.users u where u.id = public.channels.user_id and u.id = auth.uid()
-    )
-  );
-
-create policy channel_import_runs_owner_access on public.channel_import_runs
-  for all using (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.channel_import_runs.channel_id
-        and c.user_id = auth.uid()
-    )
-  ) with check (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.channel_import_runs.channel_id
-        and c.user_id = auth.uid()
-    )
-  );
-
-create policy videos_owner_access on public.videos
-  for all using (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.videos.channel_id
-        and c.user_id = auth.uid()
-    )
-  ) with check (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.videos.channel_id
-        and c.user_id = auth.uid()
-    )
-  );
-
-create policy video_locations_owner_access on public.video_locations
-  for all using (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.video_locations.channel_id
-        and c.user_id = auth.uid()
-    )
-  ) with check (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.video_locations.channel_id
-        and c.user_id = auth.uid()
-    )
-  );
-
-create policy location_extraction_runs_owner_access on public.location_extraction_runs
-  for all using (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.location_extraction_runs.channel_id
-        and c.user_id = auth.uid()
-    )
-  ) with check (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.location_extraction_runs.channel_id
-        and c.user_id = auth.uid()
-    )
-  );
-
-create policy onboarding_state_owner_access on public.onboarding_state
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-create policy subscriptions_owner_access on public.subscriptions
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-create policy sponsors_owner_access on public.sponsors
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-create policy sponsor_geo_rules_owner_access on public.sponsor_geo_rules
-  for all using (
-    exists (
-      select 1
-      from public.sponsors s
-      where s.id = public.sponsor_geo_rules.sponsor_id
-        and s.user_id = auth.uid()
-    )
-  ) with check (
-    exists (
-      select 1
-      from public.sponsors s
-      where s.id = public.sponsor_geo_rules.sponsor_id
-        and s.user_id = auth.uid()
-    )
-  );
-
-create policy sponsor_clicks_owner_read on public.sponsor_clicks
-  for select using (
-    exists (
-      select 1
-      from public.sponsors s
-      where s.id = public.sponsor_clicks.sponsor_id
-        and s.user_id = auth.uid()
-    )
-  );
-
-create policy channel_monthly_metrics_owner_access on public.channel_monthly_metrics
-  for all using (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.channel_monthly_metrics.channel_id
-        and c.user_id = auth.uid()
-    )
-  ) with check (
-    exists (
-      select 1
-      from public.channels c
-      where c.id = public.channel_monthly_metrics.channel_id
-        and c.user_id = auth.uid()
-    )
-  );
+create index if not exists map_sync_runs_channel_id_idx on public.map_sync_runs (channel_id);
+create index if not exists map_sync_runs_status_idx on public.map_sync_runs (status);
 
 create or replace function public.get_top_countries_for_channel(p_channel_id uuid)
 returns table(country_name text, video_count bigint)
@@ -433,7 +361,7 @@ as $$
   fallback as (
     select
       count(distinct vl.country_code)::integer as total_countries,
-      count(*) filter (where v.location_status = 'mapped')::integer as total_mapped,
+      count(*) filter (where v.location_status in ('mapped', 'verified_auto', 'verified_manual'))::integer as total_mapped,
       coalesce(sum(v.view_count), 0)::bigint as total_views
     from public.videos v
     left join public.video_locations vl
@@ -460,38 +388,31 @@ begin
 end;
 $$;
 
-create trigger users_touch_updated_at before update on public.users
-for each row execute function public.touch_updated_at();
-
-create trigger channels_touch_updated_at before update on public.channels
-for each row execute function public.touch_updated_at();
-
-create trigger channel_import_runs_touch_updated_at before update on public.channel_import_runs
-for each row execute function public.touch_updated_at();
-
-create trigger videos_touch_updated_at before update on public.videos
-for each row execute function public.touch_updated_at();
-
-create trigger video_locations_touch_updated_at before update on public.video_locations
-for each row execute function public.touch_updated_at();
-
-create trigger location_extraction_runs_touch_updated_at before update on public.location_extraction_runs
-for each row execute function public.touch_updated_at();
-
-create trigger onboarding_state_touch_updated_at before update on public.onboarding_state
-for each row execute function public.touch_updated_at();
-
-create trigger subscription_plans_touch_updated_at before update on public.subscription_plans
-for each row execute function public.touch_updated_at();
-
-create trigger subscriptions_touch_updated_at before update on public.subscriptions
-for each row execute function public.touch_updated_at();
-
-create trigger sponsors_touch_updated_at before update on public.sponsors
-for each row execute function public.touch_updated_at();
-
-create trigger sponsor_geo_rules_touch_updated_at before update on public.sponsor_geo_rules
-for each row execute function public.touch_updated_at();
-
-create trigger channel_monthly_metrics_touch_updated_at before update on public.channel_monthly_metrics
-for each row execute function public.touch_updated_at();
+drop trigger if exists users_touch_updated_at on public.users;
+create trigger users_touch_updated_at before update on public.users for each row execute function public.touch_updated_at();
+drop trigger if exists user_credentials_touch_updated_at on public.user_credentials;
+create trigger user_credentials_touch_updated_at before update on public.user_credentials for each row execute function public.touch_updated_at();
+drop trigger if exists channels_touch_updated_at on public.channels;
+create trigger channels_touch_updated_at before update on public.channels for each row execute function public.touch_updated_at();
+drop trigger if exists channel_import_runs_touch_updated_at on public.channel_import_runs;
+create trigger channel_import_runs_touch_updated_at before update on public.channel_import_runs for each row execute function public.touch_updated_at();
+drop trigger if exists videos_touch_updated_at on public.videos;
+create trigger videos_touch_updated_at before update on public.videos for each row execute function public.touch_updated_at();
+drop trigger if exists video_locations_touch_updated_at on public.video_locations;
+create trigger video_locations_touch_updated_at before update on public.video_locations for each row execute function public.touch_updated_at();
+drop trigger if exists location_extraction_runs_touch_updated_at on public.location_extraction_runs;
+create trigger location_extraction_runs_touch_updated_at before update on public.location_extraction_runs for each row execute function public.touch_updated_at();
+drop trigger if exists onboarding_state_touch_updated_at on public.onboarding_state;
+create trigger onboarding_state_touch_updated_at before update on public.onboarding_state for each row execute function public.touch_updated_at();
+drop trigger if exists subscription_plans_touch_updated_at on public.subscription_plans;
+create trigger subscription_plans_touch_updated_at before update on public.subscription_plans for each row execute function public.touch_updated_at();
+drop trigger if exists subscriptions_touch_updated_at on public.subscriptions;
+create trigger subscriptions_touch_updated_at before update on public.subscriptions for each row execute function public.touch_updated_at();
+drop trigger if exists sponsors_touch_updated_at on public.sponsors;
+create trigger sponsors_touch_updated_at before update on public.sponsors for each row execute function public.touch_updated_at();
+drop trigger if exists sponsor_geo_rules_touch_updated_at on public.sponsor_geo_rules;
+create trigger sponsor_geo_rules_touch_updated_at before update on public.sponsor_geo_rules for each row execute function public.touch_updated_at();
+drop trigger if exists channel_monthly_metrics_touch_updated_at on public.channel_monthly_metrics;
+create trigger channel_monthly_metrics_touch_updated_at before update on public.channel_monthly_metrics for each row execute function public.touch_updated_at();
+drop trigger if exists map_sync_runs_touch_updated_at on public.map_sync_runs;
+create trigger map_sync_runs_touch_updated_at before update on public.map_sync_runs for each row execute function public.touch_updated_at();

@@ -1,12 +1,12 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { geocodeCoordinates, geocodeLocation } from "@/lib/geocode";
 import { getGeminiClient, getGeminiModel } from "@/lib/gemini";
 import { LOCATION_PROMPT } from "@/lib/youtube-location-prompt";
 import { loadTravelPlaylistVideoIds, loadUploadsPlaylistVideos, loadVideoDetails, resolveYouTubeChannel } from "@/lib/youtube";
 import type { ManualVerificationItem } from "@/lib/map-data";
 import type { TravelVideoLocation } from "@/lib/types";
+import { sql } from "@/lib/neon";
 
 const travelTypeSchema = z.enum(["city_tour", "nature", "food", "culture", "adventure", "beach", "road_trip", "other"]);
 
@@ -274,7 +274,7 @@ Return the location data only. If there are several places, focus on the main fi
   return extractionSchema.parse(JSON.parse(response.text || "{}"));
 }
 
-async function upsertPrimaryLocation(service: SupabaseClient, input: {
+async function upsertPrimaryLocation(input: {
   channelId: string;
   videoId: string;
   location: TravelVideoLocation;
@@ -283,28 +283,55 @@ async function upsertPrimaryLocation(service: SupabaseClient, input: {
   locationSource: string;
   needsManualReason?: string | null;
 }) {
-  await service.from("video_locations").delete().eq("video_id", input.videoId).eq("is_primary", true);
-  await service.from("video_locations").insert({
-    id: randomUUID(),
-    channel_id: input.channelId,
-    video_id: input.videoId,
-    is_primary: true,
-    country_code: input.location.country_code,
-    country_name: input.location.country_name,
-    location_label: input.location.location_label,
-    city: input.location.city || null,
-    region: input.location.region || null,
-    lat: input.location.lat,
-    lng: input.location.lng,
-    confidence_score: input.location.confidence_score,
-    location_score: input.location.location_score || input.location.confidence_score || null,
-    travel_type: input.location.travel_type || null,
-    source: input.locationSource,
-    verification_source: input.verificationSource,
-    location_evidence: input.locationEvidence,
-    needs_manual_reason: input.needsManualReason || null,
-    raw_payload: input.location.location_evidence || {},
-  });
+  await sql`
+    delete from public.video_locations
+    where video_id = ${input.videoId}
+      and is_primary = true
+  `;
+  await sql`
+    insert into public.video_locations (
+      id,
+      channel_id,
+      video_id,
+      is_primary,
+      country_code,
+      country_name,
+      location_label,
+      city,
+      region,
+      lat,
+      lng,
+      confidence_score,
+      location_score,
+      travel_type,
+      source,
+      verification_source,
+      location_evidence,
+      needs_manual_reason,
+      raw_payload
+    )
+    values (
+      ${randomUUID()},
+      ${input.channelId},
+      ${input.videoId},
+      true,
+      ${input.location.country_code},
+      ${input.location.country_name || null},
+      ${input.location.location_label || null},
+      ${input.location.city || null},
+      ${input.location.region || null},
+      ${input.location.lat},
+      ${input.location.lng},
+      ${input.location.confidence_score || null},
+      ${input.location.location_score || input.location.confidence_score || null},
+      ${input.location.travel_type || null},
+      ${input.locationSource},
+      ${input.verificationSource},
+      ${JSON.stringify(input.locationEvidence || {})}::jsonb,
+      ${input.needsManualReason || null},
+      ${JSON.stringify(input.location.location_evidence || {})}::jsonb
+    )
+  `;
 }
 
 function buildVideoLocation(input: {
@@ -357,23 +384,24 @@ function buildVideoLocation(input: {
   };
 }
 
-async function getManualQueue(service: SupabaseClient, channelId: string): Promise<ManualVerificationItem[]> {
-  const { data } = await service
-    .from("videos")
-    .select("id,youtube_video_id,title,thumbnail_url,published_at,needs_manual_reason")
-    .eq("channel_id", channelId)
-    .eq("location_status", "needs_manual")
-    .order("published_at", { ascending: false })
-    .limit(250);
-
-  return ((data || []) as Array<{
+async function getManualQueue(channelId: string): Promise<ManualVerificationItem[]> {
+  const data = await sql<Array<{
     id: string;
     youtube_video_id: string;
     title: string;
     thumbnail_url: string | null;
     published_at: string | null;
     needs_manual_reason: string | null;
-  }>).map((row) => ({
+  }>>`
+    select id, youtube_video_id, title, thumbnail_url, published_at, needs_manual_reason
+    from public.videos
+    where channel_id = ${channelId}
+      and location_status = 'needs_manual'
+    order by published_at desc
+    limit 250
+  `;
+
+  return data.map((row) => ({
     video_id: row.id,
     youtube_video_id: row.youtube_video_id,
     title: row.title,
@@ -399,31 +427,40 @@ export interface MapSyncSummary {
 
 export async function syncChannelIncremental(input: {
   channelId: string;
-  service: SupabaseClient;
 }): Promise<MapSyncSummary> {
   const now = new Date().toISOString();
   const runId = randomUUID();
 
-  await input.service.from("map_sync_runs").insert({
-    id: runId,
-    channel_id: input.channelId,
-    status: "running",
-    source: "manual_refresh",
-    started_at: now,
-    input: {},
-    output: {},
-  });
+  await sql`
+    insert into public.map_sync_runs (id, channel_id, status, source, started_at, input, output)
+    values (
+      ${runId},
+      ${input.channelId},
+      'running',
+      'manual_refresh',
+      ${now},
+      '{}'::jsonb,
+      '{}'::jsonb
+    )
+  `;
 
   try {
-    const { data: channelRow, error: channelError } = await input.service
-      .from("channels")
-      .select("id,channel_name,channel_handle,youtube_channel_id,description")
-      .eq("id", input.channelId)
-      .single();
-
-    if (channelError || !channelRow) {
-      throw new Error(channelError?.message || "Canal no encontrado.");
-    }
+    const channelRows = await sql<
+      Array<{
+        id: string;
+        channel_name: string;
+        channel_handle: string | null;
+        youtube_channel_id: string | null;
+        description: string | null;
+      }>
+    >`
+      select id, channel_name, channel_handle, youtube_channel_id, description
+      from public.channels
+      where id = ${input.channelId}
+      limit 1
+    `;
+    const channelRow = channelRows[0];
+    if (!channelRow) throw new Error("Canal no encontrado.");
 
     const channelReference = channelRow.youtube_channel_id || channelRow.channel_handle;
     if (!channelReference) {
@@ -438,17 +475,14 @@ export async function syncChannelIncremental(input: {
     const nonShortVideoIds = youtubeIds.filter((youtubeVideoId) => !videoDetailsMap.get(youtubeVideoId)?.is_short);
     const excludedShorts = youtubeIds.length - nonShortVideoIds.length;
 
-    const existingVideosResult = nonShortVideoIds.length
-      ? await input.service
-          .from("videos")
-          .select("youtube_video_id")
-          .eq("channel_id", input.channelId)
-          .in("youtube_video_id", nonShortVideoIds)
-      : { data: [], error: null };
-    if (existingVideosResult.error) {
-      throw new Error(existingVideosResult.error.message);
-    }
-    const existingVideos = existingVideosResult.data || [];
+    const existingVideos = nonShortVideoIds.length
+      ? await sql<Array<{ youtube_video_id: string }>>`
+          select youtube_video_id
+          from public.videos
+          where channel_id = ${input.channelId}
+            and youtube_video_id = any(${nonShortVideoIds})
+        `
+      : [];
 
     const existingIdSet = new Set(((existingVideos || []) as Array<{ youtube_video_id: string }>).map((row) => row.youtube_video_id));
     const newVideoIds = nonShortVideoIds.filter((youtubeVideoId) => !existingIdSet.has(youtubeVideoId));
@@ -485,67 +519,113 @@ export async function syncChannelIncremental(input: {
       });
       const isTravel = travelSignals.isTravel;
 
-      const { data: insertedVideo, error: insertError } = await input.service
-        .from("videos")
-        .upsert(
-          {
-            channel_id: input.channelId,
-            youtube_video_id: youtubeVideoId,
-            title,
-            description,
-            thumbnail_url: thumbnailUrl,
-            published_at: publishedAt,
-            view_count: viewCount ?? 0,
-            like_count: likeCount,
-            comment_count: commentCount,
-            duration_seconds: durationSeconds,
-            is_short: false,
-            is_travel: isTravel,
-            travel_score: travelSignals.score,
-            travel_signals: travelSignals.signals,
-            inclusion_reason: travelSignals.inclusionReason,
-            exclusion_reason: travelSignals.exclusionReason,
-            recording_lat: recordingLat,
-            recording_lng: recordingLng,
-            recording_location_description: recordingLocationDescription,
-            location_status: "processing",
-            verification_source: null,
-            location_score: null,
-            location_evidence: {},
-            needs_manual_reason: isTravel ? null : "Video sin señales claras de viaje.",
-            last_location_checked_at: null,
-            source_payload: {
-              video_details: details?.raw || null,
-            },
-            updated_at: currentTs,
-          },
-          { onConflict: "channel_id,youtube_video_id" }
+      const insertedVideos = await sql<Array<{ id: string }>>`
+        insert into public.videos (
+          channel_id,
+          youtube_video_id,
+          title,
+          description,
+          thumbnail_url,
+          published_at,
+          view_count,
+          like_count,
+          comment_count,
+          duration_seconds,
+          is_short,
+          is_travel,
+          travel_score,
+          travel_signals,
+          inclusion_reason,
+          exclusion_reason,
+          recording_lat,
+          recording_lng,
+          recording_location_description,
+          location_status,
+          verification_source,
+          location_score,
+          location_evidence,
+          needs_manual_reason,
+          last_location_checked_at,
+          source_payload,
+          updated_at
         )
-        .select("id")
-        .single();
-
-      if (insertError || !insertedVideo?.id) {
-        throw new Error(insertError?.message || `No se pudo guardar el video ${youtubeVideoId}.`);
-      }
-
-      const videoId = insertedVideo.id as string;
+        values (
+          ${input.channelId},
+          ${youtubeVideoId},
+          ${title},
+          ${description},
+          ${thumbnailUrl},
+          ${publishedAt},
+          ${viewCount ?? 0},
+          ${likeCount},
+          ${commentCount},
+          ${durationSeconds},
+          false,
+          ${isTravel},
+          ${travelSignals.score},
+          ${JSON.stringify(travelSignals.signals)}::jsonb,
+          ${travelSignals.inclusionReason},
+          ${travelSignals.exclusionReason},
+          ${recordingLat},
+          ${recordingLng},
+          ${recordingLocationDescription},
+          'processing',
+          null,
+          null,
+          '{}'::jsonb,
+          ${isTravel ? null : "Video sin señales claras de viaje."},
+          null,
+          ${JSON.stringify({ video_details: details?.raw || null })}::jsonb,
+          ${currentTs}
+        )
+        on conflict (channel_id, youtube_video_id)
+        do update set
+          title = excluded.title,
+          description = excluded.description,
+          thumbnail_url = excluded.thumbnail_url,
+          published_at = excluded.published_at,
+          view_count = excluded.view_count,
+          like_count = excluded.like_count,
+          comment_count = excluded.comment_count,
+          duration_seconds = excluded.duration_seconds,
+          is_short = excluded.is_short,
+          is_travel = excluded.is_travel,
+          travel_score = excluded.travel_score,
+          travel_signals = excluded.travel_signals,
+          inclusion_reason = excluded.inclusion_reason,
+          exclusion_reason = excluded.exclusion_reason,
+          recording_lat = excluded.recording_lat,
+          recording_lng = excluded.recording_lng,
+          recording_location_description = excluded.recording_location_description,
+          location_status = excluded.location_status,
+          verification_source = excluded.verification_source,
+          location_score = excluded.location_score,
+          location_evidence = excluded.location_evidence,
+          needs_manual_reason = excluded.needs_manual_reason,
+          last_location_checked_at = excluded.last_location_checked_at,
+          source_payload = excluded.source_payload,
+          updated_at = excluded.updated_at
+        returning id
+      `;
+      const videoId = insertedVideos[0]?.id;
+      if (!videoId) throw new Error(`No se pudo guardar el video ${youtubeVideoId}.`);
       if (!isTravel) {
         excludedNonTravel += 1;
-        await input.service
-          .from("videos")
-          .update({
-            location_status: "no_location",
-            verification_source: "heuristic",
-            location_score: travelSignals.score,
-            location_evidence: {
+        await sql`
+          update public.videos
+          set
+            location_status = 'no_location',
+            verification_source = 'heuristic',
+            location_score = ${travelSignals.score},
+            location_evidence = ${JSON.stringify({
               stage: "travel_filter",
               travel_signals: travelSignals.signals,
-            },
-            needs_manual_reason: "Video filtrado: no se detecto evidencia suficiente de viaje.",
-            last_location_checked_at: currentTs,
-            updated_at: currentTs,
-          })
-          .eq("id", videoId);
+            })}::jsonb,
+            needs_manual_reason = 'Video filtrado: no se detecto evidencia suficiente de viaje.',
+            last_location_checked_at = ${currentTs},
+            updated_at = ${currentTs}
+          where id = ${videoId}
+        `;
         continue;
       }
 
@@ -585,7 +665,7 @@ export async function syncChannelIncremental(input: {
           },
         });
 
-        await upsertPrimaryLocation(input.service, {
+        await upsertPrimaryLocation({
           channelId: input.channelId,
           videoId,
           location,
@@ -600,24 +680,24 @@ export async function syncChannelIncremental(input: {
           },
         });
 
-        await input.service
-          .from("videos")
-          .update({
-            location_status: "verified_auto",
-            verification_source: "youtube_recording_details",
-            location_score: score,
-            location_evidence: {
+        await sql`
+          update public.videos
+          set
+            location_status = 'verified_auto',
+            verification_source = 'youtube_recording_details',
+            location_score = ${score},
+            location_evidence = ${JSON.stringify({
               source: "youtube_recording_details",
               recording_lat: recordingLat,
               recording_lng: recordingLng,
               recording_location_description: recordingLocationDescription,
               reverse_geocode: reverseGeo?.raw || null,
-            },
-            needs_manual_reason: null,
-            last_location_checked_at: currentTs,
-            updated_at: currentTs,
-          })
-          .eq("id", videoId);
+            })}::jsonb,
+            needs_manual_reason = null,
+            last_location_checked_at = ${currentTs},
+            updated_at = ${currentTs}
+          where id = ${videoId}
+        `;
 
         verifiedAuto += 1;
         continue;
@@ -648,7 +728,7 @@ export async function syncChannelIncremental(input: {
             evidence: heuristic.evidence,
           });
 
-          await upsertPrimaryLocation(input.service, {
+          await upsertPrimaryLocation({
             channelId: input.channelId,
             videoId,
             location,
@@ -657,21 +737,21 @@ export async function syncChannelIncremental(input: {
             locationEvidence: heuristic.evidence,
           });
 
-          await input.service
-            .from("videos")
-            .update({
-              location_status: "verified_auto",
-              verification_source: "heuristic",
-              location_score: heuristic.score,
-              location_evidence: {
+          await sql`
+            update public.videos
+            set
+              location_status = 'verified_auto',
+              verification_source = 'heuristic',
+              location_score = ${heuristic.score},
+              location_evidence = ${JSON.stringify({
                 ...heuristic.evidence,
                 travel_signals: travelSignals.signals,
-              },
-              needs_manual_reason: null,
-              last_location_checked_at: currentTs,
-              updated_at: currentTs,
-            })
-            .eq("id", videoId);
+              })}::jsonb,
+              needs_manual_reason = null,
+              last_location_checked_at = ${currentTs},
+              updated_at = ${currentTs}
+            where id = ${videoId}
+          `;
 
           verifiedAuto += 1;
           continue;
@@ -715,7 +795,7 @@ export async function syncChannelIncremental(input: {
               evidence: { gemini: extraction },
             });
 
-            await upsertPrimaryLocation(input.service, {
+            await upsertPrimaryLocation({
               channelId: input.channelId,
               videoId,
               location,
@@ -724,18 +804,22 @@ export async function syncChannelIncremental(input: {
               locationEvidence: { gemini: extraction, geocode: geo.raw },
             });
 
-            await input.service
-              .from("videos")
-              .update({
-                location_status: "verified_auto",
-                verification_source: "gemini",
-                location_score: score,
-                location_evidence: { gemini: extraction, geocode: geo.raw, travel_signals: travelSignals.signals },
-                needs_manual_reason: null,
-                last_location_checked_at: currentTs,
-                updated_at: currentTs,
-              })
-              .eq("id", videoId);
+            await sql`
+              update public.videos
+              set
+                location_status = 'verified_auto',
+                verification_source = 'gemini',
+                location_score = ${score},
+                location_evidence = ${JSON.stringify({
+                  gemini: extraction,
+                  geocode: geo.raw,
+                  travel_signals: travelSignals.signals,
+                })}::jsonb,
+                needs_manual_reason = null,
+                last_location_checked_at = ${currentTs},
+                updated_at = ${currentTs}
+              where id = ${videoId}
+            `;
 
             resolvedWithGemini = true;
             verifiedAuto += 1;
@@ -747,42 +831,45 @@ export async function syncChannelIncremental(input: {
 
       if (!resolvedWithGemini) {
         needsManual += 1;
-        await input.service
-          .from("videos")
-          .update({
-            location_status: "needs_manual",
-            verification_source: null,
-            location_score: 0.0,
-            needs_manual_reason: "Ambiguo o sin evidencia suficiente tras verificacion automatica.",
-            location_evidence: { stage: "manual_queue", travel_signals: travelSignals.signals },
-            last_location_checked_at: currentTs,
-            updated_at: currentTs,
-          })
-          .eq("id", videoId);
+        await sql`
+          update public.videos
+          set
+            location_status = 'needs_manual',
+            verification_source = null,
+            location_score = 0.0,
+            needs_manual_reason = 'Ambiguo o sin evidencia suficiente tras verificacion automatica.',
+            location_evidence = ${JSON.stringify({
+              stage: "manual_queue",
+              travel_signals: travelSignals.signals,
+            })}::jsonb,
+            last_location_checked_at = ${currentTs},
+            updated_at = ${currentTs}
+          where id = ${videoId}
+        `;
       }
     }
 
-    const manualQueue = await getManualQueue(input.service, input.channelId);
+    const manualQueue = await getManualQueue(input.channelId);
     const finishedAt = new Date().toISOString();
 
-    await input.service
-      .from("channels")
-      .update({
-        last_synced_at: finishedAt,
-        updated_at: finishedAt,
-      })
-      .eq("id", input.channelId);
+    await sql`
+      update public.channels
+      set
+        last_synced_at = ${finishedAt},
+        updated_at = ${finishedAt}
+      where id = ${input.channelId}
+    `;
 
-    await input.service
-      .from("map_sync_runs")
-      .update({
-        status: "completed",
-        videos_scanned: nonShortVideoIds.length,
-        videos_extracted: newVideoIds.length,
-        videos_verified_auto: verifiedAuto,
-        videos_needs_manual: needsManual,
-        videos_verified_manual: 0,
-        output: {
+    await sql`
+      update public.map_sync_runs
+      set
+        status = 'completed',
+        videos_scanned = ${nonShortVideoIds.length},
+        videos_extracted = ${newVideoIds.length},
+        videos_verified_auto = ${verifiedAuto},
+        videos_needs_manual = ${needsManual},
+        videos_verified_manual = 0,
+        output = ${JSON.stringify({
           videos_scanned: nonShortVideoIds.length,
           videos_extracted: newVideoIds.length,
           videos_verified_auto: verifiedAuto,
@@ -790,11 +877,11 @@ export async function syncChannelIncremental(input: {
           excluded_shorts: excludedShorts,
           excluded_non_travel: excludedNonTravel,
           manual_queue: manualQueue.length,
-        },
-        finished_at: finishedAt,
-        updated_at: finishedAt,
-      })
-      .eq("id", runId);
+        })}::jsonb,
+        finished_at = ${finishedAt},
+        updated_at = ${finishedAt}
+      where id = ${runId}
+    `;
 
     return {
       runId,
@@ -809,50 +896,56 @@ export async function syncChannelIncremental(input: {
     };
   } catch (error) {
     const finishedAt = new Date().toISOString();
-    await input.service
-      .from("map_sync_runs")
-      .update({
-        status: "failed",
-        error_message: error instanceof Error ? error.message : "Sync failed",
-        finished_at: finishedAt,
-        updated_at: finishedAt,
-      })
-      .eq("id", runId);
+    await sql`
+      update public.map_sync_runs
+      set
+        status = 'failed',
+        error_message = ${error instanceof Error ? error.message : "Sync failed"},
+        finished_at = ${finishedAt},
+        updated_at = ${finishedAt}
+      where id = ${runId}
+    `;
     throw error;
   }
 }
 
-export async function fetchMapSyncRun(service: SupabaseClient, runId: string) {
-  const { data, error } = await service
-    .from("map_sync_runs")
-    .select("*")
-    .eq("id", runId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data;
+export async function fetchMapSyncRun(runId: string) {
+  const runs = await sql<Array<Record<string, unknown>>>`
+    select *
+    from public.map_sync_runs
+    where id = ${runId}
+    limit 1
+  `;
+  return runs[0] || null;
 }
 
 export async function confirmManualLocation(input: {
-  service: SupabaseClient;
   channelId: string;
   videoId: string;
   countryCode: string;
   city: string;
 }): Promise<TravelVideoLocation> {
-  const { data: videoRow, error: videoError } = await input.service
-    .from("videos")
-    .select("id,youtube_video_id,title,description,thumbnail_url,published_at,view_count,like_count,comment_count")
-    .eq("id", input.videoId)
-    .eq("channel_id", input.channelId)
-    .single();
-
-  if (videoError || !videoRow) {
-    throw new Error(videoError?.message || "Video no encontrado.");
-  }
+  const videoRows = await sql<
+    Array<{
+      id: string;
+      youtube_video_id: string;
+      title: string;
+      description: string | null;
+      thumbnail_url: string | null;
+      published_at: string | null;
+      view_count: number | string | null;
+      like_count: number | string | null;
+      comment_count: number | string | null;
+    }>
+  >`
+    select id, youtube_video_id, title, description, thumbnail_url, published_at, view_count, like_count, comment_count
+    from public.videos
+    where id = ${input.videoId}
+      and channel_id = ${input.channelId}
+    limit 1
+  `;
+  const videoRow = videoRows[0];
+  if (!videoRow) throw new Error("Video no encontrado.");
 
   const geoQuery = [input.city, input.countryCode].filter(Boolean).join(", ");
   const geo = await geocodeLocation(geoQuery);
@@ -889,7 +982,7 @@ export async function confirmManualLocation(input: {
     },
   });
 
-  await upsertPrimaryLocation(input.service, {
+  await upsertPrimaryLocation({
     channelId: input.channelId,
     videoId: videoRow.id,
     location,
@@ -899,18 +992,18 @@ export async function confirmManualLocation(input: {
   });
 
   const now = new Date().toISOString();
-  await input.service
-    .from("videos")
-    .update({
-      location_status: "verified_manual",
-      verification_source: "manual",
-      location_score: score,
-      needs_manual_reason: null,
-      location_evidence: location.location_evidence || {},
-      last_location_checked_at: now,
-      updated_at: now,
-    })
-    .eq("id", input.videoId);
+  await sql`
+    update public.videos
+    set
+      location_status = 'verified_manual',
+      verification_source = 'manual',
+      location_score = ${score},
+      needs_manual_reason = null,
+      location_evidence = ${JSON.stringify(location.location_evidence || {})}::jsonb,
+      last_location_checked_at = ${now},
+      updated_at = ${now}
+    where id = ${input.videoId}
+  `;
 
   return location;
 }

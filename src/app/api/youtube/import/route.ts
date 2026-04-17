@@ -4,7 +4,7 @@ import { DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_VIDEO_LOCATIONS } from "@/lib/dem
 import { buildAnalyticsFromVideoLocations } from "@/lib/analytics";
 import { createPreviewSession } from "@/lib/preview-session";
 import { importYoutubeChannel, importYoutubeChannelPreview } from "@/lib/youtube-import";
-import { createClient } from "@/lib/supabase-server";
+import { getSessionUserIdFromRequest } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 
@@ -71,29 +71,14 @@ export async function POST(request: Request) {
       });
     }
 
-    const hasSupabaseAuthConfig = Boolean(
-      process.env.NEXT_PUBLIC_SUPABASE_URL &&
-        (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) &&
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
-    if (!hasSupabaseAuthConfig) {
-      return NextResponse.json(await createPreviewImportResponse(payload.channelUrl));
-    }
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const userId = getSessionUserIdFromRequest(request);
+    if (!userId) {
       return NextResponse.json(await createPreviewImportResponse(payload.channelUrl));
     }
 
     assertImportProvidersConfigured();
 
-    const result = await importYoutubeChannel({ userId: user.id, channelUrl: payload.channelUrl });
+    const result = await importYoutubeChannel({ userId, channelUrl: payload.channelUrl });
 
     return NextResponse.json(result);
   } catch (error) {

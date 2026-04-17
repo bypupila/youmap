@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase-server";
-import { createServiceRoleClient } from "@/lib/supabase-service";
+import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { sql } from "@/lib/neon";
 
 const sponsorSchema = z.object({
   brand_name: z.string().min(2),
@@ -35,49 +35,49 @@ export async function POST(request: Request) {
       });
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const userId = getSessionUserIdFromRequest(request);
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const service = createServiceRoleClient();
-
-    const { data: sponsor, error: sponsorError } = await service
-      .from("sponsors")
-      .insert({
-        user_id: user.id,
-        brand_name: payload.brand_name,
-        logo_url: payload.logo_url,
-        website_url: payload.website_url,
-        affiliate_url: payload.affiliate_url,
-        discount_code: payload.discount_code,
-        description: payload.description,
-        active: true,
-      })
-      .select("id")
-      .single();
-
-    if (sponsorError || !sponsor) {
-      return NextResponse.json({ error: sponsorError?.message || "Failed to create sponsor" }, { status: 400 });
+    const sponsorRows = await sql<Array<{ id: string }>>`
+      insert into public.sponsors (
+        user_id,
+        brand_name,
+        logo_url,
+        website_url,
+        affiliate_url,
+        discount_code,
+        description,
+        active
+      )
+      values (
+        ${userId},
+        ${payload.brand_name},
+        ${payload.logo_url},
+        ${payload.website_url},
+        ${payload.affiliate_url},
+        ${payload.discount_code},
+        ${payload.description},
+        true
+      )
+      returning id
+    `;
+    const sponsor = sponsorRows[0];
+    if (!sponsor?.id) {
+      return NextResponse.json({ error: "Failed to create sponsor" }, { status: 400 });
     }
 
     if (payload.country_code) {
-      await service.from("sponsor_geo_rules").insert({
-        sponsor_id: sponsor.id,
-        country_code: payload.country_code.toUpperCase(),
-        priority: 10,
-      });
+      await sql`
+        insert into public.sponsor_geo_rules (sponsor_id, country_code, priority)
+        values (${sponsor.id}, ${payload.country_code.toUpperCase()}, 10)
+      `;
     } else {
-      await service.from("sponsor_geo_rules").insert({
-        sponsor_id: sponsor.id,
-        country_code: null,
-        priority: 0,
-      });
+      await sql`
+        insert into public.sponsor_geo_rules (sponsor_id, country_code, priority)
+        values (${sponsor.id}, null, 0)
+      `;
     }
 
     return NextResponse.json({ ok: true, id: sponsor.id });

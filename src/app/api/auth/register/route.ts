@@ -2,13 +2,10 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { importYoutubeChannel } from "@/lib/youtube-import";
-import { createServiceRoleClient } from "@/lib/supabase-service";
-import {
-  isValidUsername,
-  normalizeEmail,
-  normalizeUsername,
-  toPublicMapPath,
-} from "@/lib/auth-identifiers";
+import { hashPassword } from "@/lib/auth-password";
+import { setSessionCookie } from "@/lib/auth-session";
+import { isValidUsername, normalizeEmail, normalizeUsername, toPublicMapPath } from "@/lib/auth-identifiers";
+import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,79 +31,61 @@ function buildChannelInput(payload: z.infer<typeof payloadSchema>) {
   return null;
 }
 
-async function ensureAuthUser(args: {
-  userId: string | null;
-  email: string;
-  password: string;
-  displayName: string;
-}) {
-  const service = createServiceRoleClient();
-  const metadata = { display_name: args.displayName };
-
-  if (args.userId) {
-    const { data, error } = await service.auth.admin.updateUserById(args.userId, {
-      email: args.email,
-      password: args.password,
-      email_confirm: true,
-      user_metadata: metadata,
-    });
-
-    if (error || !data.user?.id) {
-      throw new Error(error?.message || "No se pudo actualizar la cuenta de autenticación");
-    }
-    return data.user.id;
-  }
-
-  const { data, error } = await service.auth.admin.createUser({
-    email: args.email,
-    password: args.password,
-    email_confirm: true,
-    user_metadata: metadata,
-  });
-
-  if (error || !data.user?.id) {
-    throw new Error(error?.message || "No se pudo crear la cuenta de autenticación");
-  }
-
-  return data.user.id;
-}
-
 async function upsertTrialSubscription(args: { userId: string; selectedPlan: string }) {
-  const service = createServiceRoleClient();
   const now = new Date();
   const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
   const manualSubscriptionId = `manual-test-${args.userId}`;
 
-  const { data: planRow } = await service
-    .from("subscription_plans")
-    .select("id")
-    .eq("slug", args.selectedPlan)
-    .maybeSingle();
+  const planRows = await sql<Array<{ id: string }>>`
+    select id
+    from public.subscription_plans
+    where slug = ${args.selectedPlan}
+    limit 1
+  `;
+  const planId = planRows[0]?.id || null;
 
-  await service.from("subscriptions").upsert(
-    {
-      user_id: args.userId,
-      plan_id: planRow?.id || null,
-      polar_subscription_id: manualSubscriptionId,
-      polar_customer_id: "manual-test",
-      status: "trialing",
-      current_period_start: now.toISOString(),
-      current_period_end: trialEnd.toISOString(),
-      cancel_at_period_end: false,
-      metadata: {
-        source: "manual_test_mode",
-      },
-      updated_at: now.toISOString(),
-    },
-    { onConflict: "polar_subscription_id" }
-  );
+  await sql`
+    insert into public.subscriptions (
+      user_id,
+      plan_id,
+      polar_subscription_id,
+      polar_customer_id,
+      status,
+      current_period_start,
+      current_period_end,
+      cancel_at_period_end,
+      metadata,
+      updated_at
+    )
+    values (
+      ${args.userId},
+      ${planId},
+      ${manualSubscriptionId},
+      'manual-test',
+      'trialing',
+      ${now.toISOString()},
+      ${trialEnd.toISOString()},
+      false,
+      ${JSON.stringify({ source: "manual_test_mode" })}::jsonb,
+      ${now.toISOString()}
+    )
+    on conflict (polar_subscription_id)
+    do update set
+      user_id = excluded.user_id,
+      plan_id = excluded.plan_id,
+      polar_customer_id = excluded.polar_customer_id,
+      status = excluded.status,
+      current_period_start = excluded.current_period_start,
+      current_period_end = excluded.current_period_end,
+      cancel_at_period_end = excluded.cancel_at_period_end,
+      metadata = excluded.metadata,
+      updated_at = excluded.updated_at
+  `;
 }
 
 export async function POST(request: Request) {
   try {
     const payload = payloadSchema.parse(await request.json());
-    const service = createServiceRoleClient();
-
     const username = normalizeUsername(payload.username);
     const email = normalizeEmail(payload.email);
     const displayName = payload.displayName.trim();
@@ -130,57 +109,84 @@ export async function POST(request: Request) {
       );
     }
 
-    const [{ data: existingByUsername, error: usernameError }, { data: existingByEmail, error: emailError }] =
-      await Promise.all([
-        service.from("users").select("id,email,username").eq("username", username).maybeSingle(),
-        service.from("users").select("id,email,username").eq("email", email).maybeSingle(),
-      ]);
+    const existingByUsernameRows = await sql<Array<{ id: string; email: string; username: string }>>`
+      select id, email, username
+      from public.users
+      where username = ${username}
+      limit 1
+    `;
+    const existingByEmailRows = await sql<Array<{ id: string; email: string; username: string }>>`
+      select id, email, username
+      from public.users
+      where email = ${email}
+      limit 1
+    `;
 
-    if (usernameError || emailError) {
-      return NextResponse.json(
-        { error: usernameError?.message || emailError?.message || "No se pudo validar la cuenta" },
-        { status: 400 }
-      );
-    }
+    const existingByUsername = existingByUsernameRows[0] || null;
+    const existingByEmail = existingByEmailRows[0] || null;
 
     if (existingByUsername && existingByUsername.email !== email) {
       return NextResponse.json({ error: "Ese nombre de usuario ya está en uso." }, { status: 409 });
     }
 
-    const existingUserId = existingByEmail?.id || existingByUsername?.id || null;
+    const userId = existingByEmail?.id || existingByUsername?.id || randomUUID();
+    const nowIso = new Date().toISOString();
+    const passwordHash = hashPassword(payload.password);
 
-    const authUserId = await ensureAuthUser({
-      userId: existingUserId,
-      email,
-      password: payload.password,
-      displayName,
-    });
+    await sql`
+      insert into public.users (id, email, username, display_name, updated_at)
+      values (${userId}, ${email}, ${username}, ${displayName}, ${nowIso})
+      on conflict (id)
+      do update set
+        email = excluded.email,
+        username = excluded.username,
+        display_name = excluded.display_name,
+        updated_at = excluded.updated_at
+    `;
 
-    await service.from("users").upsert(
-      {
-        id: authUserId,
-        email,
-        username,
-        display_name: displayName,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
+    await sql`
+      insert into public.user_credentials (user_id, password_hash, updated_at)
+      values (${userId}, ${passwordHash}, ${nowIso})
+      on conflict (user_id)
+      do update set
+        password_hash = excluded.password_hash,
+        updated_at = excluded.updated_at
+    `;
 
-    await service.from("onboarding_state").upsert(
-      {
-        user_id: authUserId,
-        current_step: "plan",
-        completed_steps: ["welcome", "youtube"],
-        selected_plan: selectedPlan,
-        youtube_channel_id: String(payload.youtubeChannelId || "").trim() || null,
-        is_complete: false,
-        demo_mode: false,
-        last_seen_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+    await sql`
+      insert into public.onboarding_state (
+        user_id,
+        current_step,
+        completed_steps,
+        selected_plan,
+        youtube_channel_id,
+        is_complete,
+        demo_mode,
+        last_seen_at,
+        updated_at
+      )
+      values (
+        ${userId},
+        'plan',
+        array['welcome', 'youtube']::text[],
+        ${selectedPlan},
+        ${String(payload.youtubeChannelId || "").trim() || null},
+        false,
+        false,
+        ${nowIso},
+        ${nowIso}
+      )
+      on conflict (user_id)
+      do update set
+        current_step = excluded.current_step,
+        completed_steps = excluded.completed_steps,
+        selected_plan = excluded.selected_plan,
+        youtube_channel_id = excluded.youtube_channel_id,
+        is_complete = excluded.is_complete,
+        demo_mode = excluded.demo_mode,
+        last_seen_at = excluded.last_seen_at,
+        updated_at = excluded.updated_at
+    `;
 
     let channelId: string | null = null;
     let importSummary: {
@@ -192,16 +198,15 @@ export async function POST(request: Request) {
 
     if (payload.activateWithoutPayment) {
       await upsertTrialSubscription({
-        userId: authUserId,
+        userId,
         selectedPlan,
       });
 
       if (channelInput) {
         try {
           const importResult = await importYoutubeChannel({
-            userId: authUserId,
+            userId,
             channelUrl: channelInput,
-            service,
           });
           channelId = importResult.channel.id;
           importSummary = {
@@ -215,9 +220,9 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
-      user_id: authUserId,
+      user_id: userId,
       username,
       email,
       selected_plan: selectedPlan,
@@ -229,6 +234,8 @@ export async function POST(request: Request) {
       activation_mode: payload.activateWithoutPayment ? "test_no_payment" : "payment_required",
       request_id: randomUUID(),
     });
+    setSessionCookie(response, userId);
+    return response;
   } catch (error) {
     console.error("[api/auth/register]", error);
     return NextResponse.json(

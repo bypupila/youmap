@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getDemoSponsorByCountry, isDemoChannelId } from "@/lib/demo-data";
+import { sql } from "@/lib/neon";
 
 interface GeoRule {
   country_code: string | null;
@@ -14,7 +14,7 @@ interface SponsorRow {
   description: string | null;
   discount_code: string | null;
   affiliate_url: string | null;
-  sponsor_geo_rules: GeoRule[];
+  sponsor_geo_rules: GeoRule[] | null;
 }
 
 export async function GET(
@@ -28,32 +28,49 @@ export async function GET(
       return NextResponse.json({ sponsor: getDemoSponsorByCountry(countryCode) });
     }
 
-    const supabase = createServiceRoleClient();
-
-    const { data: channel, error: channelError } = await supabase
-      .from("channels")
-      .select("id,user_id")
-      .eq("id", params.channelId)
-      .maybeSingle();
-
-    if (channelError || !channel) {
+    const channels = await sql<Array<{ id: string; user_id: string }>>`
+      select id, user_id
+      from public.channels
+      where id = ${params.channelId}
+      limit 1
+    `;
+    const channel = channels[0] || null;
+    if (!channel) {
       return NextResponse.json({ sponsor: null });
     }
 
-    const { data, error } = await supabase
-      .from("sponsors")
-      .select("id,brand_name,logo_url,description,discount_code,affiliate_url,sponsor_geo_rules(country_code,priority)")
-      .eq("user_id", channel.user_id)
-      .eq("active", true)
-      .limit(50);
+    const data = await sql<SponsorRow[]>`
+      select
+        s.id,
+        s.brand_name,
+        s.logo_url,
+        s.description,
+        s.discount_code,
+        s.affiliate_url,
+        coalesce(
+          jsonb_agg(
+            jsonb_build_object(
+              'country_code', sgr.country_code,
+              'priority', sgr.priority
+            )
+          ) filter (where sgr.id is not null),
+          '[]'::jsonb
+        ) as sponsor_geo_rules
+      from public.sponsors s
+      left join public.sponsor_geo_rules sgr on sgr.sponsor_id = s.id
+      where s.user_id = ${channel.user_id}
+        and s.active = true
+      group by s.id
+      limit 50
+    `;
 
-    if (error || !data?.length) {
+    if (!data?.length) {
       return NextResponse.json({ sponsor: null });
     }
 
-    const scored = (data as SponsorRow[])
+    const scored = data
       .map((sponsor) => {
-        const rules = sponsor.sponsor_geo_rules || [];
+        const rules = Array.isArray(sponsor.sponsor_geo_rules) ? sponsor.sponsor_geo_rules : [];
         const exact = rules
           .filter((rule) => rule.country_code && rule.country_code === countryCode)
           .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0))[0];

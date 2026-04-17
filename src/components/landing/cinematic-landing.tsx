@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { FloatingTopBar, MetricPill, SignalPill } from "@/components/design-system/chrome";
 import { MapExperience } from "@/components/map/map-experience";
+import { MiniMapModel } from "@/components/landing/mini-map-model";
 import { DEMO_CHANNEL, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
@@ -15,15 +16,13 @@ const creatorByLocale = {
     channelId: "luisito-global-map",
     name: "Luisito Comunica",
     handle: "@luisitocomunica",
-    avatarUrl: "https://yt3.googleusercontent.com/ytc/AIdro_n8bIG30NfchfW9JpLs-LIgLr4AF6b_QJ4Pj9ceU0M=s176-c-k-c0x00ffffff-no-rj",
-    ctaMap: "Ver mundo",
+    avatarUrl: "/creators/luisito-comunica.png",
   },
   en: {
     channelId: "drew-global-map",
     name: "Drew Binsky",
     handle: "@drewbinsky",
     avatarUrl: "https://yt3.googleusercontent.com/ytc/AIdro_m8sS2E7bFGw87h9D5xUjN4j0kVxL3S9tJmF8xGGQ=s176-c-k-c0x00ffffff-no-rj",
-    ctaMap: "View world",
   },
 } as const;
 
@@ -68,15 +67,15 @@ export function CinematicLanding() {
             headline: "TravelMap para YouTube. Tu aventura digital por el mundo.",
             body: "Importa el canal, detecta países, entiende rendimiento por destino y abre una capa visual que se siente nativa para cualquier creador.",
             ctaPrimary: "Probar gratis",
-            ctaSecondary: "Ver mapa",
-            cardTitle: `Ve el mundo de ${activeCreator.name}`,
+            cardTitle: activeCreator.name,
+            ctaDemo: "Ver Demo",
           }
         : {
             headline: "TravelMap for YouTube. Your digital adventure across the world.",
             body: "Import your channel, detect countries, understand destination performance, and open a creator layer that feels native to YouTube.",
             ctaPrimary: "Try free",
-            ctaSecondary: "View map",
-            cardTitle: `See ${activeCreator.name}'s world`,
+            cardTitle: activeCreator.name,
+            ctaDemo: "View Demo",
           },
     [activeCreator.name, locale]
   );
@@ -86,8 +85,8 @@ export function CinematicLanding() {
   const totalCountries = new Set(mapVideos.map((video) => video.country_code).filter(Boolean)).size;
 
   return (
-    <main className="relative h-[100dvh] overflow-hidden bg-[#0f0f0f] text-[#f1f1f1]">
-      <div className="absolute inset-0 z-0">
+    <main className="relative isolate h-[100dvh] overflow-hidden bg-[#0f0f0f] text-[#f1f1f1]">
+      <div className="pointer-events-none absolute inset-0 z-0">
         <MapExperience
           channel={mapChannel}
           videoLocations={mapVideos}
@@ -100,22 +99,23 @@ export function CinematicLanding() {
 
       <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(15,15,15,0.92),rgba(15,15,15,0.35)_28%,rgba(15,15,15,0.18)_52%,rgba(15,15,15,0.86))]" />
 
-      <header className="absolute inset-x-0 top-0 z-[80] px-4 py-3 pointer-events-auto">
+      <header className="absolute inset-x-0 top-0 z-[320] px-4 py-3 pointer-events-auto">
         <FloatingTopBar
-          eyebrow="TravelMap - BY PUPILA"
+          eyebrow="YOUMAP - BY PUPILA"
           title="tu mapa de Youtube."
+          className="pointer-events-auto relative z-[321]"
           actions={
             <>
               <div className="hidden items-center gap-2 md:flex">
-                <button type="button" className="yt-nav-pill" data-active={locale === "es"} onClick={() => setLocale("es")}>
+                <button type="button" className="yt-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "es"} onClick={() => setLocale("es")}>
                   ES
                 </button>
-                <button type="button" className="yt-nav-pill" data-active={locale === "en"} onClick={() => setLocale("en")}>
+                <button type="button" className="yt-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "en"} onClick={() => setLocale("en")}>
                   EN
                 </button>
               </div>
               <MetricPill text="Travel creators" />
-              <Link href="/auth" className="yt-btn-primary">
+              <Link href="/auth" className="yt-btn-primary relative z-[322] pointer-events-auto">
                 Sign in
               </Link>
             </>
@@ -123,8 +123,8 @@ export function CinematicLanding() {
         />
       </header>
 
-      <section className="relative z-[70] flex h-full items-center justify-center px-4 pointer-events-none">
-        <div className="w-full max-w-[1120px] pointer-events-auto grid grid-cols-2 gap-6 items-center">
+      <section className="relative z-[310] flex h-full items-center justify-center px-4 pointer-events-auto">
+        <div className="relative z-[311] w-full max-w-[1120px] pointer-events-auto grid grid-cols-2 gap-6 items-center">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
@@ -132,7 +132,7 @@ export function CinematicLanding() {
             className="w-full min-w-0"
           >
             <div className="mb-5 flex flex-wrap gap-2">
-              <SignalPill text="1 punto = 1 video real" />
+              <SignalPill text="Mapa Interactivo" />
               <SignalPill text="Country analytics" />
               <SignalPill text="Sponsor hub" />
             </div>
@@ -143,11 +143,8 @@ export function CinematicLanding() {
             <p className="mt-4 max-w-[520px] text-[15px] leading-6 text-[#aaaaaa]">{copy.body}</p>
 
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/onboarding" className="yt-btn-primary">
+              <Link href="/onboarding" className="yt-btn-primary relative z-[322] pointer-events-auto">
                 {copy.ctaPrimary}
-              </Link>
-              <Link href={mapPath} className="yt-btn-secondary">
-                {copy.ctaSecondary}
               </Link>
             </div>
           </motion.div>
@@ -158,15 +155,9 @@ export function CinematicLanding() {
             transition={{ delay: 0.1 }}
             className="w-full min-w-0"
           >
-            <Link href={mapPath} className="pointer-events-auto block w-full rounded-2xl border border-white/10 bg-[#181818]/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur hover:bg-[#1f1f1f]/95">
+            <Link href={mapPath} className="pointer-events-auto relative z-[322] block w-full rounded-2xl border border-white/10 bg-[#181818]/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur hover:bg-[#1f1f1f]/95">
               <div className="yt-video-thumb aspect-video bg-[radial-gradient(circle_at_30%_30%,#2c2c2c,#111)]">
-                <div className="flex h-full w-full items-center justify-center">
-                  <div className="yt-mini-globe">
-                    <div className="yt-mini-globe-core" />
-                    <div className="yt-mini-globe-ring" />
-                    <div className="yt-mini-globe-ring delay" />
-                  </div>
-                </div>
+                <MiniMapModel />
               </div>
 
               <div className="mt-4 flex items-start gap-3">
@@ -182,7 +173,9 @@ export function CinematicLanding() {
               </div>
 
               <div className="mt-4">
-                <span className="yt-btn-primary w-full">{activeCreator.ctaMap}</span>
+                <span className="inline-flex h-10 w-full items-center justify-center rounded-full border border-[#f1f1f1] bg-[#f1f1f1] px-4 text-[14px] font-medium text-[#0f0f0f] transition-colors duration-200 hover:bg-[#e7e7e7]">
+                  {copy.ctaDemo}
+                </span>
               </div>
             </Link>
           </motion.div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createServiceRoleClient } from "@/lib/supabase-service";
 import { isEmailIdentifier, normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
+import { sql } from "@/lib/neon";
 
 const payloadSchema = z.object({
   identifier: z.string().min(3),
@@ -17,16 +17,13 @@ export async function POST(request: Request) {
     }
 
     const username = normalizeUsername(trimmed);
-    const service = createServiceRoleClient();
-    const { data: user, error } = await service
-      .from("users")
-      .select("email")
-      .eq("username", username)
-      .maybeSingle();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const users = await sql<Array<{ email: string }>>`
+      select email
+      from public.users
+      where username = ${username}
+      limit 1
+    `;
+    const user = users[0] || null;
 
     if (!user?.email) {
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });

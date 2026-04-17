@@ -11,7 +11,7 @@ interface FloatingTopBarProps {
 
 export function FloatingTopBar({ eyebrow, title, actions, className }: FloatingTopBarProps) {
   return (
-    <div className={cn("mx-auto yt-navbar", className)}>
+    <div className={cn("mx-auto yt-navbar pointer-events-auto", className)}>
       <div className="yt-logo-lockup">
         <div className="yt-logo-badge" aria-hidden="true">
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
@@ -25,13 +25,15 @@ export function FloatingTopBar({ eyebrow, title, actions, className }: FloatingT
       </div>
 
       <div className="hidden flex-1 justify-center lg:flex">
-        <div className="yt-search">
-          <input value="" readOnly aria-label="Search" placeholder="Search across videos, countries, or creators" />
-          <button type="button" aria-label="Search placeholder">
-            <svg viewBox="0 0 24 24" className="mx-auto h-4 w-4 fill-current">
+        <div className="yt-search" aria-hidden="true">
+          <div className="flex h-full min-w-0 flex-1 items-center px-4 text-[13px] text-[#aaaaaa]">
+            Search across videos, countries, or creators
+          </div>
+          <div className="flex h-full min-w-16 items-center justify-center border-l border-white/10 bg-[#222222] text-[#aaaaaa]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
               <path d="M15.5 14h-.8l-.3-.3a6 6 0 1 0-.7.7l.3.3v.8L19 20.5 20.5 19 15.5 14Zm-5.5 0a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" />
             </svg>
-          </button>
+          </div>
         </div>
       </div>
 

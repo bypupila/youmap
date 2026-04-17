@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-server";
-import { createServiceRoleClient } from "@/lib/supabase-service";
+import { getSessionUserIdFromRequest } from "@/lib/current-user";
 import { fetchMapSyncRun } from "@/lib/map-sync";
+import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
@@ -12,31 +12,25 @@ export async function GET(_request: Request, { params }: { params: { runId: stri
       return NextResponse.json({ error: "runId is required" }, { status: 400 });
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const userId = getSessionUserIdFromRequest(_request);
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const service = createServiceRoleClient();
-    const run = await fetchMapSyncRun(service, runId);
+    const run = await fetchMapSyncRun(runId);
     if (!run) {
       return NextResponse.json({ error: "Sync run not found" }, { status: 404 });
     }
 
-    const { data: channel, error: channelError } = await service
-      .from("channels")
-      .select("id,user_id")
-      .eq("id", run.channel_id)
-      .maybeSingle();
-
-    if (channelError) {
-      return NextResponse.json({ error: channelError.message }, { status: 400 });
-    }
-    if (!channel || channel.user_id !== user.id) {
+    const channelId = String((run as { channel_id?: string }).channel_id || "");
+    const channels = await sql<Array<{ id: string; user_id: string }>>`
+      select id, user_id
+      from public.channels
+      where id = ${channelId}
+      limit 1
+    `;
+    const channel = channels[0] || null;
+    if (!channel || channel.user_id !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

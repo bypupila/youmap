@@ -1,11 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { MapExperience } from "@/components/map/map-experience";
 import { FloatingTopBar, MetricPill } from "@/components/design-system/chrome";
 import { Button } from "@/components/ui/button";
 import { DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
 import { loadMapDataByChannelId, type MapDataPayload } from "@/lib/map-data";
 import { readPreviewSession } from "@/lib/preview-session";
-import { createClient } from "@/lib/supabase-server";
+import { getSessionUserIdFromServerCookies } from "@/lib/current-user";
+import { sql } from "@/lib/neon";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
 interface DashboardPageProps {
@@ -20,7 +22,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const isDemoMode = searchParams.demo === "1";
   const previewId = searchParams.preview || "";
   const previewSession = previewId ? await readPreviewSession(previewId) : null;
-  const fallbackChannelId = isDemoMode ? DEMO_CHANNEL_SLUG : await resolveUserChannelId();
+  let fallbackChannelId = "";
+
+  if (isDemoMode) {
+    fallbackChannelId = DEMO_CHANNEL_SLUG;
+  } else if (!previewSession) {
+    const userId = await getSessionUserIdFromServerCookies();
+    if (!userId) redirect("/auth");
+    const hasSubscription = await userHasActiveSubscription(userId);
+    if (!hasSubscription) redirect("/pricing");
+    fallbackChannelId = await resolveUserChannelId(userId);
+  }
+
   const channelId = searchParams.channelId || fallbackChannelId;
 
   const payload: MapDataPayload | null = previewSession
@@ -107,18 +120,24 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-async function resolveUserChannelId() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.id) return "";
+async function userHasActiveSubscription(userId: string) {
+  const rows = await sql<Array<{ id: string }>>`
+    select id
+    from public.subscriptions
+    where user_id = ${userId}
+      and status in ('active', 'trialing')
+    order by updated_at desc
+    limit 1
+  `;
+  return Boolean(rows[0]?.id);
+}
 
-  const { data: channel } = await supabase
-    .from("channels")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  return channel?.id || "";
+async function resolveUserChannelId(userId: string) {
+  const channels = await sql<Array<{ id: string }>>`
+    select id
+    from public.channels
+    where user_id = ${userId}
+    limit 1
+  `;
+  return channels[0]?.id || "";
 }

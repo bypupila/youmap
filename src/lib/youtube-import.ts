@@ -1,12 +1,11 @@
 import { randomUUID } from "crypto";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { createServiceRoleClient } from "@/lib/supabase-service";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { geocodeLocation } from "@/lib/geocode";
 import { getGeminiClient, getGeminiModel } from "@/lib/gemini";
 import { LOCATION_PROMPT } from "@/lib/youtube-location-prompt";
 import { loadUploadsPlaylistVideos, loadVideoDetails, resolveYouTubeChannel } from "@/lib/youtube";
+import { sql } from "@/lib/neon";
 
 const travelTypeSchema = z.enum(["city_tour", "nature", "food", "culture", "adventure", "beach", "road_trip", "other"]);
 
@@ -75,7 +74,6 @@ const geminiJsonSchema = {
 interface ImportYoutubeChannelInput {
   userId: string;
   channelUrl: string;
-  service?: SupabaseClient;
 }
 
 export interface ImportYoutubeChannelResult {
@@ -95,7 +93,7 @@ export interface ImportYoutubeChannelResult {
   };
 }
 
-async function upsertExtractionRun(service: SupabaseClient, input: {
+async function upsertExtractionRun(input: {
   channelId: string;
   videoId: string;
   status: string;
@@ -108,38 +106,69 @@ async function upsertExtractionRun(service: SupabaseClient, input: {
   startedAt?: string | null;
   finishedAt?: string | null;
 }) {
-  const { data: existing } = await service
-    .from("location_extraction_runs")
-    .select("id")
-    .eq("video_id", input.videoId)
-    .maybeSingle();
-
-  const payload = {
-    channel_id: input.channelId,
-    video_id: input.videoId,
-    status: input.status,
-    prompt_version: input.promptVersion,
-    model: input.model,
-    input: input.inputPayload,
-    output: input.outputPayload,
-    error_message: input.errorMessage || null,
-    attempts: input.attempts ?? 1,
-    started_at: input.startedAt || null,
-    finished_at: input.finishedAt || null,
-    updated_at: new Date().toISOString(),
-  };
+  const existingRows = await sql<Array<{ id: string }>>`
+    select id
+    from public.location_extraction_runs
+    where video_id = ${input.videoId}
+    limit 1
+  `;
+  const existing = existingRows[0] || null;
 
   if (existing?.id) {
-    await service.from("location_extraction_runs").update(payload).eq("id", existing.id);
-    return existing.id as string;
+    await sql`
+      update public.location_extraction_runs
+      set
+        channel_id = ${input.channelId},
+        video_id = ${input.videoId},
+        status = ${input.status},
+        prompt_version = ${input.promptVersion},
+        model = ${input.model},
+        input = ${JSON.stringify(input.inputPayload || {})}::jsonb,
+        output = ${JSON.stringify(input.outputPayload || {})}::jsonb,
+        error_message = ${input.errorMessage || null},
+        attempts = ${input.attempts ?? 1},
+        started_at = ${input.startedAt || null},
+        finished_at = ${input.finishedAt || null},
+        updated_at = ${new Date().toISOString()}
+      where id = ${existing.id}
+    `;
+    return existing.id;
   }
 
-  const { data, error } = await service.from("location_extraction_runs").insert(payload).select("id").single();
-  if (error || !data) {
-    throw new Error(error?.message || "Could not create extraction run");
-  }
-
-  return data.id as string;
+  const inserted = await sql<Array<{ id: string }>>`
+    insert into public.location_extraction_runs (
+      channel_id,
+      video_id,
+      status,
+      prompt_version,
+      model,
+      input,
+      output,
+      error_message,
+      attempts,
+      started_at,
+      finished_at,
+      updated_at
+    )
+    values (
+      ${input.channelId},
+      ${input.videoId},
+      ${input.status},
+      ${input.promptVersion},
+      ${input.model},
+      ${JSON.stringify(input.inputPayload || {})}::jsonb,
+      ${JSON.stringify(input.outputPayload || {})}::jsonb,
+      ${input.errorMessage || null},
+      ${input.attempts ?? 1},
+      ${input.startedAt || null},
+      ${input.finishedAt || null},
+      ${new Date().toISOString()}
+    )
+    returning id
+  `;
+  const row = inserted[0];
+  if (!row?.id) throw new Error("Could not create extraction run");
+  return row.id;
 }
 
 async function extractLocationForVideo(channel: { channel_name: string; description: string | null }, video: {
@@ -317,57 +346,85 @@ export async function importYoutubeChannelPreview(channelUrl: string): Promise<I
 export async function importYoutubeChannel({
   userId,
   channelUrl,
-  service = createServiceRoleClient(),
 }: ImportYoutubeChannelInput): Promise<ImportYoutubeChannelResult> {
   const importRunId = randomUUID();
   const startedAt = new Date().toISOString();
 
   try {
     const source = await resolveYouTubeChannel(channelUrl);
-    const { data: channelRow, error: channelError } = await service
-      .from("channels")
-      .upsert(
-        {
-          user_id: userId,
-          youtube_channel_id: source.youtube_channel_id,
-          channel_name: source.channel_name,
-          channel_handle: source.channel_handle,
-          thumbnail_url: source.thumbnail_url,
-          subscriber_count: source.subscriber_count,
-          description: source.description,
-          is_public: true,
-          published_at: source.published_at,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
+    const channelRows = await sql<
+      Array<{
+        id: string;
+        user_id: string;
+        channel_name: string;
+        channel_handle: string | null;
+        thumbnail_url: string | null;
+        subscriber_count: number | null;
+        description: string | null;
+      }>
+    >`
+      insert into public.channels (
+        user_id,
+        youtube_channel_id,
+        channel_name,
+        channel_handle,
+        thumbnail_url,
+        subscriber_count,
+        description,
+        is_public,
+        published_at,
+        updated_at
       )
-      .select("id,user_id,channel_name,channel_handle,thumbnail_url,subscriber_count,description")
-      .single();
+      values (
+        ${userId},
+        ${source.youtube_channel_id},
+        ${source.channel_name},
+        ${source.channel_handle},
+        ${source.thumbnail_url},
+        ${source.subscriber_count},
+        ${source.description},
+        true,
+        ${source.published_at},
+        ${new Date().toISOString()}
+      )
+      on conflict (user_id)
+      do update set
+        youtube_channel_id = excluded.youtube_channel_id,
+        channel_name = excluded.channel_name,
+        channel_handle = excluded.channel_handle,
+        thumbnail_url = excluded.thumbnail_url,
+        subscriber_count = excluded.subscriber_count,
+        description = excluded.description,
+        is_public = excluded.is_public,
+        published_at = excluded.published_at,
+        updated_at = excluded.updated_at
+      returning id, user_id, channel_name, channel_handle, thumbnail_url, subscriber_count, description
+    `;
+    const uploadChannel = channelRows[0];
+    if (!uploadChannel) throw new Error("Could not save channel");
 
-    if (channelError || !channelRow) {
-      throw new Error(channelError?.message || "Could not save channel");
-    }
-
-    const uploadChannel = channelRow as {
-      id: string;
-      user_id: string;
-      channel_name: string;
-      channel_handle: string | null;
-      thumbnail_url: string | null;
-      subscriber_count: number | null;
-      description: string | null;
-    };
-
-    await service.from("channel_import_runs").insert({
-      id: importRunId,
-      channel_id: uploadChannel.id,
-      status: "running",
-      source: "youtube",
-      input: { channelUrl },
-      output: {},
-      started_at: startedAt,
-      updated_at: startedAt,
-    });
+    await sql`
+      insert into public.channel_import_runs (
+        id,
+        channel_id,
+        status,
+        source,
+        input,
+        output,
+        started_at,
+        updated_at
+      )
+      values (
+        ${importRunId},
+        ${uploadChannel.id},
+        'running',
+        'youtube',
+        ${JSON.stringify({ channelUrl })}::jsonb,
+        '{}'::jsonb,
+        ${startedAt},
+        ${startedAt}
+      )
+    `;
 
     const playlistVideos = await loadUploadsPlaylistVideos(source.uploads_playlist_id);
     const videoIds = playlistVideos.map((video) => video.contentDetails?.videoId).filter(Boolean) as string[];
@@ -386,37 +443,59 @@ export async function importYoutubeChannel({
       const publishedAt = details?.published_at || playlistItem.snippet?.publishedAt || playlistItem.contentDetails?.videoPublishedAt || null;
       const viewCount = details?.view_count ?? null;
 
-      const { data: videoRow, error: videoError } = await service
-        .from("videos")
-        .upsert(
-          {
-            channel_id: uploadChannel.id,
-            youtube_video_id: videoId,
-            title,
-            description,
-            thumbnail_url: thumbnailUrl,
-            published_at: publishedAt,
-            view_count: viewCount ?? 0,
-            like_count: details?.like_count ?? null,
-            comment_count: details?.comment_count ?? null,
-            travel_type: null,
-            location_status: "processing",
-            source_payload: {
-              playlist_item: playlistItem,
-              video_details: details?.raw || null,
-            },
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "channel_id,youtube_video_id" }
+      const videoRows = await sql<Array<{ id: string }>>`
+        insert into public.videos (
+          channel_id,
+          youtube_video_id,
+          title,
+          description,
+          thumbnail_url,
+          published_at,
+          view_count,
+          like_count,
+          comment_count,
+          travel_type,
+          location_status,
+          source_payload,
+          updated_at
         )
-        .select("id")
-        .single();
-
-      if (videoError || !videoRow) {
-        throw new Error(videoError?.message || `Could not persist video ${videoId}`);
+        values (
+          ${uploadChannel.id},
+          ${videoId},
+          ${title},
+          ${description},
+          ${thumbnailUrl},
+          ${publishedAt},
+          ${viewCount ?? 0},
+          ${details?.like_count ?? null},
+          ${details?.comment_count ?? null},
+          null,
+          'processing',
+          ${JSON.stringify({
+            playlist_item: playlistItem,
+            video_details: details?.raw || null,
+          })}::jsonb,
+          ${new Date().toISOString()}
+        )
+        on conflict (channel_id, youtube_video_id)
+        do update set
+          title = excluded.title,
+          description = excluded.description,
+          thumbnail_url = excluded.thumbnail_url,
+          published_at = excluded.published_at,
+          view_count = excluded.view_count,
+          like_count = excluded.like_count,
+          comment_count = excluded.comment_count,
+          travel_type = excluded.travel_type,
+          location_status = excluded.location_status,
+          source_payload = excluded.source_payload,
+          updated_at = excluded.updated_at
+        returning id
+      `;
+      const videoRecordId = videoRows[0]?.id;
+      if (!videoRecordId) {
+        throw new Error(`Could not persist video ${videoId}`);
       }
-
-      const videoRecordId = videoRow.id as string;
       const now = new Date().toISOString();
 
       const extraction = await extractLocationForVideo(
@@ -430,16 +509,16 @@ export async function importYoutubeChannel({
       );
 
       if (!extraction.has_location || !extraction.primary_location) {
-        await service
-          .from("videos")
-          .update({
-            travel_type: null,
-            location_status: "no_location",
-            updated_at: now,
-          })
-          .eq("id", videoRecordId);
+        await sql`
+          update public.videos
+          set
+            travel_type = null,
+            location_status = 'no_location',
+            updated_at = ${now}
+          where id = ${videoRecordId}
+        `;
 
-        await upsertExtractionRun(service, {
+        await upsertExtractionRun({
           channelId: uploadChannel.id,
           videoId: videoRecordId,
           status: "completed",
@@ -459,16 +538,16 @@ export async function importYoutubeChannel({
 
       const geo = await geocodeLocation(createGeoQuery(extraction.primary_location));
       if (!geo) {
-        await service
-          .from("videos")
-          .update({
-            travel_type: extraction.primary_location.travel_type || null,
-            location_status: "failed",
-            updated_at: now,
-          })
-          .eq("id", videoRecordId);
+        await sql`
+          update public.videos
+          set
+            travel_type = ${extraction.primary_location.travel_type || null},
+            location_status = 'failed',
+            updated_at = ${now}
+          where id = ${videoRecordId}
+        `;
 
-        await upsertExtractionRun(service, {
+        await upsertExtractionRun({
           channelId: uploadChannel.id,
           videoId: videoRecordId,
           status: "failed",
@@ -499,64 +578,105 @@ export async function importYoutubeChannel({
 
       if (!primaryLocation) return null;
 
-      await service.from("video_locations").delete().eq("video_id", videoRecordId);
-      await service.from("video_locations").insert({
-        id: randomUUID(),
-        channel_id: uploadChannel.id,
-        video_id: videoRecordId,
-        is_primary: true,
-        country_code: primaryLocation.country_code,
-        country_name: primaryLocation.country_name,
-        location_label: primaryLocation.location_label,
-        city: extraction.primary_location.city || geo.city,
-        region: extraction.primary_location.region || geo.region,
-        lat: primaryLocation.lat,
-        lng: primaryLocation.lng,
-        confidence_score: primaryLocation.confidence_score,
-        travel_type: primaryLocation.travel_type,
-        source: "gemini",
-        raw_payload: {
-          gemini: extraction,
-          geocode: geo.raw,
-        },
-      });
+      await sql`
+        delete from public.video_locations
+        where video_id = ${videoRecordId}
+      `;
+      await sql`
+        insert into public.video_locations (
+          id,
+          channel_id,
+          video_id,
+          is_primary,
+          country_code,
+          country_name,
+          location_label,
+          city,
+          region,
+          lat,
+          lng,
+          confidence_score,
+          travel_type,
+          source,
+          raw_payload
+        )
+        values (
+          ${randomUUID()},
+          ${uploadChannel.id},
+          ${videoRecordId},
+          true,
+          ${primaryLocation.country_code},
+          ${primaryLocation.country_name || null},
+          ${primaryLocation.location_label || null},
+          ${extraction.primary_location.city || geo.city || null},
+          ${extraction.primary_location.region || geo.region || null},
+          ${primaryLocation.lat},
+          ${primaryLocation.lng},
+          ${primaryLocation.confidence_score || null},
+          ${primaryLocation.travel_type || null},
+          'gemini',
+          ${JSON.stringify({
+            gemini: extraction,
+            geocode: geo.raw,
+          })}::jsonb
+        )
+      `;
 
       for (const extra of extraction.additional_locations) {
         const extraGeo = await geocodeLocation(createGeoQuery(extra));
         if (!extraGeo) continue;
 
-        await service.from("video_locations").insert({
-          id: randomUUID(),
-          channel_id: uploadChannel.id,
-          video_id: videoRecordId,
-          is_primary: false,
-          country_code: extraGeo.countryCode || extra.country_code || "XX",
-          country_name: extraGeo.countryName || extra.country_name || "Unknown",
-          location_label: extra.location_label || extraGeo.label,
-          city: extra.city || extraGeo.city,
-          region: extra.region || extraGeo.region,
-          lat: extraGeo.lat,
-          lng: extraGeo.lng,
-          confidence_score: extra.confidence ?? null,
-          travel_type: extra.travel_type || null,
-          source: "gemini",
-          raw_payload: {
-            gemini: extraction,
-            geocode: extraGeo.raw,
-          },
-        });
+        await sql`
+          insert into public.video_locations (
+            id,
+            channel_id,
+            video_id,
+            is_primary,
+            country_code,
+            country_name,
+            location_label,
+            city,
+            region,
+            lat,
+            lng,
+            confidence_score,
+            travel_type,
+            source,
+            raw_payload
+          )
+          values (
+            ${randomUUID()},
+            ${uploadChannel.id},
+            ${videoRecordId},
+            false,
+            ${extraGeo.countryCode || extra.country_code || "XX"},
+            ${extraGeo.countryName || extra.country_name || "Unknown"},
+            ${extra.location_label || extraGeo.label || null},
+            ${extra.city || extraGeo.city || null},
+            ${extra.region || extraGeo.region || null},
+            ${extraGeo.lat},
+            ${extraGeo.lng},
+            ${extra.confidence ?? null},
+            ${extra.travel_type || null},
+            'gemini',
+            ${JSON.stringify({
+              gemini: extraction,
+              geocode: extraGeo.raw,
+            })}::jsonb
+          )
+        `;
       }
 
-      await service
-        .from("videos")
-        .update({
-          travel_type: primaryLocation.travel_type || null,
-          location_status: "mapped",
-          updated_at: now,
-        })
-        .eq("id", videoRecordId);
+      await sql`
+        update public.videos
+        set
+          travel_type = ${primaryLocation.travel_type || null},
+          location_status = 'mapped',
+          updated_at = ${now}
+        where id = ${videoRecordId}
+      `;
 
-      await upsertExtractionRun(service, {
+      await upsertExtractionRun({
         channelId: uploadChannel.id,
         videoId: videoRecordId,
         status: "completed",
@@ -577,69 +697,59 @@ export async function importYoutubeChannel({
       return primaryLocation;
     });
 
-    const allLocations = await service
-      .from("video_locations")
-      .select(
-        `
-        country_code,
-        country_name,
-        location_label,
-        lat,
-        lng,
-        confidence_score,
-        travel_type,
-        videos!inner(
-          youtube_video_id,
-          title,
-          description,
-          thumbnail_url,
-          published_at,
-          view_count
-        )
-      `
-      )
-      .eq("channel_id", uploadChannel.id)
-      .eq("is_primary", true)
-      .order("created_at", { ascending: false });
-
-    const normalizedLocations = ((allLocations.data || []) as Array<{
-      country_code: string;
-      country_name: string | null;
-      location_label: string | null;
-      lat: number | string;
-      lng: number | string;
-      confidence_score: number | string | null;
-      travel_type: string | null;
-      videos: Array<{
+    const allLocations = await sql<
+      Array<{
+        country_code: string;
+        country_name: string | null;
+        location_label: string | null;
+        lat: number | string;
+        lng: number | string;
+        confidence_score: number | string | null;
+        travel_type: string | null;
         youtube_video_id: string;
         title: string;
         description: string | null;
         thumbnail_url: string | null;
         published_at: string | null;
         view_count: number | string | null;
-      }>;
-    }>)
-      .map((row) => {
-        const video = row.videos?.[0];
-        if (!video) return null;
+      }>
+    >`
+      select
+        vl.country_code,
+        vl.country_name,
+        vl.location_label,
+        vl.lat,
+        vl.lng,
+        vl.confidence_score,
+        vl.travel_type,
+        v.youtube_video_id,
+        v.title,
+        v.description,
+        v.thumbnail_url,
+        v.published_at,
+        v.view_count
+      from public.video_locations vl
+      inner join public.videos v on v.id = vl.video_id
+      where vl.channel_id = ${uploadChannel.id}
+        and vl.is_primary = true
+      order by vl.created_at desc
+    `;
 
-        return {
-          youtube_video_id: video.youtube_video_id,
-          title: video.title,
-          description: video.description,
-          thumbnail_url: video.thumbnail_url,
-          published_at: video.published_at,
-          view_count: Number(video.view_count || 0),
-          travel_type: row.travel_type,
-          country_code: row.country_code,
-          country_name: row.country_name || row.country_code,
-          location_label: row.location_label,
-          lat: Number(row.lat),
-          lng: Number(row.lng),
-          confidence_score: Number(row.confidence_score || 0),
-        } satisfies TravelVideoLocation;
-      })
-      .filter(Boolean) as TravelVideoLocation[];
+    const normalizedLocations = allLocations.map((row) => ({
+      youtube_video_id: row.youtube_video_id,
+      title: row.title,
+      description: row.description,
+      thumbnail_url: row.thumbnail_url,
+      published_at: row.published_at,
+      view_count: Number(row.view_count || 0),
+      travel_type: row.travel_type,
+      country_code: row.country_code,
+      country_name: row.country_name || row.country_code,
+      location_label: row.location_label,
+      lat: Number(row.lat),
+      lng: Number(row.lng),
+      confidence_score: Number(row.confidence_score || 0),
+    } satisfies TravelVideoLocation));
 
     const channel: TravelChannel = {
       id: uploadChannel.id,
@@ -652,34 +762,52 @@ export async function importYoutubeChannel({
 
     const skippedVideos = eligibleVideoCount - normalizedLocations.length;
 
-    await service
-      .from("channel_import_runs")
-      .update({
-        status: "completed",
-        output: {
+    await sql`
+      update public.channel_import_runs
+      set
+        status = 'completed',
+        output = ${JSON.stringify({
           importedVideos: eligibleVideoCount,
           mappedVideos: normalizedLocations.length,
           skippedVideos,
           channel: source,
-        },
-        finished_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", importRunId);
+        })}::jsonb,
+        finished_at = ${new Date().toISOString()},
+        updated_at = ${new Date().toISOString()}
+      where id = ${importRunId}
+    `;
 
-    await service.from("onboarding_state").upsert(
-      {
-        user_id: userId,
-        current_step: "plan",
-        completed_steps: ["welcome", "youtube"],
-        youtube_channel_id: source.youtube_channel_id,
-        channel_id: uploadChannel.id,
-        is_complete: false,
-        last_seen_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+    await sql`
+      insert into public.onboarding_state (
+        user_id,
+        current_step,
+        completed_steps,
+        youtube_channel_id,
+        channel_id,
+        is_complete,
+        last_seen_at,
+        updated_at
+      )
+      values (
+        ${userId},
+        'plan',
+        array['welcome', 'youtube']::text[],
+        ${source.youtube_channel_id},
+        ${uploadChannel.id},
+        false,
+        ${new Date().toISOString()},
+        ${new Date().toISOString()}
+      )
+      on conflict (user_id)
+      do update set
+        current_step = excluded.current_step,
+        completed_steps = excluded.completed_steps,
+        youtube_channel_id = excluded.youtube_channel_id,
+        channel_id = excluded.channel_id,
+        is_complete = excluded.is_complete,
+        last_seen_at = excluded.last_seen_at,
+        updated_at = excluded.updated_at
+    `;
 
     return {
       import_run_id: importRunId,
@@ -697,15 +825,15 @@ export async function importYoutubeChannel({
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown import error";
-    await service
-      .from("channel_import_runs")
-      .update({
-        status: "failed",
-        error_message: errorMessage,
-        finished_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", importRunId);
+    await sql`
+      update public.channel_import_runs
+      set
+        status = 'failed',
+        error_message = ${errorMessage},
+        finished_at = ${new Date().toISOString()},
+        updated_at = ${new Date().toISOString()}
+      where id = ${importRunId}
+    `;
     throw error;
   }
 }

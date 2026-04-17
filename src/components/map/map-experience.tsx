@@ -273,9 +273,9 @@ export function MapExperience({
       ) : null}
 
       {showLegend ? (
-        <aside className="pointer-events-none absolute left-4 top-24 bottom-4 z-30 hidden w-[320px] lg:block">
+        <aside className="pointer-events-auto absolute left-4 top-24 bottom-4 z-30 hidden w-[320px] lg:block">
           <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} className="h-full">
-            <Card className="h-full bg-[#0f0f0f]/92">
+            <Card className="tm-surface-strong h-full">
               <CardHeader className="border-b border-white/10">
                 <CardTitle className="text-[16px] font-medium text-[#f1f1f1]">Countries</CardTitle>
                 <p className="text-[12px] text-[#aaaaaa]">Click a country to isolate its videos.</p>
@@ -324,7 +324,7 @@ export function MapExperience({
 
       {showLegend ? (
         <Sheet open={mobileLegendOpen} onOpenChange={setMobileLegendOpen}>
-          <SheetContent side="left" className="w-[92vw] border-white/10 bg-[#0f0f0f] p-0">
+          <SheetContent side="left" className="tm-surface-strong w-[92vw] p-0">
             <SheetHeader className="border-b border-white/10 px-5 py-4">
               <SheetTitle className="text-[#f1f1f1]">Countries</SheetTitle>
             </SheetHeader>
@@ -334,7 +334,7 @@ export function MapExperience({
                   <button
                     key={country.country_code}
                     type="button"
-                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[#212121] px-3 py-2 text-left"
+                    className="tm-surface flex w-full items-center justify-between rounded-xl px-3 py-2 text-left"
                     onClick={() => {
                       selectCountry(country.country_code);
                       setMobileLegendOpen(false);
@@ -354,7 +354,7 @@ export function MapExperience({
         <aside className="pointer-events-none absolute right-4 top-24 bottom-4 z-30 flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-4">
           {showOperationsPanel ? (
             <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="pointer-events-auto">
-              <Card className="bg-[#0f0f0f]/92">
+              <Card className="tm-surface-strong">
                 <CardHeader className="border-b border-white/10">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -404,7 +404,7 @@ export function MapExperience({
 
           {selectedCountryCode ? (
             <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="pointer-events-auto min-h-0 flex-1">
-              <Card className="flex h-full flex-col bg-[#0f0f0f]/92">
+              <Card className="tm-surface-strong flex h-full flex-col">
                 <CardHeader className="border-b border-white/10">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -427,7 +427,7 @@ export function MapExperience({
                             setPinnedVideo(video);
                             setFocusCountryCode(video.country_code || null);
                           }}
-                          className="w-full rounded-2xl border border-white/10 bg-[#212121] p-3 text-left transition-colors hover:bg-[#2a2a2a]"
+                          className="tm-surface flex w-full rounded-2xl p-3 text-left transition-colors hover:bg-white/10"
                         >
                           <VideoListItem video={video} />
                         </button>
@@ -441,7 +441,7 @@ export function MapExperience({
 
           {showActiveVideoCard && activeVideo && !selectedCountryCode && !pinnedVideo ? (
             <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="pointer-events-auto">
-              <Card className="bg-[#0f0f0f]/92">
+              <Card className="tm-surface-strong">
                 <CardContent className="px-4 py-4">
                   <p className="yt-overline text-[#aaaaaa]">Now hovering</p>
                   <div className="mt-3">
@@ -463,7 +463,7 @@ export function MapExperience({
       ) : null}
 
       {pinnedVideo ? (
-        <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/65 p-4" onClick={() => setPinnedVideo(null)}>
+        <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setPinnedVideo(null)}>
           <a
             href={pinnedVideo.video_url || `https://youtube.com/watch?v=${pinnedVideo.youtube_video_id}`}
             target="_blank"
@@ -471,7 +471,7 @@ export function MapExperience({
             className="block w-full max-w-[640px]"
             onClick={(event) => event.stopPropagation()}
           >
-            <Card className="overflow-hidden bg-[#181818]">
+            <Card className="tm-surface-strong overflow-hidden">
               <CardContent className="px-4 py-4">
                 <div className="yt-video-thumb aspect-video">
                   {pinnedVideo.thumbnail_url ? (
@@ -496,7 +496,7 @@ export function MapExperience({
       ) : null}
 
       <Dialog open={showResultModal} onOpenChange={setShowResultModal}>
-        <DialogContent className="max-w-4xl border-white/10 bg-[#181818]">
+        <DialogContent className="tm-surface-strong max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-[#f1f1f1]">Extraction report</DialogTitle>
             <DialogDescription className="text-[#aaaaaa]">
@@ -521,7 +521,7 @@ export function MapExperience({
                 pendingManual.map((video) => {
                   const draft = manualDrafts[video.video_id] || { country_code: video.country_code || "", city: video.city || "" };
                   return (
-                    <div key={video.video_id} className="rounded-2xl border border-white/10 bg-[#212121] p-4">
+                    <div key={video.video_id} className="tm-surface rounded-2xl p-4">
                       <div className="flex gap-4">
                         <div className="relative h-20 w-32 shrink-0 overflow-hidden rounded-xl bg-[#121212]">
                           {video.thumbnail_url ? (
@@ -606,7 +606,7 @@ function VideoListItem({ video, compact = false }: { video: TravelVideoLocation;
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-[#212121] px-3 py-3">
+    <div className="tm-surface rounded-xl px-3 py-3">
       <p className="text-[18px] leading-5 font-medium text-[#f1f1f1]">{formatNumber(value)}</p>
       <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-[#aaaaaa]">{label}</p>
     </div>

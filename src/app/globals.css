@@ -76,9 +76,21 @@ a {
 
 .tm-surface,
 .tm-surface-strong {
-  background: rgba(33, 33, 33, 0.92);
-  border: 1px solid var(--yt-border);
-  backdrop-filter: blur(18px);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(20px) saturate(1.1);
+}
+
+.tm-surface {
+  background: linear-gradient(180deg, rgba(26, 26, 26, 0.72), rgba(18, 18, 18, 0.58));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+}
+
+.tm-surface-strong {
+  background: linear-gradient(180deg, rgba(15, 15, 15, 0.82), rgba(15, 15, 15, 0.64));
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.38);
 }
 
 .tm-refraction::after {
@@ -98,8 +110,10 @@ a {
   padding: 8px 16px;
   border-radius: 999px;
   border: 1px solid var(--yt-border);
-  background: rgba(15, 15, 15, 0.92);
-  backdrop-filter: blur(18px);
+  background: rgba(15, 15, 15, 0.78);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
 }
 
 .yt-logo-lockup {
@@ -291,45 +305,6 @@ a {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-}
-
-@keyframes mini-globe-spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.yt-mini-globe {
-  position: relative;
-  width: 74px;
-  height: 74px;
-}
-
-.yt-mini-globe-core {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: radial-gradient(circle at 30% 28%, #6ad2ff, #2a77ff 42%, #0a2460 80%);
-  box-shadow: inset -10px -12px 18px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(62, 166, 255, 0.3);
-}
-
-.yt-mini-globe-ring {
-  position: absolute;
-  inset: -9px;
-  border-radius: 999px;
-  border: 1px solid rgba(241, 241, 241, 0.2);
-  transform-origin: center;
-  animation: mini-globe-spin 6s linear infinite;
-}
-
-.yt-mini-globe-ring.delay {
-  inset: -15px;
-  border-color: rgba(255, 255, 255, 0.12);
-  animation-duration: 9s;
-  animation-direction: reverse;
 }
 
 @layer base {

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getPolarClient } from "@/lib/polar";
-import { createClient } from "@/lib/supabase-server";
+import { getSessionUserById, getSessionUserIdFromRequest } from "@/lib/current-user";
+import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
@@ -13,32 +14,43 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const { plan } = querySchema.parse({ plan: url.searchParams.get("plan") || "" });
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const userId = getSessionUserIdFromRequest(request);
+    if (!userId) {
       return NextResponse.redirect(new URL(`/onboarding?plan=${encodeURIComponent(plan)}`, url.origin));
     }
 
-    const { data: planRow, error: planError } = await supabase
-      .from("subscription_plans")
-      .select("id,slug,name,polar_product_id,polar_price_id")
-      .eq("slug", plan)
-      .maybeSingle();
+    const users = await getSessionUserById(userId);
+    if (!users) {
+      return NextResponse.redirect(new URL("/auth", url.origin));
+    }
 
-    if (planError || !planRow?.polar_price_id) {
+    const planRows = await sql<
+      Array<{
+        id: string;
+        slug: string;
+        name: string;
+        polar_product_id: string | null;
+        polar_price_id: string | null;
+      }>
+    >`
+      select id, slug, name, polar_product_id, polar_price_id
+      from public.subscription_plans
+      where slug = ${plan}
+      limit 1
+    `;
+    const planRow = planRows[0] || null;
+
+    if (!planRow?.polar_price_id) {
       return NextResponse.redirect(new URL("/pricing?error=plan_unavailable", url.origin));
     }
 
-    const { data: channelRow } = await supabase
-      .from("channels")
-      .select("id")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const channelRows = await sql<Array<{ id: string }>>`
+      select id
+      from public.channels
+      where user_id = ${userId}
+      limit 1
+    `;
+    const channelRow = channelRows[0] || null;
 
     const polar = getPolarClient();
     const checkout = await polar.checkouts.create({
@@ -46,7 +58,7 @@ export async function GET(request: Request) {
       successUrl: channelRow?.id
         ? `${url.origin}/dashboard?channelId=${channelRow.id}&checkout=success`
         : `${url.origin}/dashboard?checkout=success`,
-      customerEmail: user.email || undefined,
+      customerEmail: users.email || undefined,
     });
 
     if (!checkout.url) {

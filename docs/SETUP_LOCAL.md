@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node.js 20+
-- Supabase project or local Supabase CLI
+- Neon Postgres database
 - Polar test credentials if you want to exercise billing
 
 ## Start the app
@@ -13,15 +13,15 @@ npm install
 npm run dev
 ```
 
-## Bootstrap Supabase
+## Bootstrap Neon
 
-If the Supabase CLI is available and the project is linked, run:
+With `DATABASE_URL` set in `.env.local`, run:
 
 ```bash
 ./scripts/bootstrap-local.sh
 ```
 
-That script applies the SQL migration and loads the demo seed in order.
+That script delegates to `scripts/bootstrap-neon.mjs` and applies Neon SQL migration and seed in order.
 
 ## Demo flow
 
@@ -31,15 +31,15 @@ Use the demo route to inspect the product without external credentials:
 - `/dashboard?channelId=demo-channel&demo=1`
 - `/u/demo`
 
-## Supabase setup
+## Neon setup
 
-1. Apply `supabase/migrations/0001_initial.sql`.
-2. Load `supabase/seed/demo.sql`.
-3. Set `NEXT_PUBLIC_SUPABASE_URL`.
-4. Set `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-5. Set `SUPABASE_SERVICE_ROLE_KEY`.
-6. Set `GEMINI_API_KEY`, `YOUTUBE_API_KEY`, `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET`.
-7. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
+1. Set `DATABASE_URL`.
+2. Set `AUTH_SESSION_SECRET`.
+3. Apply `neon/migrations/0001_initial.sql` and `neon/seed/demo.sql` via `./scripts/bootstrap-local.sh`.
+4. Set `GEMINI_API_KEY`, `YOUTUBE_API_KEY`, `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET`.
+5. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
+
+No external CLI or linked project is required for local bootstrap anymore.
 
 ## Verification order
 

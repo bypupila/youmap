@@ -24,16 +24,17 @@ TravelMap se divide en cuatro capas:
 
 ## Persistencia
 
-- Supabase es la fuente de verdad.
+- Neon Postgres es la fuente de verdad.
 - Los datos de usuarios, canales, videos, ubicaciones, sponsors y suscripciones deben persistirse en tablas separadas.
-- El backend usa `service role` solo para consultas administrativas y reports.
+- El backend usa SQL server-side con `DATABASE_URL` y sesión HTTP-only.
+- El esquema oficial vive en `neon/migrations` y el bootstrap local en `scripts/bootstrap-neon.mjs`.
 
 ## Integraciones
 
 - YouTube para importacion de videos.
 - Gemini para extracción de ubicaciones.
 - Polar para billing.
-- Supabase Auth para login.
+- Auth propio basado en tabla `users` + `user_credentials` + cookie de sesión.
 
 ## Decisiones
 
@@ -43,8 +44,7 @@ TravelMap se divide en cuatro capas:
 
 ## Riesgos actuales
 
-- Falta el esquema SQL real.
-- Falta la importacion de YouTube.
-- Falta el pipeline de ubicaciones.
-- Falta la persistencia del onboarding.
-- Falta cerrar el billing con Polar.
+- Quedan cambios amplios sin commitear de la migración a Neon y eso eleva el riesgo de regresiones si se mezclan con trabajo nuevo.
+- El auth propio por cookie depende completamente de `AUTH_SESSION_SECRET` y `DATABASE_URL`; cualquier desalineación entre entornos rompe login y middleware.
+- Faltan tests de integración para login, onboarding, sync de mapa y billing sobre Neon.
+- La documentación histórica del pipeline y skills todavía puede arrastrar conceptos del stack anterior si no se mantiene alineada.

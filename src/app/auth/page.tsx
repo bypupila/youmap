@@ -3,24 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase-browser";
 
 type AuthMode = "login" | "register";
-
-async function resolveEmailFromIdentifier(identifier: string) {
-  const response = await fetch("/api/auth/resolve-identifier", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ identifier }),
-  });
-
-  const payload = (await response.json().catch(() => null)) as { email?: string; error?: string } | null;
-  if (!response.ok || !payload?.email) {
-    throw new Error(payload?.error || "No pudimos resolver tu usuario.");
-  }
-
-  return payload.email;
-}
 
 export default function AuthPage() {
   const router = useRouter();
@@ -42,15 +26,19 @@ export default function AuthPage() {
     setError(null);
 
     try {
-      const supabase = createClient();
-      const resolvedEmail = await resolveEmailFromIdentifier(identifier);
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: resolvedEmail,
-        password,
+      const loginResponse = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier,
+          password,
+        }),
       });
-
-      if (signInError) {
-        throw new Error(signInError.message);
+      const loginPayload = (await loginResponse.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      if (!loginResponse.ok) {
+        throw new Error(loginPayload?.error || "No se pudo iniciar sesión.");
       }
 
       router.push("/dashboard");
@@ -68,7 +56,6 @@ export default function AuthPage() {
     setError(null);
 
     try {
-      const supabase = createClient();
       const registerResponse = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,14 +72,6 @@ export default function AuthPage() {
       const registerPayload = (await registerResponse.json().catch(() => null)) as { error?: string } | null;
       if (!registerResponse.ok) {
         throw new Error(registerPayload?.error || "No se pudo crear la cuenta.");
-      }
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password: registerPassword,
-      });
-      if (signInError) {
-        throw new Error(signInError.message);
       }
 
       router.push("/onboarding");

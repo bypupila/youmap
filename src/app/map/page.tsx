@@ -54,7 +54,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,107,53,0.12),transparent_24%),radial-gradient(circle_at_84%_14%,rgba(0,212,255,0.10),transparent_26%),linear-gradient(to_bottom,rgba(2,4,10,0.48),rgba(2,4,10,0.15)_32%,rgba(2,4,10,0.46))]" />
 
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-40 px-4 pt-3 sm:px-6">
+      <header className="pointer-events-auto absolute inset-x-0 top-0 z-40 px-4 pt-3 sm:px-6">
         <FloatingTopBar
           eyebrow="Mapa Fullscreen"
           title={`${payload.channel.channel_name} · 1 punto = 1 video`}

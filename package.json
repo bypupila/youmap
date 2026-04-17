@@ -10,9 +10,8 @@
   },
   "dependencies": {
     "@google/genai": "^1.13.0",
+    "@neondatabase/serverless": "^1.0.1",
     "@polar-sh/sdk": "^0.6.0",
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.53.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^11.3.19",

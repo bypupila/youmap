@@ -1,8 +1,8 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createServiceRoleClient } from "@/lib/supabase-service";
 import { isDemoChannelId } from "@/lib/demo-data";
+import { sql } from "@/lib/neon";
 
 const payloadSchema = z.object({
   sponsorId: z.string().uuid(),
@@ -27,13 +27,15 @@ export async function POST(request: Request) {
     const userAgent = request.headers.get("user-agent") || "unknown";
     const ipHash = createHash("sha256").update(`${ip}|${userAgent}`).digest("hex");
 
-    const service = createServiceRoleClient();
-    await service.from("sponsor_clicks").insert({
-      sponsor_id: payload.sponsorId,
-      country_code: payload.countryCode || null,
-      ip_hash: ipHash,
-      clicked_at: new Date().toISOString(),
-    });
+    await sql`
+      insert into public.sponsor_clicks (sponsor_id, country_code, ip_hash, clicked_at)
+      values (
+        ${payload.sponsorId},
+        ${payload.countryCode || null},
+        ${ipHash},
+        ${new Date().toISOString()}
+      )
+    `;
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase-server";
-import { createServiceRoleClient } from "@/lib/supabase-service";
+import { getSessionUserIdFromRequest } from "@/lib/current-user";
 import { loadMapDataByChannelId } from "@/lib/map-data";
 import { confirmManualLocation } from "@/lib/map-sync";
+import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
@@ -34,33 +34,24 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const payload = payloadSchema.parse(await request.json());
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const userId = getSessionUserIdFromRequest(request);
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const service = createServiceRoleClient();
-    const { data: channelOwner, error: channelError } = await service
-      .from("channels")
-      .select("id")
-      .eq("id", payload.channelId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (channelError) {
-      return NextResponse.json({ error: channelError.message }, { status: 400 });
-    }
+    const channels = await sql<Array<{ id: string }>>`
+      select id
+      from public.channels
+      where id = ${payload.channelId}
+        and user_id = ${userId}
+      limit 1
+    `;
+    const channelOwner = channels[0] || null;
     if (!channelOwner) {
       return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });
     }
 
     const location = await confirmManualLocation({
-      service,
       channelId: payload.channelId,
       videoId: payload.videoId,
       countryCode: payload.country_code.toUpperCase(),

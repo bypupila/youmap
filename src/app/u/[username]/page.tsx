@@ -3,8 +3,8 @@ import { MapExperience } from "@/components/map/map-experience";
 import { FloatingTopBar } from "@/components/design-system/chrome";
 import { DEMO_CHANNEL_SLUG, isDemoUsername } from "@/lib/demo-data";
 import { loadMapDataByChannelId } from "@/lib/map-data";
-import { createServiceRoleClient } from "@/lib/supabase-service";
 import { normalizeUsername } from "@/lib/auth-identifiers";
+import { sql } from "@/lib/neon";
 
 interface PublicMapPageProps {
   params: {
@@ -47,22 +47,23 @@ async function loadPublicMapPayload(username: string) {
     return loadMapDataByChannelId(DEMO_CHANNEL_SLUG);
   }
 
-  const service = createServiceRoleClient();
-  const { data: user, error: userError } = await service
-    .from("users")
-    .select("id")
-    .eq("username", username)
-    .maybeSingle();
+  const users = await sql<Array<{ id: string }>>`
+    select id
+    from public.users
+    where username = ${username}
+    limit 1
+  `;
+  const user = users[0] || null;
+  if (!user) return null;
 
-  if (userError || !user) return null;
-
-  const { data: channel, error: channelError } = await service
-    .from("channels")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (channelError || !channel) return null;
+  const channels = await sql<Array<{ id: string }>>`
+    select id
+    from public.channels
+    where user_id = ${user.id}
+    limit 1
+  `;
+  const channel = channels[0] || null;
+  if (!channel) return null;
 
   return loadMapDataByChannelId(channel.id);
 }

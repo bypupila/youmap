@@ -1,7 +1,7 @@
-import { createServiceRoleClient } from "@/lib/supabase-service";
 import { DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_VIDEO_LOCATIONS, isDemoChannelId } from "@/lib/demo-data";
 import { loadLuisitoMapData } from "@/lib/luisito-map-data";
 import { loadDrewMapData } from "@/lib/drew-map-data";
+import { sql } from "@/lib/neon";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
 export interface MapSummary {
@@ -44,33 +44,31 @@ interface RawLocationRow {
   location_evidence: Record<string, unknown> | null;
   needs_manual_reason: string | null;
   source: string | null;
-  videos: Array<{
-    id: string;
-    youtube_video_id: string;
-    title: string;
-    description: string | null;
-    thumbnail_url: string | null;
-    view_count: number | string | null;
-    like_count: number | string | null;
-    comment_count: number | string | null;
-    duration_seconds: number | string | null;
-    is_short: boolean | null;
-    is_travel: boolean | null;
-    travel_score: number | string | null;
-    travel_signals: string[] | null;
-    inclusion_reason: string | null;
-    exclusion_reason: string | null;
-    recording_lat: number | string | null;
-    recording_lng: number | string | null;
-    recording_location_description: string | null;
-    published_at: string | null;
-    travel_type: string | null;
-    location_status: string | null;
-    verification_source: string | null;
-    location_score: number | string | null;
-    location_evidence: Record<string, unknown> | null;
-    needs_manual_reason: string | null;
-  }>;
+  video_id: string;
+  youtube_video_id: string;
+  title: string;
+  description: string | null;
+  thumbnail_url: string | null;
+  view_count: number | string | null;
+  like_count: number | string | null;
+  comment_count: number | string | null;
+  duration_seconds: number | string | null;
+  is_short: boolean | null;
+  is_travel: boolean | null;
+  travel_score: number | string | null;
+  travel_signals: string[] | null;
+  inclusion_reason: string | null;
+  exclusion_reason: string | null;
+  recording_lat: number | string | null;
+  recording_lng: number | string | null;
+  recording_location_description: string | null;
+  published_at: string | null;
+  travel_type: string | null;
+  location_status: string | null;
+  video_verification_source: string | null;
+  video_location_score: number | string | null;
+  video_location_evidence: Record<string, unknown> | null;
+  video_needs_manual_reason: string | null;
 }
 
 function computeSummary(videoLocations: TravelVideoLocation[], manualQueue: ManualVerificationItem[]): MapSummary {
@@ -170,126 +168,138 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
     };
   }
 
-  const service = createServiceRoleClient();
+  const channelRows = await sql<
+    Array<{
+      id: string;
+      user_id: string;
+      channel_name: string;
+      channel_handle: string | null;
+      thumbnail_url: string | null;
+      subscriber_count: number | null;
+      youtube_channel_id: string | null;
+      last_synced_at: string | null;
+    }>
+  >`
+    select
+      id,
+      user_id,
+      channel_name,
+      channel_handle,
+      thumbnail_url,
+      subscriber_count,
+      youtube_channel_id,
+      last_synced_at
+    from public.channels
+    where id = ${channelId}
+    limit 1
+  `;
 
-  const { data: channelRow, error: channelError } = await service
-    .from("channels")
-    .select("id,user_id,channel_name,channel_handle,thumbnail_url,subscriber_count,youtube_channel_id,last_synced_at")
-    .eq("id", channelId)
-    .maybeSingle();
+  const channelRow = channelRows[0];
+  if (!channelRow) return null;
 
-  if (channelError || !channelRow) {
-    return null;
-  }
-
-  const [locationsResult, manualQueueResult] = await Promise.all([
-    service
-      .from("video_locations")
-      .select(
-        `
-        country_code,
-        country_name,
-        location_label,
-        city,
-        region,
-        lat,
-        lng,
-        confidence_score,
-        location_score,
-        verification_source,
-        location_evidence,
-        needs_manual_reason,
-        source,
-        videos!inner(
-          id,
-          youtube_video_id,
-          title,
-          description,
-          thumbnail_url,
-          view_count,
-          like_count,
-          comment_count,
-          duration_seconds,
-          is_short,
-          is_travel,
-          travel_score,
-          travel_signals,
-          inclusion_reason,
-          exclusion_reason,
-          recording_lat,
-          recording_lng,
-          recording_location_description,
-          published_at,
-          travel_type,
-          location_status,
-          verification_source,
-          location_score,
-          location_evidence,
-          needs_manual_reason
-        )
-      `
-      )
-      .eq("channel_id", channelRow.id)
-      .eq("is_primary", true)
-      .eq("videos.is_travel", true)
-      .eq("videos.is_short", false)
-      .limit(4000),
-    service
-      .from("videos")
-      .select("id,youtube_video_id,title,thumbnail_url,published_at,location_status,needs_manual_reason")
-      .eq("channel_id", channelRow.id)
-      .eq("location_status", "needs_manual")
-      .order("published_at", { ascending: false })
-      .limit(300),
+  const [locationRows, manualRows] = await Promise.all([
+    sql<RawLocationRow[]>`
+      select
+        vl.country_code,
+        vl.country_name,
+        vl.location_label,
+        vl.city,
+        vl.region,
+        vl.lat,
+        vl.lng,
+        vl.confidence_score,
+        vl.location_score,
+        vl.verification_source,
+        vl.location_evidence,
+        vl.needs_manual_reason,
+        vl.source,
+        v.id as video_id,
+        v.youtube_video_id,
+        v.title,
+        v.description,
+        v.thumbnail_url,
+        v.view_count,
+        v.like_count,
+        v.comment_count,
+        v.duration_seconds,
+        v.is_short,
+        v.is_travel,
+        v.travel_score,
+        v.travel_signals,
+        v.inclusion_reason,
+        v.exclusion_reason,
+        v.recording_lat,
+        v.recording_lng,
+        v.recording_location_description,
+        v.published_at,
+        v.travel_type,
+        v.location_status,
+        v.verification_source as video_verification_source,
+        v.location_score as video_location_score,
+        v.location_evidence as video_location_evidence,
+        v.needs_manual_reason as video_needs_manual_reason
+      from public.video_locations vl
+      inner join public.videos v on v.id = vl.video_id
+      where vl.channel_id = ${channelRow.id}
+        and vl.is_primary = true
+        and coalesce(v.is_travel, true) = true
+        and coalesce(v.is_short, false) = false
+      limit 4000
+    `,
+    sql<
+      Array<{
+        id: string;
+        youtube_video_id: string;
+        title: string;
+        thumbnail_url: string | null;
+        published_at: string | null;
+        needs_manual_reason: string | null;
+      }>
+    >`
+      select
+        id,
+        youtube_video_id,
+        title,
+        thumbnail_url,
+        published_at,
+        needs_manual_reason
+      from public.videos
+      where channel_id = ${channelRow.id}
+        and location_status = 'needs_manual'
+      order by published_at desc
+      limit 300
+    `,
   ]);
 
-  if (locationsResult.error) {
-    console.error("[map-data] locations error", locationsResult.error.message);
-    return {
-      channel: channelRow as TravelChannel,
-      videoLocations: [],
-      manualQueue: [],
-      summary: {
-        total_videos: 0,
-        total_countries: 0,
-        verified_auto: 0,
-        verified_manual: 0,
-        needs_manual: 0,
-      },
-    };
-  }
-
-  const locations = ((locationsResult.data || []) as RawLocationRow[])
+  const locations = (locationRows || [])
     .map((row) => {
-      const video = row.videos?.[0];
-      if (!video) return null;
-      const locationStatus = video.location_status as TravelVideoLocation["location_status"];
+      const locationStatus = row.location_status as TravelVideoLocation["location_status"];
       const verificationSource =
-        (video.verification_source as TravelVideoLocation["verification_source"]) ||
+        (row.video_verification_source as TravelVideoLocation["verification_source"]) ||
         (row.verification_source as TravelVideoLocation["verification_source"]) ||
         null;
 
       return {
-        youtube_video_id: video.youtube_video_id,
-        video_url: `https://youtube.com/watch?v=${video.youtube_video_id}`,
-        title: video.title,
-        description: video.description,
-        thumbnail_url: video.thumbnail_url,
-        published_at: video.published_at,
-        view_count: Number(video.view_count || 0),
-        like_count: Number(video.like_count || 0) || null,
-        comment_count: Number(video.comment_count || 0) || null,
-        duration_seconds: Number(video.duration_seconds || 0) || null,
-        is_short: Boolean(video.is_short),
-        is_travel: video.is_travel !== false,
-        travel_score: Number(video.travel_score || 0) || null,
-        travel_signals: Array.isArray(video.travel_signals) ? video.travel_signals : [],
-        inclusion_reason: video.inclusion_reason || null,
-        exclusion_reason: video.exclusion_reason || null,
-        recording_lat: Number(video.recording_lat || 0) || null,
-        recording_lng: Number(video.recording_lng || 0) || null,
-        recording_location_description: video.recording_location_description || null,
-        travel_type: video.travel_type,
+        youtube_video_id: row.youtube_video_id,
+        video_url: `https://youtube.com/watch?v=${row.youtube_video_id}`,
+        title: row.title,
+        description: row.description,
+        thumbnail_url: row.thumbnail_url,
+        published_at: row.published_at,
+        view_count: Number(row.view_count || 0),
+        like_count: Number(row.like_count || 0) || null,
+        comment_count: Number(row.comment_count || 0) || null,
+        duration_seconds: Number(row.duration_seconds || 0) || null,
+        is_short: Boolean(row.is_short),
+        is_travel: row.is_travel !== false,
+        travel_score: Number(row.travel_score || 0) || null,
+        travel_signals: Array.isArray(row.travel_signals) ? row.travel_signals : [],
+        inclusion_reason: row.inclusion_reason || null,
+        exclusion_reason: row.exclusion_reason || null,
+        recording_lat: Number(row.recording_lat || 0) || null,
+        recording_lng: Number(row.recording_lng || 0) || null,
+        recording_location_description: row.recording_location_description || null,
+        travel_type: row.travel_type,
         country_code: row.country_code,
         country_name: row.country_name || row.country_code,
         location_label: row.location_label,
@@ -301,21 +311,14 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         location_status: locationStatus,
         location_source: row.source || null,
         verification_source: verificationSource,
-        location_score: Number(video.location_score || row.location_score || 0) || null,
-        location_evidence: (video.location_evidence || row.location_evidence || null) as Record<string, unknown> | null,
-        needs_manual_reason: video.needs_manual_reason || row.needs_manual_reason || null,
+        location_score: Number(row.video_location_score || row.location_score || 0) || null,
+        location_evidence: (row.video_location_evidence || row.location_evidence || null) as Record<string, unknown> | null,
+        needs_manual_reason: row.video_needs_manual_reason || row.needs_manual_reason || null,
       } satisfies TravelVideoLocation;
     })
     .filter(Boolean) as TravelVideoLocation[];
 
-  const manualQueue = ((manualQueueResult.data || []) as Array<{
-    id: string;
-    youtube_video_id: string;
-    title: string;
-    thumbnail_url: string | null;
-    published_at: string | null;
-    needs_manual_reason: string | null;
-  }>).map((video) => ({
+  const manualQueue = (manualRows || []).map((video) => ({
     video_id: video.id,
     youtube_video_id: video.youtube_video_id,
     title: video.title,
