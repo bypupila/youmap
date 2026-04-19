@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FloatingTopBar, SignalPill } from "@/components/design-system/chrome";
 import { Button } from "@/components/ui/button";
@@ -113,6 +113,7 @@ export function OnboardingProcessing({
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [phraseIndex, setPhraseIndex] = useState(0);
+  const invalidRunIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -132,7 +133,7 @@ export function OnboardingProcessing({
     async function ensureImportRun() {
       try {
         if (active) setError(null);
-        const cachedRunId = sessionStorage.getItem(storageKey);
+        const cachedRunId = String(sessionStorage.getItem(storageKey) || "").trim();
         if (cachedRunId) {
           const validateResponse = await fetch(`/api/youtube/import/${encodeURIComponent(cachedRunId)}`, { cache: "no-store" });
           if (validateResponse.ok) {
@@ -143,6 +144,7 @@ export function OnboardingProcessing({
             setRunStatus(String(validatePayload?.status || "running"));
             return;
           }
+          invalidRunIdsRef.current.add(cachedRunId);
           sessionStorage.removeItem(storageKey);
         }
 
@@ -153,6 +155,9 @@ export function OnboardingProcessing({
         const startPayload = (await startResponse.json().catch(() => null)) as { import_run_id?: string; status?: string; error?: string } | null;
         if (!startResponse.ok || !startPayload?.import_run_id) {
           throw new Error(startPayload?.error || copy.errorFallback);
+        }
+        if (invalidRunIdsRef.current.has(startPayload.import_run_id)) {
+          throw new Error(copy.errorFallback);
         }
 
         sessionStorage.setItem(storageKey, startPayload.import_run_id);
@@ -183,11 +188,14 @@ export function OnboardingProcessing({
         const response = await fetch(`/api/youtube/import/${encodeURIComponent(currentRunId)}`, { cache: "no-store" });
         if (!response.ok) {
           if (response.status === 404) {
+            invalidRunIdsRef.current.add(currentRunId);
             sessionStorage.removeItem(storageKey);
             if (!active) return;
             setError(null);
             setRunId(null);
             setRunStatus("idle");
+            setProgress(0);
+            setStage("restarting");
           }
           return;
         }

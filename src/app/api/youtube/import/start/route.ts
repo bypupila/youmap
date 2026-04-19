@@ -25,11 +25,13 @@ export async function POST(request: Request) {
     }
 
     const existingRuns = await sql<Array<{ id: string; status: string }>>`
-      select id, status
-      from public.channel_import_runs
-      where input ->> 'channelUrl' = ${channelReference}
-        and status in ('running', 'completed')
-      order by started_at desc
+      select cir.id, cir.status
+      from public.channel_import_runs cir
+      inner join public.channels c on c.id = cir.channel_id
+      where c.user_id = ${userId}
+        and cir.input ->> 'channelUrl' = ${channelReference}
+        and cir.status in ('running', 'completed')
+      order by cir.started_at desc
       limit 1
     `;
     const existingRun = existingRuns[0] || null;
