@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MapExperience } from "@/components/map/map-experience";
-import { FloatingTopBar, MetricPill } from "@/components/design-system/chrome";
+import { FloatingTopBar } from "@/components/design-system/chrome";
 import { Button } from "@/components/ui/button";
 import { loadMapDataByChannelId } from "@/lib/map-data";
 
@@ -38,6 +38,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
       </main>
     );
   }
+  const channelTitle = String(payload.channel.channel_name || "").split("·")[0].trim() || payload.channel.channel_name;
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
@@ -54,17 +55,23 @@ export default async function MapPage({ searchParams }: MapPageProps) {
 
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
 
-      <header className="pointer-events-auto absolute inset-x-0 top-0 z-40 px-4 pt-3 sm:px-6">
+      <header className="absolute inset-x-0 top-0 z-[320] px-4 py-3 pointer-events-auto">
         <FloatingTopBar
           eyebrow="Mapa Fullscreen"
-          title={`${payload.channel.channel_name} · 1 punto = 1 video`}
-          className="max-w-[760px] px-2.5 py-1.5 sm:px-3"
+          title={channelTitle}
+          searchPlaceholder="Busca videos y lugares en este mapa"
+          className="relative z-[321]"
           actions={
             <>
-              <MetricPill text={`${payload.summary.total_videos} videos`} className="px-2 py-0.5 text-[10px]" />
-              <MetricPill text={`${payload.summary.total_countries} paises`} className="px-2 py-0.5 text-[10px]" />
-              <Button asChild size="xs">
+              <Button
+                asChild
+                size="xs"
+                className="border border-black/10 bg-white text-black shadow-none hover:bg-white/90"
+              >
                 <Link href="/">Volver</Link>
+              </Button>
+              <Button asChild size="xs">
+                <Link href="/onboarding">Crear mi mapa</Link>
               </Button>
             </>
           }

@@ -51,8 +51,13 @@ TravelMap convierte un canal de viajes en un globo 3D interactivo con analytics,
 2. Paso 1: carga `nombre + email + username + canal`.
 3. Paso 6:
    - `Pagar con Polar y activar`: crea cuenta con password, inicia sesión y redirige a checkout.
-   - `Procesar sin pago (TEST)`: crea cuenta, activa trial de prueba e inicia extracción inmediatamente.
+   - `Procesar sin pago (TEST)`: crea cuenta, activa trial de prueba y sigue al mismo paso de procesamiento del flujo pago.
 4. Luego puedes entrar por `/auth` usando email o username.
+
+Control de QA para mostrar/ocultar la opción test en planes:
+
+- `NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT=1` muestra `Procesar sin pago (TEST)`.
+- `NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT=0` la oculta para lanzamiento.
 
 ## Desarrollo
 

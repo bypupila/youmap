@@ -16,13 +16,11 @@ const creatorByLocale = {
     channelId: "luisito-global-map",
     name: "Luisito Comunica",
     handle: "@luisitocomunica",
-    avatarUrl: "/creators/luisito-comunica.png",
   },
   en: {
     channelId: "drew-global-map",
     name: "Drew Binsky",
     handle: "@drewbinsky",
-    avatarUrl: "https://yt3.googleusercontent.com/ytc/AIdro_m8sS2E7bFGw87h9D5xUjN4j0kVxL3S9tJmF8xGGQ=s176-c-k-c0x00ffffff-no-rj",
   },
 } as const;
 
@@ -167,26 +165,18 @@ export function CinematicLanding() {
               <Link href={onboardingPath} className="yt-btn-primary relative z-[322] pointer-events-auto">
                 {copy.ctaPrimary}
               </Link>
-              <Link href={mapPath} className="yt-btn-secondary relative z-[322] pointer-events-auto">
-                {copy.ctaDemo}
-              </Link>
             </div>
 
-            <div className="mt-10 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr]">
-              <div className="tm-surface-strong rounded-[2rem] p-5">
-                <p className="yt-overline">Ruta viva</p>
-                <p className="mt-3 text-xl font-medium text-foreground">Cada video deja una coordenada, una lectura de país y una capa pública lista para compartir.</p>
-              </div>
+            <div className="mt-10">
               <div className="tm-surface rounded-[2rem] p-5">
-                <div className="space-y-4">
-                  <div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
                     <p className="text-[2rem] leading-none font-semibold tracking-tight">{totalVideos.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{copy.videosLabel} procesables</p>
+                    <p className="mt-1 text-sm text-muted-foreground">videos procesados</p>
                   </div>
-                  <div className="yt-divider" />
-                  <div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
                     <p className="text-[2rem] leading-none font-semibold tracking-tight">{totalCountries.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{copy.countriesLabel} visibles en el mapa</p>
+                    <p className="mt-1 text-sm text-muted-foreground">países visibles en el mapa</p>
                   </div>
                 </div>
               </div>
@@ -204,9 +194,7 @@ export function CinematicLanding() {
                 <MiniMapModel videoLocations={mapVideos} />
               </div>
 
-              <div className="mt-4 flex items-start gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={activeCreator.avatarUrl} alt={activeCreator.name} className="h-10 w-10 rounded-full object-cover ring-1 ring-white/15" />
+              <div className="mt-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-[15px] leading-5 font-medium text-foreground">{copy.cardTitle}</p>
@@ -217,14 +205,7 @@ export function CinematicLanding() {
                   </p>
                   <p className="mt-1 text-[12px] leading-4 text-muted-foreground">{activeCreator.handle}</p>
                 </div>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-                <div className="tm-surface rounded-[1.5rem] px-4 py-3">
-                  <p className="yt-overline">Mapa listo</p>
-                  <p className="mt-2 text-sm text-muted-foreground">Descubre destinos fuertes, videos ancla y oportunidad comercial sin salir del globo.</p>
-                </div>
-                <span className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground shadow-[0_20px_45px_-24px_rgba(255,0,0,0.78)] transition-transform duration-200 hover:-translate-y-[1px]">
+                <span className="ml-auto inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground shadow-[0_20px_45px_-24px_rgba(255,0,0,0.78)] transition-transform duration-200 hover:-translate-y-[1px]">
                   {copy.ctaDemo}
                 </span>
               </div>

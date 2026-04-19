@@ -273,14 +273,14 @@ export function MapExperience({
           size="sm"
           variant="secondary"
           onClick={() => setMobileLegendOpen(true)}
-          className="pointer-events-auto absolute left-4 top-24 z-30 lg:hidden"
+          className="pointer-events-auto absolute left-4 top-24 z-[360] lg:hidden"
         >
           Countries ({legend.length})
         </Button>
       ) : null}
 
       {showLegend ? (
-        <aside className="pointer-events-auto absolute left-4 top-24 bottom-4 z-30 hidden w-[320px] lg:block">
+        <aside className="pointer-events-auto absolute left-4 top-24 bottom-4 z-[360] hidden w-[320px] lg:block">
           <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} className="h-full">
             <Card className="tm-surface-strong h-full">
               <CardHeader className="border-b border-white/10">
@@ -359,7 +359,7 @@ export function MapExperience({
       ) : null}
 
       {shouldRenderRightRail ? (
-        <aside className="pointer-events-none absolute right-4 top-24 bottom-4 z-30 flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-4">
+        <aside className="pointer-events-none absolute right-4 top-24 bottom-4 z-[360] flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-4">
           {showOperationsPanel ? (
             <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="pointer-events-auto">
               <Card className="tm-surface-strong">
@@ -389,7 +389,6 @@ export function MapExperience({
                     <div className="grid grid-cols-3 gap-2">
                       <StatTile label="Videos" value={resolvedSummary.total_videos} />
                       <StatTile label="Countries" value={resolvedSummary.total_countries} />
-                      <StatTile label="Verified" value={resolvedSummary.verified_auto} />
                     </div>
                   </div>
 
@@ -472,7 +471,7 @@ export function MapExperience({
       ) : null}
 
       {pinnedVideo ? (
-        <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setPinnedVideo(null)}>
+        <div className="absolute inset-0 z-[520] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setPinnedVideo(null)}>
           <a
             href={pinnedVideo.video_url || `https://youtube.com/watch?v=${pinnedVideo.youtube_video_id}`}
             target="_blank"
@@ -635,10 +634,15 @@ function VideoListItem({ video, compact = false }: { video: TravelVideoLocation;
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
     <div className="tm-surface rounded-xl px-3 py-3">
-      <p className="text-[18px] leading-5 font-medium text-[#f1f1f1]">{formatNumber(value)}</p>
+      <p className="text-[18px] leading-5 font-medium text-[#f1f1f1]">{formatExactNumber(value)}</p>
       <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-[#aaaaaa]">{label}</p>
     </div>
   );
+}
+
+function formatExactNumber(value: number) {
+  if (!value) return "0";
+  return Number(value).toLocaleString("en-US");
 }
 
 function formatNumber(value: number) {

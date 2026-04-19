@@ -5,7 +5,7 @@ import { AirplaneTilt, Handshake, MapPin } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FloatingTopBar, SignalPill } from "@/components/design-system/chrome";
+import { FloatingTopBar } from "@/components/design-system/chrome";
 import { MapExperience } from "@/components/map/map-experience";
 import { YoutubeImportStep, type ChannelDraft } from "@/components/onboarding/youtube-import-step";
 import { Badge } from "@/components/ui/badge";
@@ -89,6 +89,10 @@ type OnboardingCopy = {
   preparingCheckout: string;
   startTrial: string;
   payWithPolar: string;
+  testWithoutPayment: string;
+  testWithoutPaymentHint: string;
+  testWithoutPaymentAction: string;
+  testWithoutPaymentProcessing: string;
   trialBadge: string;
   trialNote: string;
   processingPhrases: string[];
@@ -169,8 +173,8 @@ const localizedPlanDetails: Record<OnboardingLocale, Record<PlanDefinition["slug
 
 const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
   es: {
-    topbarEyebrow: "Configuración TravelMap",
-    topbarTitle: "Onboarding TravelMap",
+    topbarEyebrow: "YouMap",
+    topbarTitle: "Onboarding",
     searchPlaceholder: "Busca videos, países o creadores",
     workflowPill: "Flujo del creador",
     demoMapLabel: "Mapa demo",
@@ -265,6 +269,10 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     preparingCheckout: "Abriendo Polar...",
     startTrial: "Empezar prueba de 7 días",
     payWithPolar: "Continuar con Polar",
+    testWithoutPayment: "TEST · Sin pago",
+    testWithoutPaymentHint: "Usa este modo para QA interno. Crea cuenta trialing sin checkout y sigue al procesamiento.",
+    testWithoutPaymentAction: "Procesar sin pago (TEST)",
+    testWithoutPaymentProcessing: "Preparando modo test...",
     trialBadge: "7 dias gratis",
     trialNote: "Todos los planes arrancan con una prueba de 7 días.",
     processingPhrases: [
@@ -280,8 +288,8 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     importDemoStatsNote: "La vista usa ejemplo visual. El loader ejecuta la importación real después de Polar.",
   },
   en: {
-    topbarEyebrow: "TravelMap setup",
-    topbarTitle: "TravelMap onboarding",
+    topbarEyebrow: "YouMap",
+    topbarTitle: "Onboarding",
     searchPlaceholder: "Search across videos, countries, or creators",
     workflowPill: "Creator flow",
     demoMapLabel: "Demo map",
@@ -376,6 +384,10 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     preparingCheckout: "Opening Polar...",
     startTrial: "Start 7-day trial",
     payWithPolar: "Continue with Polar",
+    testWithoutPayment: "TEST · No payment",
+    testWithoutPaymentHint: "Use this for internal QA. It creates a trialing account without checkout and continues to processing.",
+    testWithoutPaymentAction: "Process without payment (TEST)",
+    testWithoutPaymentProcessing: "Preparing test mode...",
     trialBadge: "7 days included",
     trialNote: "Every plan starts with a 7-day trial.",
     processingPhrases: [
@@ -401,6 +413,7 @@ const sponsorCards = [
 
 const visiblePlans = PLAN_DEFINITIONS.filter((plan) => plan.slug !== "free");
 const unavailablePlanSlugs = new Set<PlanDefinition["slug"]>(["agency"]);
+const showTestNoPaymentPlan = process.env.NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT !== "0";
 
 export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; locale: OnboardingLocale }) {
   const router = useRouter();
@@ -512,7 +525,6 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
     try {
       const usernameCandidates = generateUsernameCandidates();
       const generatedPassword = `tm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
-      let registered = false;
       let lastErrorMessage = copy.registerFallbackError;
 
       for (const username of usernameCandidates) {
@@ -533,8 +545,69 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
 
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         if (response.ok) {
-          registered = true;
-          break;
+          setActivationState("checkout");
+          window.location.assign(`/api/billing/polar/checkout?plan=${encodeURIComponent(checkoutSlug)}&lang=${encodeURIComponent(locale)}`);
+          return;
+        }
+
+        lastErrorMessage = payload?.error || copy.registerFallbackError;
+        const usernameTaken = response.status === 409 || /usuario|username/i.test(lastErrorMessage);
+        if (usernameTaken) continue;
+
+        throw new Error(lastErrorMessage);
+      }
+      throw new Error(lastErrorMessage);
+    } catch (error) {
+      setActivationState("idle");
+      setStepError(error instanceof Error ? error.message : copy.registerFallbackError);
+    }
+  }
+
+  async function activateWithoutPaymentForTest() {
+    if (!selectedPlan) {
+      setStepError(copy.choosePlanError);
+      return;
+    }
+
+    if (unavailablePlanSlugs.has(selectedPlan as PlanDefinition["slug"])) {
+      setStepError(copy.planUnavailableError);
+      return;
+    }
+
+    if (isDemoMode) {
+      router.push(`/dashboard?channelId=${DEMO_CHANNEL_SLUG}&demo=1`);
+      return;
+    }
+
+    setActivationState("registering");
+    setStepError(null);
+
+    try {
+      const usernameCandidates = generateUsernameCandidates();
+      const generatedPassword = `tm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+      let lastErrorMessage = copy.registerFallbackError;
+
+      for (const username of usernameCandidates) {
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName: channelDraft.displayName.trim(),
+            email: channelDraft.email.trim(),
+            username,
+            password: generatedPassword,
+            selectedPlan,
+            channelUrl: channelDraft.channelUrl.trim() || null,
+            youtubeChannelId: channelValidationMetrics?.youtubeChannelId || null,
+            activateWithoutPayment: true,
+            deferImportToProcessing: true,
+          }),
+        });
+
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        if (response.ok) {
+          window.location.assign(`/onboarding/processing?lang=${encodeURIComponent(locale)}`);
+          return;
         }
 
         lastErrorMessage = payload?.error || copy.registerFallbackError;
@@ -544,12 +617,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
         throw new Error(lastErrorMessage);
       }
 
-      if (!registered) {
-        throw new Error(lastErrorMessage);
-      }
-
-      setActivationState("checkout");
-      window.location.assign(`/api/billing/polar/checkout?plan=${encodeURIComponent(checkoutSlug)}&lang=${encodeURIComponent(locale)}`);
+      throw new Error(lastErrorMessage);
     } catch (error) {
       setActivationState("idle");
       setStepError(error instanceof Error ? error.message : copy.registerFallbackError);
@@ -671,29 +739,27 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   }
 
   const stepper = (
-    <div className="pointer-events-none absolute inset-x-0 top-[84px] z-30 px-4">
-      <div className="mx-auto flex w-fit max-w-full gap-2 overflow-x-auto rounded-full border border-white/10 bg-[#181818]/95 p-1.5 backdrop-blur pointer-events-auto">
-        {copy.stepLabels.map((item) => {
-          const state = stepStateFor(item.step);
-          return (
-            <button
-              key={item.step}
-              type="button"
-              className={cn(
-                "inline-flex h-10 items-center justify-center rounded-full px-4 text-[13px] font-medium transition-colors whitespace-nowrap",
-                state === "active" && "bg-white/[0.08] text-[#f3eee7]",
-                state === "done" && "bg-transparent text-[#8b8b8b] hover:text-[#b5b5b5]",
-                state === "upcoming" && "bg-transparent text-[#ff4040] hover:text-[#ff6a6a]"
-              )}
-              onClick={() => {
-                if (item.step <= step) setStep(item.step);
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
+    <div className="mx-auto flex w-fit max-w-[620px] gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-[#181818]/95 p-1.5 backdrop-blur">
+      {copy.stepLabels.map((item) => {
+        const state = stepStateFor(item.step);
+        return (
+          <button
+            key={item.step}
+            type="button"
+            className={cn(
+              "inline-flex h-9 items-center justify-center rounded-full px-3 text-[12px] font-medium transition-colors whitespace-nowrap",
+              state === "active" && "bg-white/[0.08] text-[#f3eee7]",
+              state === "done" && "bg-transparent text-[#8b8b8b] hover:text-[#b5b5b5]",
+              state === "upcoming" && "bg-transparent text-[#ff4040] hover:text-[#ff6a6a]"
+            )}
+            onClick={() => {
+              if (item.step <= step) setStep(item.step);
+            }}
+          >
+            {item.label}
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -718,10 +784,10 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
         <FloatingTopBar
           eyebrow={copy.topbarEyebrow}
           title={copy.topbarTitle}
-          searchPlaceholder={copy.searchPlaceholder}
+          centerContent={stepper}
+          hideSearch
           actions={
             <>
-              <SignalPill text={copy.workflowPill} />
               <Link href={demoMapPath} className="yt-btn-primary">
                 {copy.demoMapLabel}
               </Link>
@@ -729,8 +795,6 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
           }
         />
       </header>
-
-      {stepper}
 
       <section className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-4 pb-24 pt-32">
         <div className="w-full max-w-[1040px]">
@@ -772,6 +836,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
                   channelValidationMessage,
                   stepError,
                   activationState,
+                  onActivateWithoutPaymentForTest: activateWithoutPaymentForTest,
                 })}
               </div>
             </motion.div>
@@ -834,6 +899,7 @@ function renderStepBody(
     channelValidationMessage: string | null;
     stepError: string | null;
     activationState: ActivationState;
+    onActivateWithoutPaymentForTest: () => Promise<void>;
   }
 ) {
   if (step === 0) {
@@ -844,16 +910,16 @@ function renderStepBody(
     ] as const;
 
     return (
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.15fr_0.85fr]">
-        {featureCards.map((feature, index) => {
+      <div className="grid gap-4 md:grid-cols-3">
+        {featureCards.map((feature) => {
           const Icon = feature.icon;
           return (
-            <div key={feature.title} className={cn("rounded-[28px] border border-white/10 bg-[#212121] p-6", index === 0 && "md:col-span-2 xl:col-span-1")}>
+            <div key={feature.title} className="flex flex-col items-center rounded-[28px] border border-white/10 bg-[#212121] p-6 text-center">
               <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(255,0,0,0.14)] text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <Icon size={30} weight="regular" />
               </div>
               <p className="text-[16px] leading-[22px] font-medium text-[#f1f1f1]">{feature.title}</p>
-              <p className="mt-2 max-w-[34ch] text-[14px] leading-6 text-[#aaaaaa]">{feature.copy}</p>
+              <p className="mt-2 text-[14px] leading-6 text-[#aaaaaa]">{feature.copy}</p>
             </div>
           );
         })}
@@ -887,25 +953,19 @@ function renderStepBody(
         : ctx.channelValidationMetrics?.totalVideos ?? DEMO_VIDEO_LOCATIONS.length;
     const countries = new Set(DEMO_VIDEO_LOCATIONS.map((video) => video.country_code)).size;
     const views = ctx.channelValidationMetrics?.totalViews ?? DEMO_VIDEO_LOCATIONS.reduce((sum, video) => sum + Number(video.view_count || 0), 0);
-    const hasRealStats = typeof ctx.channelValidationMetrics?.totalVideos === "number" || typeof ctx.channelValidationMetrics?.totalViews === "number";
-
     return (
       <div className="space-y-5">
         <div className="rounded-[28px] border border-white/10 bg-[#212121] p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="yt-overline text-[#aaaaaa]">{ctx.copy.importStatusEyebrow}</p>
-              <p className="mt-2 text-[20px] leading-7 font-medium text-[#f1f1f1]">{ctx.copy.importStatusTitle}</p>
-            </div>
-            <Badge variant="secondary">{ctx.copy.trialBadge}</Badge>
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="yt-overline text-[#aaaaaa]">{ctx.copy.importStatusEyebrow}</p>
+            <p className="mt-2 text-[22px] leading-8 font-semibold text-[#f1f1f1]">{ctx.copy.importStatusTitle}</p>
+            <p className="mt-3 text-[14px] leading-6 text-[#aaaaaa]">{ctx.copy.importStatusBody}</p>
           </div>
-          <p className="mt-3 max-w-2xl text-[14px] leading-6 text-[#aaaaaa]">{ctx.copy.importStatusBody}</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <StudioMetric label={ctx.copy.importMetricCountries} value={countries} />
             <StudioMetric label={ctx.copy.importMetricMapped} value={mapped} />
             <StudioMetric label={ctx.copy.importMetricViews} value={views} />
           </div>
-          <p className="mt-4 text-[12px] text-[#9a9a9a]">{hasRealStats ? ctx.copy.importRealStatsNote : ctx.copy.importDemoStatsNote}</p>
         </div>
       </div>
     );
@@ -943,16 +1003,16 @@ function renderStepBody(
 
   if (step === 4) {
     return (
-      <div className="grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-4 overflow-x-auto pb-1">
+      <div className="grid gap-4 md:grid-cols-4">
         {sponsorCards.map((sponsor) => (
-          <div key={sponsor.brand} className="rounded-[28px] border border-white/10 bg-[#212121] p-5">
+          <div key={sponsor.brand} className="flex h-full flex-col items-center rounded-[28px] border border-white/10 bg-[#212121] p-5 text-center">
             <div className="mb-4 aspect-video overflow-hidden rounded-2xl border border-white/10 bg-[#111111]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={sponsor.image} alt={sponsor.brand} className="h-full w-full object-contain p-4" />
             </div>
             <p className="text-[16px] font-medium text-[#f1f1f1]">{sponsor.brand}</p>
             <p className="mt-2 text-[13px] leading-5 text-[#aaaaaa]">{ctx.copy.sponsorsDescription}</p>
-            <button type="button" className="yt-btn-secondary mt-5 w-full">
+            <button type="button" className="yt-btn-secondary mt-5 w-full border border-black/10 bg-white text-black hover:bg-white hover:text-black">
               {ctx.copy.sponsorsConnect}
             </button>
           </div>
@@ -991,8 +1051,8 @@ function renderStepBody(
   }
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.1fr_0.9fr]">
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-3">
         {visiblePlans.map((plan) => {
           const active = ctx.selectedPlan === plan.slug;
           const localizedPlan = localizedPlanDetails[ctx.locale][plan.slug];
@@ -1008,8 +1068,7 @@ function renderStepBody(
               }}
               disabled={unavailable}
               className={cn(
-                "rounded-[28px] border p-5 text-left transition-colors",
-                plan.slug === "creator_pro" && "md:col-span-2 xl:col-span-1",
+                "h-full rounded-[28px] border p-5 text-left transition-colors",
                 unavailable && "cursor-not-allowed border-white/10 bg-[#1b1b1b] opacity-70",
                 !unavailable && active && "border-[rgba(255,0,0,0.36)] bg-[rgba(255,0,0,0.12)]",
                 !unavailable && !active && "border-white/10 bg-[#212121] hover:bg-[#272727]"
@@ -1040,6 +1099,28 @@ function renderStepBody(
       <div className="rounded-2xl border border-[rgba(255,0,0,0.16)] bg-[rgba(255,0,0,0.08)] px-4 py-3 text-[13px] text-[#f1f1f1]">
         {ctx.copy.trialBadge} · {ctx.copy.trialNote}
       </div>
+      {showTestNoPaymentPlan ? (
+        <div className="rounded-xl border border-[#ffd27a]/25 bg-[rgba(255,210,122,0.08)] px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="yt-overline text-[#ffd27a]">{ctx.copy.testWithoutPayment}</p>
+              <p className="mt-1 text-[11px] leading-4 text-[#e7d7b1]">{ctx.copy.testWithoutPaymentHint}</p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              className="border border-black/10 bg-white text-black hover:bg-white/90"
+              onClick={() => {
+                void ctx.onActivateWithoutPaymentForTest();
+              }}
+              disabled={ctx.activationState !== "idle"}
+            >
+              {ctx.activationState === "registering" ? ctx.copy.testWithoutPaymentProcessing : ctx.copy.testWithoutPaymentAction}
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {ctx.stepError ? <p className="text-[12px] text-[#ff8b8b]">{ctx.stepError}</p> : null}
     </div>
   );
@@ -1047,8 +1128,8 @@ function renderStepBody(
 
 function StudioMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-[#181818] p-4">
-      <p className="text-[20px] leading-6 font-medium text-[#f1f1f1]">{formatNumber(value)}</p>
+    <div className="rounded-[24px] border border-white/10 bg-[#181818] p-4 text-center">
+      <p className="text-[32px] leading-none font-semibold tracking-tight text-[#f1f1f1]">{formatNumber(value)}</p>
       <p className="mt-1 text-[12px] text-[#aaaaaa]">{label}</p>
     </div>
   );

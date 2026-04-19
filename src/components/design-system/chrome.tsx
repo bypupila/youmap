@@ -11,6 +11,9 @@ interface FloatingTopBarProps {
   actions?: ReactNode;
   className?: string;
   searchPlaceholder?: string;
+  centerContent?: ReactNode;
+  logoBadgeContent?: ReactNode;
+  hideSearch?: boolean;
 }
 
 export function FloatingTopBar({
@@ -19,12 +22,15 @@ export function FloatingTopBar({
   actions,
   className,
   searchPlaceholder = "Search across videos, countries, or creators",
+  centerContent,
+  logoBadgeContent,
+  hideSearch = false,
 }: FloatingTopBarProps) {
   return (
     <div className={cn("mx-auto yt-navbar tm-refraction pointer-events-auto", className)}>
       <div className="yt-logo-lockup">
         <div className="yt-logo-badge" aria-hidden="true">
-          <GlobeHemisphereWest size={20} weight="duotone" />
+          {logoBadgeContent || <GlobeHemisphereWest size={20} weight="duotone" />}
         </div>
         <div className="min-w-0">
           <p className="yt-overline">{eyebrow}</p>
@@ -32,19 +38,23 @@ export function FloatingTopBar({
         </div>
       </div>
 
-      <div className="hidden flex-1 justify-center lg:flex">
-        <div className="yt-search platform-shimmer" aria-hidden="true">
-          <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
-            <MagnifyingGlass size={16} />
-          </div>
-          <div className="flex h-full min-w-0 flex-1 items-center px-3 text-[13px] text-muted-foreground">
-            {searchPlaceholder}
-          </div>
-          <div className="flex h-full min-w-16 items-center justify-center border-l border-white/10 bg-white/[0.02] text-muted-foreground">
-            <span className="platform-country-code">live</span>
-          </div>
+      {centerContent || !hideSearch ? (
+        <div className="hidden flex-1 justify-center lg:flex">
+          {centerContent || (
+            <div className="yt-search platform-shimmer" aria-hidden="true">
+              <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
+                <MagnifyingGlass size={16} />
+              </div>
+              <div className="flex h-full min-w-0 flex-1 items-center px-3 text-[13px] text-muted-foreground">
+                {searchPlaceholder}
+              </div>
+              <div className="flex h-full min-w-16 items-center justify-center border-l border-white/10 bg-white/[0.02] text-muted-foreground">
+                <span className="platform-country-code">live</span>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      ) : null}
 
       <div className="ml-auto flex items-center gap-2">
         {actions}

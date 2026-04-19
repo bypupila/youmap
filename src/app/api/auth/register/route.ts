@@ -19,6 +19,7 @@ const payloadSchema = z.object({
   channelUrl: z.string().min(3).optional().nullable(),
   youtubeChannelId: z.string().min(8).optional().nullable(),
   activateWithoutPayment: z.boolean().optional().default(false),
+  deferImportToProcessing: z.boolean().optional().default(false),
 });
 
 function buildValidationMessage(error: z.ZodError) {
@@ -218,7 +219,7 @@ export async function POST(request: Request) {
         selectedPlan,
       });
 
-      if (channelInput) {
+      if (channelInput && !payload.deferImportToProcessing) {
         try {
           const importResult = await importYoutubeChannel({
             userId,
