@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "validate:env": "node scripts/validate-env.mjs"
+    "validate:env": "node scripts/validate-env.mjs",
+    "polar:bootstrap": "node scripts/polar-bootstrap-travel.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.13.0",
     "@neondatabase/serverless": "^1.0.1",
+    "@phosphor-icons/react": "^2.1.10",
     "@polar-sh/sdk": "^0.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

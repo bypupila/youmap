@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type AuthMode = "login" | "register";
 
@@ -84,124 +87,106 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden bg-[#02040a] text-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,107,53,0.2),transparent_24%),radial-gradient(circle_at_84%_14%,rgba(0,212,255,0.14),transparent_26%)]" />
-      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4">
-        <section className="w-full max-w-lg rounded-[32px] border border-white/10 bg-black/50 p-6 backdrop-blur-2xl sm:p-8">
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.25em] text-primary">TravelMap</p>
-              <h1 className="mt-1 text-2xl font-black tracking-tight text-white">Acceso de Cuenta</h1>
-            </div>
-            <Link href="/" className="text-xs text-white/60 transition hover:text-white">
-              Volver
-            </Link>
+    <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
+      <div className="platform-grid-glow pointer-events-none absolute inset-0" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,0,0,0.18),transparent_24%),radial-gradient(circle_at_84%_14%,rgba(255,0,0,0.12),transparent_26%),linear-gradient(180deg,rgba(17,20,22,0.92),rgba(17,20,22,0.76))]" />
+      <div className="relative z-10 mx-auto grid min-h-[100dvh] max-w-[1400px] items-center gap-8 px-4 py-10 lg:grid-cols-[0.92fr_1.08fr] lg:px-6">
+        <section className="order-2 lg:order-1">
+          <div className="max-w-[38rem]">
+            <Badge variant="outline">Creator access</Badge>
+            <h1 className="mt-5 max-w-[12ch] text-4xl font-semibold tracking-[-0.06em] text-foreground md:text-6xl md:leading-none">
+              Entra, activa tu mapa y publica una presencia propia.
+            </h1>
+            <p className="mt-5 max-w-[60ch] text-base leading-7 text-muted-foreground">
+              TravelMap convierte el catálogo del canal en una experiencia editorial: rutas, países, sponsors y una URL pública lista para ventas o discovery.
+            </p>
           </div>
 
-          <div className="mb-5 grid grid-cols-2 gap-2 rounded-full border border-white/10 bg-white/5 p-1">
-            <button
-              type="button"
-              onClick={() => setMode("login")}
-              className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
-                mode === "login" ? "bg-primary text-white" : "text-white/60 hover:text-white"
-              }`}
-            >
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <div className="tm-surface-strong rounded-[2rem] p-5">
+              <p className="yt-overline">Acceso ordenado</p>
+              <p className="mt-3 text-lg font-medium">Login y registro mantienen el mismo lenguaje visual del producto para reducir fricción desde el primer paso.</p>
+            </div>
+            <div className="tm-surface rounded-[2rem] p-5">
+              <p className="text-3xl font-semibold tracking-tight">7 días</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">El flujo completo te lleva a onboarding, importación y dashboard sin saltos de interfaz.</p>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <Link href="/" className="yt-btn-secondary">
+              Volver al inicio
+            </Link>
+          </div>
+        </section>
+
+        <section className="order-1 tm-surface-strong rounded-[2rem] p-6 sm:p-8 lg:order-2 lg:ml-auto lg:w-full lg:max-w-[38rem]">
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <p className="yt-overline">Cuenta TravelMap</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-foreground">Acceso de cuenta</h2>
+            </div>
+            <Badge variant="secondary">{mode === "login" ? "Login" : "Registro"}</Badge>
+          </div>
+
+          <div className="mb-6 flex flex-wrap gap-2">
+            <button type="button" onClick={() => setMode("login")} className="yt-nav-pill" data-active={mode === "login"}>
               Iniciar sesión
             </button>
-            <button
-              type="button"
-              onClick={() => setMode("register")}
-              className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
-                mode === "register" ? "bg-primary text-white" : "text-white/60 hover:text-white"
-              }`}
-            >
+            <button type="button" onClick={() => setMode("register")} className="yt-nav-pill" data-active={mode === "register"}>
               Crear cuenta
             </button>
           </div>
 
           {mode === "login" ? (
-            <form className="space-y-3" onSubmit={handleLogin}>
-              <label className="block">
-                <span className="mb-1 block text-xs uppercase tracking-[0.16em] text-slate-300">Email o usuario</span>
-                <input
-                  value={identifier}
-                  onChange={(event) => setIdentifier(event.target.value)}
-                  placeholder="tu@email.com o tu_usuario"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-2"
-                />
+            <form className="grid gap-4" onSubmit={handleLogin}>
+              <label className="grid gap-2">
+                <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Email o usuario</span>
+                <Input value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="tu@email.com o tu_usuario" />
+                <p className="text-xs text-muted-foreground">Puedes entrar usando el email de facturación o tu identificador público.</p>
               </label>
-              <label className="block">
-                <span className="mb-1 block text-xs uppercase tracking-[0.16em] text-slate-300">Contraseña</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="********"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-2"
-                />
+              <label className="grid gap-2">
+                <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Contraseña</span>
+                <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Tu contraseña" />
+                <p className="text-xs text-muted-foreground">Mantén una clave única para tu operación editorial y comercial.</p>
               </label>
-              <button
-                type="submit"
-                disabled={loading || !identifier.trim() || !password.trim()}
-                className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button type="submit" className="mt-2 w-full" disabled={loading || !identifier.trim() || !password.trim()}>
                 {loading ? "Ingresando..." : "Entrar"}
-              </button>
+              </Button>
             </form>
           ) : (
-            <form className="space-y-3" onSubmit={handleRegister}>
-              <label className="block">
-                <span className="mb-1 block text-xs uppercase tracking-[0.16em] text-slate-300">Nombre</span>
-                <input
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                  placeholder="Tu nombre"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-2"
-                />
+            <form className="grid gap-4" onSubmit={handleRegister}>
+              <label className="grid gap-2">
+                <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Nombre público</span>
+                <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Nombre visible en tu mapa" />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-xs uppercase tracking-[0.16em] text-slate-300">Email</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="tu@email.com"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-2"
-                />
+              <label className="grid gap-2">
+                <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Email</span>
+                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@email.com" />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-xs uppercase tracking-[0.16em] text-slate-300">Usuario</span>
-                <input
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  placeholder="tu_usuario"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-2"
-                />
+              <label className="grid gap-2">
+                <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Usuario</span>
+                <Input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="tu_usuario" />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-xs uppercase tracking-[0.16em] text-slate-300">Contraseña</span>
-                <input
-                  type="password"
-                  value={registerPassword}
-                  onChange={(event) => setRegisterPassword(event.target.value)}
-                  placeholder="Mínimo 8 caracteres"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-2"
-                />
+              <label className="grid gap-2">
+                <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Contraseña</span>
+                <Input type="password" value={registerPassword} onChange={(event) => setRegisterPassword(event.target.value)} placeholder="Mínimo 8 caracteres" />
+                <p className="text-xs text-muted-foreground">La cuenta nueva te llevará directo al flujo de activación y mapa.</p>
               </label>
-              <button
+              <Button
                 type="submit"
+                className="mt-2 w-full"
                 disabled={loading || !displayName.trim() || !email.trim() || !username.trim() || !registerPassword.trim()}
-                className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Creando..." : "Crear cuenta"}
-              </button>
+              </Button>
             </form>
           )}
 
-          {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
-          <p className="mt-5 text-xs text-white/50">
-            Si estás arrancando el flujo completo de canal + extracción, usa{" "}
-            <Link href="/onboarding" className="text-primary hover:underline">
+          {error ? <p className="mt-4 text-sm text-[#ffb0a7]">{error}</p> : null}
+          <p className="mt-5 text-sm text-muted-foreground">
+            Si vas a arrancar la activación completa de canal e importación, entra por{" "}
+            <Link href="/onboarding" className="text-foreground underline underline-offset-4">
               onboarding
             </Link>
             .

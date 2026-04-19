@@ -1,0 +1,437 @@
+{
+  "generated_at": "2026-04-19T12:31:04.823Z",
+  "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+  "products": [
+    {
+      "id": "d92c7238-77c5-4bf5-a4f7-0d1109a7a429",
+      "name": "TravelMap Creator Plus Monthly (2026-04-19)",
+      "is_archived": false,
+      "is_recurring": true,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": "month",
+      "prices": [
+        {
+          "id": "c8906072-ad98-4f20-9f96-8fe131863ea4",
+          "type": "recurring",
+          "price_amount": 19900,
+          "price_currency": "usd",
+          "recurring_interval": "month",
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "3a0d3c6b-a853-4bc8-b472-1a919ee2606e",
+      "name": "TravelMap Pro Monthly (2026-04-19)",
+      "is_archived": false,
+      "is_recurring": true,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": "month",
+      "prices": [
+        {
+          "id": "6323cdc5-2b7e-44ef-adbf-c7b5596100b4",
+          "type": "recurring",
+          "price_amount": 7900,
+          "price_currency": "usd",
+          "recurring_interval": "month",
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "4dfa4344-c9f3-4a26-bf65-7046aad8d99e",
+      "name": "TravelMap Starter Monthly (2026-04-19)",
+      "is_archived": false,
+      "is_recurring": true,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": "month",
+      "prices": [
+        {
+          "id": "a6fc2939-aead-42f1-a28e-dc4f60854091",
+          "type": "recurring",
+          "price_amount": 2900,
+          "price_currency": "usd",
+          "recurring_interval": "month",
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "935eabb9-f699-4ff8-a3c0-34948c3b88b9",
+      "name": "Community Globe - Project promotion 30 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "8585e1e8-1e62-4f79-99c8-54188ac561ef",
+          "type": "one_time",
+          "price_amount": 5900,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "f0fea7a7-cce2-4040-abc7-14a00921baaa",
+      "name": "Community Globe - Project promotion 15 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "1a494963-de67-4442-91b7-03050a5c5a24",
+          "type": "one_time",
+          "price_amount": 3900,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "d0652820-f929-496d-a840-008447746fa5",
+      "name": "Community Globe - Project promotion 7 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "c59ca316-9cc7-4ac2-ad08-83133e0681c9",
+          "type": "one_time",
+          "price_amount": 2400,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "ea036602-2af0-410e-811a-31230ef8c3ae",
+      "name": "Community Globe - Event promotion 15 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "5af54a6a-c960-4f70-8aed-6edb8f2ff520",
+          "type": "one_time",
+          "price_amount": 3200,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "f84cbcae-be33-452f-9aeb-2640bcf71641",
+      "name": "Community Globe - Event promotion 7 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "eb412c2e-96e1-456f-905c-6bdb5ab17cec",
+          "type": "one_time",
+          "price_amount": 1800,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "dea3e62d-7064-4726-8c54-11e3a902c12a",
+      "name": "Community Globe - Donation",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "49d30d51-57f2-44d5-b6c3-50eafaea0a52",
+          "type": "one_time",
+          "price_amount": 500,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "9d17fb03-515b-42d2-8fa7-efec911d075a",
+      "name": "Community Globe - Event promotion 30 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "8e936103-03f4-4b54-88ed-607a6703d2b6",
+          "type": "one_time",
+          "price_amount": 4900,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "fb639cdd-0d5b-45a7-b4f8-93f2df1dfa00",
+      "name": "Community Globe - Profile promotion 30 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "bd7294c0-b565-443e-b011-e0a1aead2e88",
+          "type": "one_time",
+          "price_amount": 3600,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "b7c4ad94-45b1-4089-a55d-0c1a7b71a29e",
+      "name": "Community Globe - Profile promotion 15 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "e5cf94b9-d75c-4fef-a2ca-75e8a84213b3",
+          "type": "one_time",
+          "price_amount": 2400,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "fd2350d8-72a2-4b96-b2ed-b3985a0a5323",
+      "name": "Community Globe - Profile promotion 7 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "1c499723-b1cb-4ebc-ad7b-6fed4d631386",
+          "type": "one_time",
+          "price_amount": 1000,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "6b604250-8a86-42b5-aa38-ce914ea5ef45",
+      "name": "Community Globe - Access monthly",
+      "is_archived": false,
+      "is_recurring": true,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": "month",
+      "prices": [
+        {
+          "id": "10ce49c0-37a1-495d-be44-c684211a893e",
+          "type": "recurring",
+          "price_amount": 1200,
+          "price_currency": "usd",
+          "recurring_interval": "month",
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "4f708f7e-ba7f-419a-8066-33c917db1507",
+      "name": "Community Globe - Access 30 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "c1df0803-c5ad-4de4-9506-51c0a4e68f01",
+          "type": "one_time",
+          "price_amount": 800,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "b6365efb-8cc4-4b8a-9c85-f8173fab3ec5",
+      "name": "Community Globe - Access 15 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "d90dfab8-540a-43ff-a46e-cef3ff86aade",
+          "type": "one_time",
+          "price_amount": 500,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "31dff23e-8c26-4862-b748-66dac5fdee5e",
+      "name": "Community Globe - Access 7 days",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "b2ec76e1-ea25-42b2-826a-00ede2651513",
+          "type": "one_time",
+          "price_amount": 300,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "6b9b290e-aa66-4ee4-9c61-ae7624af4da8",
+      "name": "Donacion - Community Globe",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "d924410f-f57d-4833-9b47-c6d9a9798ff7",
+          "type": "one_time",
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "804f595b-22c3-4d18-b2c8-45939d46dd1e",
+      "name": "Perfil Destacado - 30 dias",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "8886fb8e-46b3-4dff-929b-981fa632cc9d",
+          "type": "one_time",
+          "price_amount": 1500,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "42a957b8-543d-474c-850a-43a0c4ca1235",
+      "name": "Community Globe Lifetime USD 15",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "ab2a256a-7f7c-441d-a28a-19644508ea67",
+          "type": "one_time",
+          "price_amount": 5000,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "6c2b1ac2-11a9-416d-872f-b3a51bd6f1bc",
+      "name": "Hogar Protegido (Pro)",
+      "is_archived": false,
+      "is_recurring": true,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": "year",
+      "prices": [
+        {
+          "id": "4ffed363-8c7d-43f2-9407-b367351082fe",
+          "type": "recurring",
+          "price_amount": 9900,
+          "price_currency": "usd",
+          "recurring_interval": "year",
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "ef200879-891c-4eca-8aaf-dd9ce0a3a9f0",
+      "name": "Acceso Inmortal",
+      "is_archived": false,
+      "is_recurring": false,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": null,
+      "prices": [
+        {
+          "id": "7652bb34-4829-41cd-a7a1-3a3dfd480393",
+          "type": "one_time",
+          "price_amount": 19900,
+          "price_currency": "usd",
+          "recurring_interval": null,
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "b0f89f9f-2274-440b-a24e-47ed44d4d6a1",
+      "name": "Premium Anual",
+      "is_archived": false,
+      "is_recurring": true,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": "year",
+      "prices": [
+        {
+          "id": "479fdf05-e750-442d-8b96-cfaa33fa7642",
+          "type": "recurring",
+          "price_amount": 4900,
+          "price_currency": "usd",
+          "recurring_interval": "year",
+          "is_archived": false
+        }
+      ]
+    },
+    {
+      "id": "1714e6aa-0c66-4bd8-aee5-f35a59e29629",
+      "name": "Premium Mensual",
+      "is_archived": false,
+      "is_recurring": true,
+      "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
+      "recurring_interval": "month",
+      "prices": [
+        {
+          "id": "f57292e6-3aef-4734-84af-1cc80ddef5ee",
+          "type": "recurring",
+          "price_amount": 499,
+          "price_currency": "usd",
+          "recurring_interval": "month",
+          "is_archived": false
+        }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GlobeMethods } from "react-globe.gl";
 import { feature } from "topojson-client";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
+import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { SponsorBanner } from "@/components/sponsors/sponsor-banner";
 
 type PointKind = "country" | "video";
@@ -208,6 +209,13 @@ export function TravelGlobe({
     const video = activePoint?.videos?.[0] || null;
     onActiveVideoChange(video);
   }, [activePoint, onActiveVideoChange]);
+
+  useEffect(() => {
+    return () => {
+      disposeGlobeResources(globeRef.current);
+      globeRef.current = undefined;
+    };
+  }, []);
 
   function handlePointSelection(selected: GlobePoint) {
     setRotationEnabled(false);
@@ -439,7 +447,13 @@ export function TravelGlobe({
               >
                 <div className="flex gap-3">
                   {video.thumbnail_url ? (
-                    <Image src={video.thumbnail_url} alt={video.title} width={120} height={72} className="h-16 w-28 rounded-md object-cover" />
+                    <Image
+                      src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
+                      alt={video.title}
+                      width={120}
+                      height={72}
+                      className="h-16 w-28 rounded-md object-cover"
+                    />
                   ) : (
                     <div className="h-16 w-28 rounded-md bg-white/10" />
                   )}
@@ -492,7 +506,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 function buildPointLabel(point: GlobePoint) {
   if (point.kind === "video") {
     const video = point.videos[0];
-    const thumb = video?.thumbnail_url || "https://via.placeholder.com/360x202/111827/9CA3AF?text=Video";
+    const thumb = toCompactYouTubeThumbnail(video?.thumbnail_url) || "https://via.placeholder.com/360x202/111827/9CA3AF?text=Video";
     const views = formatNumber(Number(video?.view_count || 0));
     const likes = formatNumber(Number(video?.like_count || 0));
     const comments = formatNumber(Number(video?.comment_count || 0));
@@ -815,6 +829,94 @@ const COUNTRY_NAME_ALIASES_TO_CANONICAL = new Map<string, string>(
   })
 );
 
+type Disposable = {
+  dispose?: () => void;
+};
+
+type ThreeMaterialLike = Disposable & {
+  map?: Disposable | null;
+  alphaMap?: Disposable | null;
+  aoMap?: Disposable | null;
+  bumpMap?: Disposable | null;
+  displacementMap?: Disposable | null;
+  emissiveMap?: Disposable | null;
+  envMap?: Disposable | null;
+  lightMap?: Disposable | null;
+  metalnessMap?: Disposable | null;
+  normalMap?: Disposable | null;
+  roughnessMap?: Disposable | null;
+  specularMap?: Disposable | null;
+};
+
+type ThreeObjectLike = {
+  geometry?: Disposable | null;
+  material?: ThreeMaterialLike | ThreeMaterialLike[] | null;
+};
+
+type GlobeInternals = GlobeMethods & {
+  pauseAnimation?: () => void;
+  controls?: () => Disposable | null | undefined;
+  renderer?: () => (Disposable & { forceContextLoss?: () => void }) | undefined;
+  scene?: () => { traverse?: (visitor: (object: ThreeObjectLike) => void) => void } | undefined;
+};
+
+function disposeMaterial(material: ThreeMaterialLike | null | undefined) {
+  if (!material) return;
+  material.map?.dispose?.();
+  material.alphaMap?.dispose?.();
+  material.aoMap?.dispose?.();
+  material.bumpMap?.dispose?.();
+  material.displacementMap?.dispose?.();
+  material.emissiveMap?.dispose?.();
+  material.envMap?.dispose?.();
+  material.lightMap?.dispose?.();
+  material.metalnessMap?.dispose?.();
+  material.normalMap?.dispose?.();
+  material.roughnessMap?.dispose?.();
+  material.specularMap?.dispose?.();
+  material.dispose?.();
+}
+
+function disposeGlobeResources(globe: GlobeMethods | undefined) {
+  const internals = globe as GlobeInternals | undefined;
+  if (!internals) return;
+
+  try {
+    internals.pauseAnimation?.();
+  } catch {
+    // no-op
+  }
+
+  try {
+    internals.controls?.()?.dispose?.();
+  } catch {
+    // no-op
+  }
+
+  try {
+    const scene = internals.scene?.();
+    scene?.traverse?.((node) => {
+      const object = node as unknown as ThreeObjectLike;
+      object.geometry?.dispose?.();
+      if (Array.isArray(object.material)) {
+        for (const material of object.material) disposeMaterial(material);
+      } else {
+        disposeMaterial(object.material);
+      }
+    });
+  } catch {
+    // no-op
+  }
+
+  try {
+    const renderer = internals.renderer?.();
+    renderer?.dispose?.();
+    renderer?.forceContextLoss?.();
+  } catch {
+    // no-op
+  }
+}
+
 function formatNumber(value: number) {
   if (!value) return "0";
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -841,9 +943,8 @@ function escapeHtml(raw: string) {
 function countryCodeToFlag(countryCode?: string | null) {
   const code = String(countryCode || "").toUpperCase();
   if (code.length !== 2) return "🌍";
-  const base = 0x1f1e6;
   const first = code.charCodeAt(0) - 65;
   const second = code.charCodeAt(1) - 65;
   if (first < 0 || first > 25 || second < 0 || second > 25) return "🌍";
-  return String.fromCodePoint(base + first, base + second);
+  return String.fromCodePoint(0x1f1e6 + first, 0x1f1e6 + second);
 }

@@ -1,17 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { AirplaneTilt, Handshake, MapPin } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Handshake, MapPinned, PlaneTakeoff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FloatingTopBar, SignalPill } from "@/components/design-system/chrome";
 import { MapExperience } from "@/components/map/map-experience";
 import { YoutubeImportStep, type ChannelDraft } from "@/components/onboarding/youtube-import-step";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DEMO_ANALYTICS, DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_USER, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
-import { PLAN_DEFINITIONS, resolveCheckoutPlanSlug, type PlanDefinition } from "@/lib/plans";
+import { PLAN_DEFINITIONS, resolveCanonicalPlanSlug, resolveCheckoutPlanSlug, type PlanDefinition } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 import type { ChannelAnalytics } from "@/lib/analytics";
@@ -84,6 +84,7 @@ type OnboardingCopy = {
   accountActivated: string;
   publicUrlReservedPrefix: string;
   missingCheckoutError: string;
+  checkoutFailedError: string;
   creatingAccount: string;
   preparingCheckout: string;
   startTrial: string;
@@ -259,6 +260,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     accountActivated: "Cuenta lista.",
     publicUrlReservedPrefix: "URL pública reservada:",
     missingCheckoutError: "Este plan todavía no tiene checkout configurado.",
+    checkoutFailedError: "No pudimos abrir Polar. Inténtalo nuevamente en unos segundos.",
     creatingAccount: "Creando cuenta...",
     preparingCheckout: "Abriendo Polar...",
     startTrial: "Empezar prueba de 7 días",
@@ -369,6 +371,7 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     accountActivated: "Account ready.",
     publicUrlReservedPrefix: "Public URL reserved:",
     missingCheckoutError: "That plan does not have checkout configured yet.",
+    checkoutFailedError: "We could not open Polar checkout. Please try again in a few seconds.",
     creatingAccount: "Creating account...",
     preparingCheckout: "Opening Polar...",
     startTrial: "Start 7-day trial",
@@ -401,6 +404,7 @@ const unavailablePlanSlugs = new Set<PlanDefinition["slug"]>(["agency"]);
 
 export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; locale: OnboardingLocale }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<OnboardingStep>(0);
   const [selectedPlan, setSelectedPlan] = useState<string>("creator_pro");
   const [channelDraft, setChannelDraft] = useState<ChannelDraft>(() => ({
@@ -413,6 +417,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   const [channelValidationMessage, setChannelValidationMessage] = useState<string | null>(null);
   const [channelValidationMetrics, setChannelValidationMetrics] = useState<ChannelValidationMetrics | null>(null);
   const [activationState, setActivationState] = useState<ActivationState>("idle");
+  const didHydrateQueryState = useRef(false);
 
   const copy = onboardingCopy[locale];
   const previewChannel = DEMO_CHANNEL;
@@ -421,6 +426,31 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   const demoMapPath = locale === "en" ? "/map?channelId=drew-global-map" : "/map?channelId=luisito-global-map";
 
   const currentMeta = copy.stepMeta[step];
+
+  useEffect(() => {
+    if (didHydrateQueryState.current) return;
+    didHydrateQueryState.current = true;
+
+    const planParam = String(searchParams.get("plan") || "").trim();
+    const canonicalPlan = resolveCanonicalPlanSlug(planParam);
+    if (canonicalPlan) {
+      setSelectedPlan(canonicalPlan);
+      setStep(6);
+    }
+
+    const errorCode = String(searchParams.get("error") || "").trim().toLowerCase();
+    if (!errorCode) return;
+
+    setStep(6);
+    if (errorCode === "plan_unavailable") {
+      setStepError(copy.missingCheckoutError);
+      return;
+    }
+    if (errorCode === "checkout_failed") {
+      setStepError(copy.checkoutFailedError);
+      return;
+    }
+  }, [copy.checkoutFailedError, copy.missingCheckoutError, searchParams]);
 
   function normalizeUsernameSeed(input: string) {
     const normalized = String(input || "")
@@ -651,7 +681,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
               type="button"
               className={cn(
                 "inline-flex h-10 items-center justify-center rounded-full px-4 text-[13px] font-medium transition-colors whitespace-nowrap",
-                state === "active" && "bg-[#f1f1f1] text-[#0f0f0f]",
+                state === "active" && "bg-white/[0.08] text-[#f3eee7]",
                 state === "done" && "bg-transparent text-[#8b8b8b] hover:text-[#b5b5b5]",
                 state === "upcoming" && "bg-transparent text-[#ff4040] hover:text-[#ff6a6a]"
               )}
@@ -668,7 +698,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   );
 
   return (
-    <main className="relative h-[100dvh] overflow-hidden bg-[#0f0f0f] text-[#f1f1f1]">
+    <main className="relative min-h-[100dvh] overflow-hidden text-[#f1f1f1]">
       <div className="pointer-events-none absolute inset-0 [&_*]:pointer-events-none">
         <MapExperience
           channel={previewChannel}
@@ -681,7 +711,8 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,15,15,0.96),rgba(15,15,15,0.74)_22%,rgba(15,15,15,0.4)_42%,rgba(15,15,15,0.92))]" />
+      <div className="platform-grid-glow pointer-events-none absolute inset-0" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.96),rgba(17,20,22,0.74)_22%,rgba(17,20,22,0.4)_42%,rgba(17,20,22,0.92))]" />
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-40 px-4 py-3">
         <FloatingTopBar
@@ -691,7 +722,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
           actions={
             <>
               <SignalPill text={copy.workflowPill} />
-              <Link href={demoMapPath} className="inline-flex h-9 items-center justify-center rounded-full bg-[#f1f1f1] px-4 text-[13px] font-medium text-[#0f0f0f] transition-colors hover:bg-[#e3e3e3]">
+              <Link href={demoMapPath} className="yt-btn-primary">
                 {copy.demoMapLabel}
               </Link>
             </>
@@ -710,7 +741,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -18 }}
               transition={{ duration: 0.35 }}
-              className="pointer-events-auto rounded-[24px] border border-white/10 bg-[#181818]/96 shadow-[0_30px_100px_rgba(0,0,0,0.45)] backdrop-blur"
+              className="pointer-events-auto rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(25,28,31,0.96),rgba(18,21,23,0.92))] shadow-[0_36px_100px_-52px_rgba(0,0,0,0.92)] backdrop-blur"
             >
               <div className="border-b border-white/10 px-6 py-5 text-center sm:px-8">
                 <p className="yt-overline text-[#aaaaaa]">{currentMeta.eyebrow}</p>
@@ -807,22 +838,22 @@ function renderStepBody(
 ) {
   if (step === 0) {
     const featureCards = [
-      { ...ctx.copy.overviewFeatures[0], icon: PlaneTakeoff },
-      { ...ctx.copy.overviewFeatures[1], icon: MapPinned },
+      { ...ctx.copy.overviewFeatures[0], icon: AirplaneTilt },
+      { ...ctx.copy.overviewFeatures[1], icon: MapPin },
       { ...ctx.copy.overviewFeatures[2], icon: Handshake },
     ] as const;
 
     return (
-      <div className="grid gap-4 lg:grid-cols-3">
-        {featureCards.map((feature) => {
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.15fr_0.85fr]">
+        {featureCards.map((feature, index) => {
           const Icon = feature.icon;
           return (
-            <div key={feature.title} className="rounded-[28px] border border-white/10 bg-[#212121] p-6 text-center">
-              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-[#ff0000] text-white shadow-[0_18px_45px_rgba(255,0,0,0.22)]">
-                <Icon className="h-9 w-9" />
+            <div key={feature.title} className={cn("rounded-[28px] border border-white/10 bg-[#212121] p-6", index === 0 && "md:col-span-2 xl:col-span-1")}>
+              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(255,0,0,0.14)] text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                <Icon size={30} weight="regular" />
               </div>
               <p className="text-[16px] leading-[22px] font-medium text-[#f1f1f1]">{feature.title}</p>
-              <p className="mt-2 text-[14px] leading-6 text-[#aaaaaa]">{feature.copy}</p>
+              <p className="mt-2 max-w-[34ch] text-[14px] leading-6 text-[#aaaaaa]">{feature.copy}</p>
             </div>
           );
         })}
@@ -933,10 +964,10 @@ function renderStepBody(
   if (step === 5) {
     return (
       <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[28px] border border-[#ff0000]/25 bg-[#241616] p-6">
+        <div className="rounded-[28px] border border-[rgba(255,0,0,0.24)] bg-[rgba(255,0,0,0.12)] p-6">
           <p className="yt-overline text-[#ff8b8b]">{ctx.copy.fanVoteEyebrow}</p>
           <h3 className="mt-2 text-[26px] leading-[30px] font-bold text-[#f1f1f1]">{ctx.copy.fanVoteTitle}</h3>
-          <p className="mt-3 max-w-xl text-[14px] leading-6 text-[#d3bcbc]">{ctx.copy.fanVoteDescription}</p>
+          <p className="mt-3 max-w-xl text-[14px] leading-6 text-[#dec5b8]">{ctx.copy.fanVoteDescription}</p>
         </div>
         <div className="space-y-3">
           {[
@@ -961,7 +992,7 @@ function renderStepBody(
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.1fr_0.9fr]">
         {visiblePlans.map((plan) => {
           const active = ctx.selectedPlan === plan.slug;
           const localizedPlan = localizedPlanDetails[ctx.locale][plan.slug];
@@ -978,8 +1009,9 @@ function renderStepBody(
               disabled={unavailable}
               className={cn(
                 "rounded-[28px] border p-5 text-left transition-colors",
+                plan.slug === "creator_pro" && "md:col-span-2 xl:col-span-1",
                 unavailable && "cursor-not-allowed border-white/10 bg-[#1b1b1b] opacity-70",
-                !unavailable && active && "border-[#ff0000] bg-[#2a1212]",
+                !unavailable && active && "border-[rgba(255,0,0,0.36)] bg-[rgba(255,0,0,0.12)]",
                 !unavailable && !active && "border-white/10 bg-[#212121] hover:bg-[#272727]"
               )}
             >
@@ -1005,7 +1037,7 @@ function renderStepBody(
           );
         })}
       </div>
-      <div className="rounded-2xl border border-[#ff0000]/15 bg-[#1a1414] px-4 py-3 text-[13px] text-[#f1f1f1]">
+      <div className="rounded-2xl border border-[rgba(255,0,0,0.16)] bg-[rgba(255,0,0,0.08)] px-4 py-3 text-[13px] text-[#f1f1f1]">
         {ctx.copy.trialBadge} · {ctx.copy.trialNote}
       </div>
       {ctx.stepError ? <p className="text-[12px] text-[#ff8b8b]">{ctx.stepError}</p> : null}

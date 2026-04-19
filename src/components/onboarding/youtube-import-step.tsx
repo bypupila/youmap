@@ -80,7 +80,7 @@ export function YoutubeImportStep({
   const validationBadgeClass =
     channelValidationState === "valid"
       ? "border-[#1f8f4a] bg-[#102317] text-[#72e5a0]"
-      : "border-[#b23636] bg-[#271212] text-[#ff8b8b]";
+      : "border-[rgba(255,0,0,0.3)] bg-[rgba(255,0,0,0.12)] text-[#ff8b8b]";
 
   return (
     <div className="space-y-4">
@@ -91,7 +91,7 @@ export function YoutubeImportStep({
             value={draft.displayName}
             onChange={(event) => onChange({ ...draft, displayName: event.target.value })}
             placeholder={copy.displayNamePlaceholder}
-            className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#ff0000]"
+            className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[rgba(255,0,0,0.6)]"
           />
         </label>
         <label className="block sm:col-span-1">
@@ -101,7 +101,7 @@ export function YoutubeImportStep({
             value={draft.email}
             onChange={(event) => onChange({ ...draft, email: event.target.value })}
             placeholder={copy.emailPlaceholder}
-            className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#ff0000]"
+            className="h-11 w-full rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[rgba(255,0,0,0.6)]"
           />
         </label>
       </div>
@@ -113,7 +113,7 @@ export function YoutubeImportStep({
             value={draft.channelUrl}
             onChange={(event) => onChange({ ...draft, channelUrl: event.target.value })}
             placeholder={copy.channelUrlPlaceholder}
-            className="h-11 min-w-0 flex-1 rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[#ff0000]"
+            className="h-11 min-w-0 flex-1 rounded-2xl border border-white/10 bg-[#121212] px-4 text-[14px] text-[#f1f1f1] outline-none placeholder:text-[#717171] focus:border-[rgba(255,0,0,0.6)]"
           />
           <button
             type="button"

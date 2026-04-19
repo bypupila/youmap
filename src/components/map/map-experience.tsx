@@ -13,6 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { ManualVerificationItem, MapSummary } from "@/lib/map-data";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
+import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { cn } from "@/lib/utils";
 
 type FilterWindow = "30" | "90" | "365" | "all";
@@ -249,7 +250,7 @@ export function MapExperience({
   }
 
   return (
-    <div ref={rootRef} className={cn("relative h-[100dvh] w-full overflow-hidden bg-[#0f0f0f]", !interactive && "pointer-events-none")}>
+    <div ref={rootRef} className={cn("relative min-h-[100dvh] w-full overflow-hidden bg-[#111416]", !interactive && "pointer-events-none")}>
       <TravelGlobe
         channelData={channel}
         videoLocations={filteredVideos}
@@ -313,7 +314,8 @@ export function MapExperience({
                         )}
                       >
                         <span className="truncate text-[13px] font-medium">
-                          {countryCodeToFlag(country.country_code)} {country.country_name}
+                          <span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(country.country_code)}</span>
+                          {country.country_name}
                         </span>
                         <span className={cn("rounded-lg px-2 py-0.5 text-[11px]", selectedCountryCode === country.country_code ? "bg-black/10" : "bg-white/10 text-[#aaaaaa]")}>
                           {country.count}
@@ -346,7 +348,7 @@ export function MapExperience({
                       setMobileLegendOpen(false);
                     }}
                   >
-                    <span className="text-[13px]">{countryCodeToFlag(country.country_code)} {country.country_name}</span>
+                    <span className="text-[13px]"><span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(country.country_code)}</span>{country.country_name}</span>
                     <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-[#aaaaaa]">{country.count}</span>
                   </button>
                 ))}
@@ -395,10 +397,10 @@ export function MapExperience({
                     <button
                       type="button"
                       onClick={() => setShowResultModal(true)}
-                      className="flex w-full items-center justify-between rounded-xl border border-[#ff0000]/20 bg-[#2a1212] px-4 py-3 text-left"
+                      className="flex w-full items-center justify-between rounded-xl border border-[rgba(255,0,0,0.24)] bg-[rgba(255,0,0,0.12)] px-4 py-3 text-left"
                     >
                       <span className="text-[13px] font-medium">Manual verification queue</span>
-                      <span className="rounded-md bg-[#ff0000] px-2 py-0.5 text-[11px]">{pendingManual.length}</span>
+                      <span className="rounded-md bg-primary px-2 py-0.5 text-[11px] text-primary-foreground">{pendingManual.length}</span>
                     </button>
                   ) : null}
 
@@ -416,7 +418,8 @@ export function MapExperience({
                     <div>
                       <p className="yt-overline text-[#aaaaaa]">Country panel</p>
                       <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">
-                        {countryCodeToFlag(selectedCountryCode)} {selectedCountryName}
+                        <span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(selectedCountryCode)}</span>
+                        {selectedCountryName}
                       </CardTitle>
                     </div>
                     <Badge variant="outline">{selectedCountryVideos.length} videos</Badge>
@@ -481,7 +484,13 @@ export function MapExperience({
               <CardContent className="px-4 py-4">
                 <div className="yt-video-thumb aspect-video">
                   {pinnedVideo.thumbnail_url ? (
-                    <Image src={pinnedVideo.thumbnail_url} alt={pinnedVideo.title} width={1280} height={720} className="h-full w-full object-cover" />
+                    <Image
+                      src={toCompactYouTubeThumbnail(pinnedVideo.thumbnail_url) || pinnedVideo.thumbnail_url}
+                      alt={pinnedVideo.title}
+                      width={1280}
+                      height={720}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[#212121] text-[#717171]">No thumbnail</div>
                   )}
@@ -492,7 +501,8 @@ export function MapExperience({
                     {formatNumber(Number(pinnedVideo.view_count || 0))} views • {formatNumber(Number(pinnedVideo.like_count || 0))} likes • {formatNumber(Number(pinnedVideo.comment_count || 0))} comments
                   </p>
                   <p className="mt-1 text-[12px] leading-4 text-[#aaaaaa]">
-                    {countryCodeToFlag(pinnedVideo.country_code)} {pinnedVideo.country_name || pinnedVideo.country_code} • {formatDate(pinnedVideo.published_at)}
+                    <span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(pinnedVideo.country_code)}</span>
+                    {pinnedVideo.country_name || pinnedVideo.country_code} · {formatDate(pinnedVideo.published_at)}
                   </p>
                 </div>
               </CardContent>
@@ -531,7 +541,13 @@ export function MapExperience({
                       <div className="flex gap-4">
                         <div className="relative h-20 w-32 shrink-0 overflow-hidden rounded-xl bg-[#121212]">
                           {video.thumbnail_url ? (
-                            <Image src={video.thumbnail_url} alt={video.title} fill className="object-cover" />
+                            <Image
+                              src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
+                              alt={video.title}
+                              fill
+                              sizes="128px"
+                              className="object-cover"
+                            />
                           ) : null}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -592,7 +608,13 @@ function VideoListItem({ video, compact = false }: { video: TravelVideoLocation;
     <div className="flex gap-3">
       <div className={cn("yt-video-thumb shrink-0", compact ? "h-16 w-28" : "h-20 w-36")}>
         {video.thumbnail_url ? (
-          <Image src={video.thumbnail_url} alt={video.title} fill className="object-cover" />
+          <Image
+            src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
+            alt={video.title}
+            fill
+            sizes={compact ? "112px" : "144px"}
+            className="object-cover"
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-[#181818] text-[11px] text-[#717171]">No thumbnail</div>
         )}
@@ -636,5 +658,8 @@ function formatDate(value?: string | null) {
 function countryCodeToFlag(countryCode?: string | null) {
   const code = String(countryCode || "").toUpperCase();
   if (code.length !== 2) return "🌍";
-  return String.fromCodePoint(0x1f1e6 + code.charCodeAt(0) - 65, 0x1f1e6 + code.charCodeAt(1) - 65);
+  const first = code.charCodeAt(0) - 65;
+  const second = code.charCodeAt(1) - 65;
+  if (first < 0 || first > 25 || second < 0 || second > 25) return "🌍";
+  return String.fromCodePoint(0x1f1e6 + first, 0x1f1e6 + second);
 }

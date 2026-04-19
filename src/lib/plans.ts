@@ -51,6 +51,44 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
 ];
 
+export type CanonicalPlanSlug = PlanDefinition["slug"];
+
+const PLAN_ALIAS_GROUPS: ReadonlyArray<readonly [CanonicalPlanSlug, ...string[]]> = [
+  ["free"],
+  ["creator", "starter"],
+  ["creator_pro", "pro"],
+  ["agency", "creator_plus"],
+];
+
+const canonicalByAlias = new Map<string, CanonicalPlanSlug>();
+const aliasesByCanonical = new Map<CanonicalPlanSlug, string[]>();
+
+for (const group of PLAN_ALIAS_GROUPS) {
+  const [canonical, ...aliases] = group;
+  const normalizedAliases = Array.from(new Set([canonical, ...aliases].map((slug) => String(slug).trim().toLowerCase()).filter(Boolean)));
+  aliasesByCanonical.set(canonical, normalizedAliases);
+  for (const alias of normalizedAliases) canonicalByAlias.set(alias, canonical);
+}
+
+export function resolveCanonicalPlanSlug(slug: string): CanonicalPlanSlug | null {
+  const normalized = String(slug || "").trim().toLowerCase();
+  if (!normalized) return null;
+  return canonicalByAlias.get(normalized) || null;
+}
+
+export function getPlanSlugCandidates(slug: string) {
+  const normalized = String(slug || "").trim().toLowerCase();
+  if (!normalized) return [];
+
+  const canonical = canonicalByAlias.get(normalized);
+  if (!canonical) return [normalized];
+
+  const aliases = aliasesByCanonical.get(canonical) || [canonical];
+  return [normalized, ...aliases.filter((alias) => alias !== normalized)];
+}
+
 export function resolveCheckoutPlanSlug(slug: string) {
-  return PLAN_DEFINITIONS.find((plan) => plan.slug === slug)?.checkoutSlug || null;
+  const canonicalSlug = resolveCanonicalPlanSlug(slug);
+  if (!canonicalSlug) return null;
+  return PLAN_DEFINITIONS.find((plan) => plan.slug === canonicalSlug)?.checkoutSlug || null;
 }

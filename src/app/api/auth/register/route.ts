@@ -11,15 +11,31 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const payloadSchema = z.object({
-  displayName: z.string().min(1),
-  email: z.string().email(),
-  username: z.string().min(3),
-  password: z.string().min(8).max(128),
-  selectedPlan: z.string().min(2),
+  displayName: z.string().trim().min(1, "Escribe tu nombre."),
+  email: z.string().trim().email("Escribe un email válido."),
+  username: z.string().trim().min(3, "El usuario debe tener al menos 3 caracteres."),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres.").max(128),
+  selectedPlan: z.string().trim().min(2, "Selecciona un plan."),
   channelUrl: z.string().min(3).optional().nullable(),
   youtubeChannelId: z.string().min(8).optional().nullable(),
   activateWithoutPayment: z.boolean().optional().default(false),
 });
+
+function buildValidationMessage(error: z.ZodError) {
+  const firstIssue = error.issues[0];
+  const field = String(firstIssue?.path?.[0] || "");
+  const fallback = "Revisa los datos de registro e inténtalo de nuevo.";
+  if (!firstIssue) return fallback;
+
+  if (field === "displayName") return "Escribe tu nombre para continuar.";
+  if (field === "email") return "Escribe un email válido para continuar.";
+  if (field === "username") return "Elige un usuario válido (mínimo 3 caracteres).";
+  if (field === "password") return "La contraseña debe tener al menos 8 caracteres.";
+  if (field === "selectedPlan") return "Selecciona un plan para continuar.";
+  if (field === "channelUrl" || field === "youtubeChannelId") return "Revisa el canal de YouTube e inténtalo de nuevo.";
+
+  return firstIssue.message || fallback;
+}
 
 function buildChannelInput(payload: z.infer<typeof payloadSchema>) {
   const youtubeChannelId = String(payload.youtubeChannelId || "").trim();
@@ -237,6 +253,16 @@ export async function POST(request: Request) {
     setSessionCookie(response, userId);
     return response;
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: buildValidationMessage(error),
+          field_errors: error.flatten().fieldErrors,
+        },
+        { status: 400 }
+      );
+    }
+
     console.error("[api/auth/register]", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo crear la cuenta" },

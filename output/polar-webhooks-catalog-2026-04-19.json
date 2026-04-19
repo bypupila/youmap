@@ -1,0 +1,78 @@
+{
+  "generated_at": "2026-04-19T12:37:22.678Z",
+  "webhook_endpoints": [
+    {
+      "id": "b61ef98a-33c4-4d58-a0c7-d348909ffa93",
+      "name": "TravelMap Web 2026-04-19123709",
+      "url": "https://youmap.bypupila.com/api/billing/polar/webhook",
+      "enabled": true,
+      "events": [
+        "checkout.created",
+        "checkout.updated",
+        "checkout.expired",
+        "order.created",
+        "order.paid",
+        "order.refunded",
+        "subscription.created",
+        "subscription.updated",
+        "subscription.active",
+        "subscription.canceled",
+        "subscription.uncanceled",
+        "subscription.revoked",
+        "subscription.past_due"
+      ]
+    },
+    {
+      "id": "dc39846b-2593-4df7-97fc-5526c2150211",
+      "name": "WORLD - BY PUPILA 20260329123649",
+      "url": "https://world.bypupila.com/api/billing/webhook",
+      "enabled": true,
+      "events": [
+        "checkout.created",
+        "checkout.updated",
+        "order.paid",
+        "order.refunded",
+        "subscription.active",
+        "subscription.canceled",
+        "subscription.created",
+        "subscription.past_due",
+        "subscription.revoked",
+        "subscription.uncanceled",
+        "subscription.updated"
+      ]
+    },
+    {
+      "id": "360b942f-8054-4bf5-84b6-5947b004ca09",
+      "name": null,
+      "url": "https://ehayxrudglpyagklctkx.functions.supabase.co/polar-webhook",
+      "enabled": true,
+      "events": [
+        "subscription.created",
+        "subscription.updated",
+        "subscription.revoked"
+      ]
+    },
+    {
+      "id": "fd30a41e-6617-4709-9949-464accab834e",
+      "name": null,
+      "url": "https://ehayxrudglpyagklctkx.functions.supabase.co/polar-webhook",
+      "enabled": true,
+      "events": [
+        "subscription.created",
+        "subscription.updated",
+        "subscription.revoked"
+      ]
+    },
+    {
+      "id": "d431b48b-4dc7-4e54-bb4b-0928f52c6029",
+      "name": null,
+      "url": "https://ehayxrudglpyagklctkx.functions.supabase.co/polar-webhook",
+      "enabled": true,
+      "events": [
+        "subscription.created",
+        "subscription.updated",
+        "subscription.revoked"
+      ]
+    }
+  ]
+}

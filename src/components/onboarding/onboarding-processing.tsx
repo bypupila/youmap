@@ -252,8 +252,9 @@ export function OnboardingProcessing({
   }
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden bg-[#0f0f0f] text-[#f1f1f1]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_18%,rgba(255,255,255,0.08),transparent_26%),radial-gradient(circle_at_82%_22%,rgba(255,0,0,0.16),transparent_26%),linear-gradient(180deg,rgba(15,15,15,0.95),rgba(15,15,15,0.82))]" />
+    <main className="relative min-h-[100dvh] overflow-hidden text-[#f1f1f1]">
+      <div className="platform-grid-glow pointer-events-none absolute inset-0" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_18%,rgba(255,255,255,0.08),transparent_26%),radial-gradient(circle_at_82%_22%,rgba(255,0,0,0.16),transparent_26%),linear-gradient(180deg,rgba(17,20,22,0.95),rgba(17,20,22,0.82))]" />
 
       <header className="absolute inset-x-0 top-0 z-40 px-4 py-3">
         <FloatingTopBar
@@ -285,7 +286,7 @@ export function OnboardingProcessing({
 
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#2a2a2a]">
                 <div
-                  className="h-full rounded-full bg-[linear-gradient(90deg,#ffffff_0%,#ff0000_100%)] transition-all duration-500"
+                  className="h-full rounded-full bg-[linear-gradient(90deg,rgba(255,0,0,0.88)_0%,rgba(204,0,0,1)_100%)] transition-all duration-500"
                   style={{ width: `${Math.max(6, Math.round(progress * 100))}%` }}
                 />
               </div>
@@ -296,7 +297,7 @@ export function OnboardingProcessing({
                     key={phrase}
                     className={cn(
                       "rounded-full border px-3 py-1 text-[12px] transition-colors",
-                      index === phraseIndex ? "border-[#ff0000] bg-[#2a1212] text-[#f1f1f1]" : "border-white/10 bg-[#181818] text-[#8f8f8f]"
+                      index === phraseIndex ? "border-[rgba(255,0,0,0.4)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-[#181818] text-[#8f8f8f]"
                     )}
                   >
                     {phrase}

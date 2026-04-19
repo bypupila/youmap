@@ -1,4 +1,7 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { GlobeHemisphereWest, MagnifyingGlass } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -18,30 +21,27 @@ export function FloatingTopBar({
   searchPlaceholder = "Search across videos, countries, or creators",
 }: FloatingTopBarProps) {
   return (
-    <div className={cn("mx-auto yt-navbar pointer-events-auto", className)}>
+    <div className={cn("mx-auto yt-navbar tm-refraction pointer-events-auto", className)}>
       <div className="yt-logo-lockup">
         <div className="yt-logo-badge" aria-hidden="true">
-          <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#ff0000]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="8.5" />
-            <path d="M3.5 12h17" />
-            <path d="M12 3.5c2.6 2.2 3.9 5 3.9 8.5s-1.3 6.3-3.9 8.5c-2.6-2.2-3.9-5-3.9-8.5s1.3-6.3 3.9-8.5Z" />
-          </svg>
+          <GlobeHemisphereWest size={20} weight="duotone" />
         </div>
         <div className="min-w-0">
-          <p className="yt-overline text-[#aaaaaa]">{eyebrow}</p>
-          <p className="truncate text-[15px] font-medium text-[#f1f1f1]">{title}</p>
+          <p className="yt-overline">{eyebrow}</p>
+          <p className="truncate text-[15px] font-medium text-foreground">{title}</p>
         </div>
       </div>
 
       <div className="hidden flex-1 justify-center lg:flex">
-        <div className="yt-search" aria-hidden="true">
-          <div className="flex h-full min-w-0 flex-1 items-center px-4 text-[13px] text-[#aaaaaa]">
+        <div className="yt-search platform-shimmer" aria-hidden="true">
+          <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
+            <MagnifyingGlass size={16} />
+          </div>
+          <div className="flex h-full min-w-0 flex-1 items-center px-3 text-[13px] text-muted-foreground">
             {searchPlaceholder}
           </div>
-          <div className="flex h-full min-w-16 items-center justify-center border-l border-white/10 bg-[#222222] text-[#aaaaaa]">
-            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
-              <path d="M15.5 14h-.8l-.3-.3a6 6 0 1 0-.7.7l.3.3v.8L19 20.5 20.5 19 15.5 14Zm-5.5 0a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" />
-            </svg>
+          <div className="flex h-full min-w-16 items-center justify-center border-l border-white/10 bg-white/[0.02] text-muted-foreground">
+            <span className="platform-country-code">live</span>
           </div>
         </div>
       </div>
@@ -55,7 +55,7 @@ export function FloatingTopBar({
 
 export function MetricPill({ text, className }: { text: string; className?: string }) {
   return (
-    <Badge variant="outline" className={cn("rounded-lg bg-[rgba(255,255,255,0.1)] px-3 py-1 text-[12px] text-[#f1f1f1]", className)}>
+    <Badge variant="outline" className={cn("bg-white/[0.04] text-foreground", className)}>
       {text}
     </Badge>
   );
@@ -63,8 +63,8 @@ export function MetricPill({ text, className }: { text: string; className?: stri
 
 export function SignalPill({ text, className }: { text: string; className?: string }) {
   return (
-    <div className={cn("yt-chip text-[#0f0f0f] bg-[#f1f1f1]", className)}>
-      <span className="h-2 w-2 rounded-full bg-[#ff0000]" />
+    <div className={cn("yt-chip bg-white/[0.06] text-foreground", className)}>
+      <span className="platform-signal-dot h-2 w-2 rounded-full bg-primary" />
       <span>{text}</span>
     </div>
   );

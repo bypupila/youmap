@@ -90,6 +90,14 @@ Opcionales de facturacion Polar:
 - `POLAR_WEBHOOK_SECRET`
 - `POLAR_TRIAL_DISCOUNT_ID`
 
+Bootstrap recomendado para este proyecto (crea productos nuevos y sincroniza IDs en Neon):
+
+```bash
+npm run polar:bootstrap
+```
+
+Regla operativa: en esta cuenta de Polar, este proyecto nunca debe modificar productos existentes de otros proyectos; siempre debe crear productos nuevos dedicados para TravelMap.
+
 Verificacion rapida local:
 
 ```bash

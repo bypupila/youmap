@@ -1,13 +1,20 @@
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { JetBrains_Mono, Outfit } from "next/font/google";
 import "@/app/globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const roboto = Roboto({
+const outfit = Outfit({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "700"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -39,7 +46,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={cn(roboto.variable, "font-sans dark")}>
+    <html lang="es" className={cn(outfit.variable, jetbrainsMono.variable, "font-sans dark")}>
       <body className="travel-shell">
         <TooltipProvider>{children}</TooltipProvider>
       </body>

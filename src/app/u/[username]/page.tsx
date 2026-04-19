@@ -21,7 +21,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
   }
 
   return (
-    <main className="relative h-[100dvh] overflow-hidden bg-[#02040a] text-slate-50">
+    <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
       <div className="absolute inset-0">
         <MapExperience
           channel={payload.channel}
@@ -33,7 +33,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(255,107,53,0.12),transparent_24%),radial-gradient(circle_at_84%_14%,rgba(0,212,255,0.11),transparent_26%),linear-gradient(to_bottom,rgba(2,4,10,0.48),rgba(2,4,10,0.15)_32%,rgba(2,4,10,0.46))]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-40 px-4 pt-3 sm:px-6">
         <FloatingTopBar eyebrow="Mapa Publico" title={`@${normalizedUsername}`} />
