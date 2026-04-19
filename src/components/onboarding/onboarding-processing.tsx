@@ -99,6 +99,7 @@ export function OnboardingProcessing({
 }) {
   const router = useRouter();
   const copy = copyByLocale[locale];
+  const storageKey = useMemo(() => `travelmap-import-run-id:${user.id}`, [user.id]);
   const [runId, setRunId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<string>("idle");
   const [progress, setProgress] = useState(0);
@@ -125,41 +126,52 @@ export function OnboardingProcessing({
   }, [copy.loadingFallback, copy.loadingSteps, phraseIndex]);
 
   useEffect(() => {
+    if (runId) return;
     let active = true;
 
-    async function startImport() {
+    async function ensureImportRun() {
       try {
-        const cached = sessionStorage.getItem("travelmap-import-run-id");
-        if (cached) {
-          if (active) setRunId(cached);
-          return;
+        if (active) setError(null);
+        const cachedRunId = sessionStorage.getItem(storageKey);
+        if (cachedRunId) {
+          const validateResponse = await fetch(`/api/youtube/import/${encodeURIComponent(cachedRunId)}`, { cache: "no-store" });
+          if (validateResponse.ok) {
+            const validatePayload = (await validateResponse.json().catch(() => null)) as ImportRunResponse | null;
+            if (!active) return;
+            setError(null);
+            setRunId(cachedRunId);
+            setRunStatus(String(validatePayload?.status || "running"));
+            return;
+          }
+          sessionStorage.removeItem(storageKey);
         }
 
-        const response = await fetch("/api/youtube/import/start", {
+        const startResponse = await fetch("/api/youtube/import/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
-        const payload = (await response.json().catch(() => null)) as { import_run_id?: string; status?: string; error?: string } | null;
-        if (!response.ok || !payload?.import_run_id) {
-          throw new Error(payload?.error || copy.errorFallback);
+        const startPayload = (await startResponse.json().catch(() => null)) as { import_run_id?: string; status?: string; error?: string } | null;
+        if (!startResponse.ok || !startPayload?.import_run_id) {
+          throw new Error(startPayload?.error || copy.errorFallback);
         }
 
-        sessionStorage.setItem("travelmap-import-run-id", payload.import_run_id);
+        sessionStorage.setItem(storageKey, startPayload.import_run_id);
         if (!active) return;
-        setRunId(payload.import_run_id);
-        setRunStatus(payload.status || "running");
+        setError(null);
+        setRunId(startPayload.import_run_id);
+        setRunStatus(startPayload.status || "queued");
       } catch (importError) {
         if (!active) return;
         setError(importError instanceof Error ? importError.message : copy.errorFallback);
       }
     }
 
-    void startImport();
+    void ensureImportRun();
 
     return () => {
       active = false;
     };
-  }, [copy.errorFallback]);
+  }, [copy.errorFallback, runId, storageKey]);
 
   useEffect(() => {
     const currentRunId: string = runId || "";
@@ -169,7 +181,16 @@ export function OnboardingProcessing({
     async function pollRun() {
       try {
         const response = await fetch(`/api/youtube/import/${encodeURIComponent(currentRunId)}`, { cache: "no-store" });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (response.status === 404) {
+            sessionStorage.removeItem(storageKey);
+            if (!active) return;
+            setError(null);
+            setRunId(null);
+            setRunStatus("idle");
+          }
+          return;
+        }
 
         const payload = (await response.json()) as ImportRunResponse;
         if (!active) return;
@@ -208,7 +229,7 @@ export function OnboardingProcessing({
       active = false;
       window.clearInterval(interval);
     };
-  }, [copy.errorFallback, runId]);
+  }, [copy.errorFallback, runId, storageKey]);
 
   const progressLabel = useMemo(() => {
     if (runStatus === "completed") return copy.profileFallback;
@@ -241,7 +262,7 @@ export function OnboardingProcessing({
       }
 
       setProfileSuccess(payload?.public_map_path || copy.profileFallback);
-      sessionStorage.removeItem("travelmap-import-run-id");
+      sessionStorage.removeItem(storageKey);
       router.push(payload?.channel_id ? `/dashboard?channelId=${encodeURIComponent(payload.channel_id)}` : "/dashboard");
       router.refresh();
     } catch (profileSubmitError) {
