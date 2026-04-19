@@ -3,5 +3,4 @@ node_modules
 .playwright-cli
 output
 .codex
-data/processed
 *.log

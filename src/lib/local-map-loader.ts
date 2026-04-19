@@ -2,6 +2,8 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { z } from "zod";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
+import luisitoLocationsJson from "../../data/processed/luisitocomunica_video_locations.json";
+import drewLocationsJson from "../../data/processed/drewbinsky_video_locations.json";
 
 const locationSchema = z.object({
   youtube_video_id: z.string(),
@@ -54,14 +56,28 @@ interface LocalMapLoaderInput {
   channel: TravelChannel;
 }
 
+function getEmbeddedMapRows(fileName: string): unknown[] | null {
+  if (fileName === "luisitocomunica_video_locations.json") {
+    return luisitoLocationsJson as unknown[];
+  }
+  if (fileName === "drewbinsky_video_locations.json") {
+    return drewLocationsJson as unknown[];
+  }
+  return null;
+}
+
 export async function loadLocalMapData({ fileName, channel }: LocalMapLoaderInput): Promise<{
   channel: TravelChannel;
   videoLocations: TravelVideoLocation[];
 }> {
-  const filePath = path.join(process.cwd(), "data", "processed", fileName);
-  const raw = await readFile(filePath, "utf8");
+  const embeddedRows = getEmbeddedMapRows(fileName);
+  const rawRows =
+    embeddedRows ||
+    JSON.parse(
+      await readFile(path.join(process.cwd(), "data", "processed", fileName), "utf8")
+    );
   const parsed = locationsSchema
-    .parse(JSON.parse(raw))
+    .parse(rawRows)
     .filter((row) => !isShortCandidate(row))
     .filter((row) => row.is_travel !== false);
 
