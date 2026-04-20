@@ -50,6 +50,12 @@ Before pushing changes:
 npm run security:secrets
 ```
 
+Before release (or after incident response), also run:
+
+```bash
+npm run security:history
+```
+
 Only `.env.example` can be committed. Keep real credentials only in local `.env.local` or provider env settings.
 
 ## Verification order

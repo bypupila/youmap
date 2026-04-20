@@ -119,10 +119,22 @@ npm run validate:env
 npm run security:secrets
 ```
 
+- Escaneo de historial git (manual o en CI):
+
+```bash
+npm run security:history
+```
+
 - Instala hook pre-push (una vez por clon):
 
 ```bash
 npm run security:install-hooks
+```
+
+- Rotar secreto de sesion local:
+
+```bash
+npm run security:rotate-auth
 ```
 
 Procedimiento de remediacion y rotacion: `docs/SECURITY_SECRETS.md`.

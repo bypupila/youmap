@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "security:secrets": "node scripts/check-secrets.mjs",
+    "security:history": "node scripts/check-secrets-history.mjs",
     "security:install-hooks": "./scripts/install-git-hooks.sh",
+    "security:rotate-auth": "node scripts/rotate-auth-session-secret.mjs",
     "validate:env": "node scripts/validate-env.mjs",
     "polar:bootstrap": "node scripts/polar-bootstrap-travel.mjs"
   },

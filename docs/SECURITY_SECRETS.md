@@ -11,6 +11,7 @@ Actions completed:
 3. Hardened `.gitignore` to block all `.env*` files except `.env.example`.
 4. Added a repository secret scan (`npm run security:secrets`).
 5. Added a pre-push git hook to block pushes when secrets are detected.
+6. Added CI security workflow (`.github/workflows/security.yml`) to enforce scans in GitHub.
 
 ## Mandatory credential rotation
 
@@ -30,6 +31,23 @@ After rotating:
 2. Update local `.env.local`.
 3. Invalidate/revoke old credentials in each provider dashboard.
 4. Run `npm run security:secrets` before pushing.
+5. Run `npm run security:history` before release.
+
+## Provider rotation runbook
+
+Use this exact order to avoid downtime:
+
+1. Generate replacement credentials in providers (Neon, Google Cloud, Polar).
+2. Set new values in Vercel for `Production` and `Preview`.
+3. Redeploy and smoke-test auth/import/checkout flows.
+4. Revoke old credentials in providers.
+5. Rotate local `.env.local` values.
+6. Run local checks and push:
+
+```bash
+npm run security:secrets
+npm run security:history
+```
 
 ## Team workflow (required)
 
@@ -46,3 +64,8 @@ npm run security:secrets
 ```
 
 3. Never commit any `.env*` file except `.env.example`.
+4. Rotate local app session secret anytime with:
+
+```bash
+npm run security:rotate-auth
+```
