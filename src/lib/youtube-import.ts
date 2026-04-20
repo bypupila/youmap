@@ -277,31 +277,39 @@ async function extractLocationForVideo(channel: { channel_name: string; descript
   published_at: string | null;
   youtube_video_id: string;
 }) {
+  type ExtractionOrigin = "gemini" | "heuristic";
+
   function buildHeuristicFallback() {
     const heuristic = runHeuristicLocation(video.title, video.description || null);
     if (!heuristic) {
-      return extractionSchema.parse({
-        has_location: false,
-        primary_location: null,
-        additional_locations: [],
-        summary: "heuristic_fallback_no_match",
-      });
+      return {
+        extraction: extractionSchema.parse({
+          has_location: false,
+          primary_location: null,
+          additional_locations: [],
+          summary: "heuristic_fallback_no_match",
+        }),
+        origin: "heuristic" as ExtractionOrigin,
+      };
     }
 
-    return extractionSchema.parse({
-      has_location: true,
-      primary_location: {
-        country_code: heuristic.countryCode,
-        country_name: heuristic.countryCode,
-        city: null,
-        region: null,
-        location_label: heuristic.query,
-        confidence: heuristic.score,
-        travel_type: null,
-      },
-      additional_locations: [],
-      summary: "heuristic_fallback",
-    });
+    return {
+      extraction: extractionSchema.parse({
+        has_location: true,
+        primary_location: {
+          country_code: heuristic.countryCode,
+          country_name: heuristic.countryCode,
+          city: null,
+          region: null,
+          location_label: heuristic.query,
+          confidence: heuristic.score,
+          travel_type: null,
+        },
+        additional_locations: [],
+        summary: "heuristic_fallback",
+      }),
+      origin: "heuristic" as ExtractionOrigin,
+    };
   }
 
   if (!hasGeminiApiKey()) {
@@ -327,7 +335,10 @@ Return the location data only. If there are several places, focus on the main fi
       },
     });
 
-    return extractionSchema.parse(JSON.parse(response.text || "{}"));
+    return {
+      extraction: extractionSchema.parse(JSON.parse(response.text || "{}")),
+      origin: "gemini" as ExtractionOrigin,
+    };
   } catch {
     return buildHeuristicFallback();
   }
@@ -470,7 +481,7 @@ export async function importYoutubeChannelPreview(channelUrl: string): Promise<I
     const publishedAt = details?.published_at || playlistItem.snippet?.publishedAt || playlistItem.contentDetails?.videoPublishedAt || null;
     const viewCount = details?.view_count ?? null;
 
-    const extraction = await extractLocationForVideo(
+    const extractionAttempt = await extractLocationForVideo(
       { channel_name: source.channel_name, description: source.description },
       {
         title,
@@ -479,6 +490,11 @@ export async function importYoutubeChannelPreview(channelUrl: string): Promise<I
         youtube_video_id: videoId,
       }
     );
+    const extraction = extractionAttempt.extraction;
+
+    if (extractionAttempt.origin !== "gemini") {
+      return null;
+    }
 
     if (!extraction.has_location || !extraction.primary_location) {
       return null;
@@ -666,6 +682,7 @@ export async function importYoutubeChannel({
           comment_count,
           travel_type,
           location_status,
+          needs_manual_reason,
           source_payload,
           updated_at
         )
@@ -681,6 +698,7 @@ export async function importYoutubeChannel({
           ${details?.comment_count ?? null},
           null,
           'processing',
+          null,
           ${JSON.stringify({
             playlist_item: playlistItem,
             video_details: details?.raw || null,
@@ -698,6 +716,7 @@ export async function importYoutubeChannel({
           comment_count = excluded.comment_count,
           travel_type = excluded.travel_type,
           location_status = excluded.location_status,
+          needs_manual_reason = excluded.needs_manual_reason,
           source_payload = excluded.source_payload,
           updated_at = excluded.updated_at
         returning id
@@ -708,7 +727,7 @@ export async function importYoutubeChannel({
       }
       const now = new Date().toISOString();
 
-      const extraction = await extractLocationForVideo(
+      const extractionAttempt = await extractLocationForVideo(
         { channel_name: uploadChannel.channel_name, description: uploadChannel.description },
         {
           title,
@@ -717,13 +736,61 @@ export async function importYoutubeChannel({
           youtube_video_id: videoId,
         }
       );
+      const extraction = extractionAttempt.extraction;
+      const fallbackToManualReason = extractionAttempt.origin === "heuristic"
+        ? "Fallback heuristico detectado: requiere revision manual."
+        : "No se detecto una ubicacion confiable automaticamente.";
+
+      if (extractionAttempt.origin === "heuristic") {
+        await sql`
+          delete from public.video_locations
+          where video_id = ${videoRecordId}
+        `;
+        await sql`
+          update public.videos
+          set
+            travel_type = ${extraction.primary_location?.travel_type || null},
+            location_status = 'needs_manual',
+            needs_manual_reason = ${fallbackToManualReason},
+            updated_at = ${now}
+          where id = ${videoRecordId}
+        `;
+        processedVideos += 1;
+        skippedVideos += 1;
+        await updateProgress("mapping");
+
+        await upsertExtractionRun({
+          channelId: uploadChannel.id,
+          videoId: videoRecordId,
+          status: "completed",
+          promptVersion: "gemini-v1",
+          model: getGeminiModel(),
+          inputPayload: {
+            channel: source,
+            video: { title, description, publishedAt, videoId },
+          },
+          outputPayload: {
+            ...extraction,
+            fallback_origin: extractionAttempt.origin,
+          },
+          startedAt: now,
+          finishedAt: now,
+        });
+
+        return null;
+      }
 
       if (!extraction.has_location || !extraction.primary_location) {
+        await sql`
+          delete from public.video_locations
+          where video_id = ${videoRecordId}
+        `;
         await sql`
           update public.videos
           set
             travel_type = null,
-            location_status = 'no_location',
+            location_status = 'needs_manual',
+            needs_manual_reason = ${fallbackToManualReason},
             updated_at = ${now}
           where id = ${videoRecordId}
         `;
@@ -752,10 +819,15 @@ export async function importYoutubeChannel({
       const geo = await geocodeLocation(createGeoQuery(extraction.primary_location));
       if (!geo) {
         await sql`
+          delete from public.video_locations
+          where video_id = ${videoRecordId}
+        `;
+        await sql`
           update public.videos
           set
             travel_type = ${extraction.primary_location.travel_type || null},
-            location_status = 'failed',
+            location_status = 'needs_manual',
+            needs_manual_reason = 'No se pudo geocodificar automaticamente la ubicacion detectada.',
             updated_at = ${now}
           where id = ${videoRecordId}
         `;
@@ -888,6 +960,7 @@ export async function importYoutubeChannel({
         set
           travel_type = ${primaryLocation.travel_type || null},
           location_status = 'mapped',
+          needs_manual_reason = null,
           updated_at = ${now}
         where id = ${videoRecordId}
       `;

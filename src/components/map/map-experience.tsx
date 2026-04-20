@@ -164,7 +164,7 @@ export function MapExperience({
 
     const totalCountries = new Set(items.map((video) => video.country_code).filter(Boolean)).size;
     return {
-      total_videos: items.length,
+      total_videos: items.length + pendingManual.length,
       total_countries: totalCountries,
       verified_auto: items.filter((video) => video.location_status === "verified_auto" || video.location_status === "mapped").length,
       verified_manual: items.filter((video) => video.location_status === "verified_manual").length,

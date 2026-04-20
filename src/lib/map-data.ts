@@ -87,7 +87,7 @@ function computeSummary(videoLocations: TravelVideoLocation[], manualQueue: Manu
   }
 
   return {
-    total_videos: videoLocations.length,
+    total_videos: videoLocations.length + manualQueue.length,
     total_countries: totalCountries,
     verified_auto: verifiedAuto,
     verified_manual: verifiedManual,
@@ -242,6 +242,7 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
       inner join public.videos v on v.id = vl.video_id
       where vl.channel_id = ${channelRow.id}
         and vl.is_primary = true
+        and v.location_status in ('mapped', 'verified_auto', 'verified_manual')
         and coalesce(v.is_travel, true) = true
         and coalesce(v.is_short, false) = false
       limit 4000
@@ -253,6 +254,7 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         title: string;
         thumbnail_url: string | null;
         published_at: string | null;
+        location_status: string | null;
         needs_manual_reason: string | null;
       }>
     >`
@@ -262,10 +264,18 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         title,
         thumbnail_url,
         published_at,
+        location_status,
         needs_manual_reason
       from public.videos
       where channel_id = ${channelRow.id}
-        and location_status = 'needs_manual'
+        and (
+          location_status = 'needs_manual'
+          or (
+            coalesce(is_travel, true) = true
+            and coalesce(is_short, false) = false
+            and location_status in ('no_location', 'failed')
+          )
+        )
       order by published_at desc
       limit 300
     `,
@@ -326,7 +336,11 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
     published_at: video.published_at,
     country_code: null,
     city: null,
-    needs_manual_reason: video.needs_manual_reason || "No se pudo confirmar la ubicacion automaticamente.",
+    needs_manual_reason:
+      video.needs_manual_reason ||
+      (video.location_status === "failed"
+        ? "No se pudo geocodificar automaticamente la ubicacion detectada."
+        : "No se pudo confirmar la ubicacion automaticamente."),
   }));
 
   return {

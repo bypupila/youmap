@@ -193,6 +193,17 @@ function normalize(input: string) {
     .toLowerCase();
 }
 
+function escapeRegex(input: string) {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsLocationHint(normalizedText: string, hint: string) {
+  const token = normalize(hint).trim();
+  if (!token) return false;
+  const pattern = new RegExp(`(^|\\b)${escapeRegex(token)}(\\b|$)`);
+  return pattern.test(normalizedText);
+}
+
 function flagToCountryCode(text: string): string | null {
   const codepoints = Array.from(text).map((char) => char.codePointAt(0) || 0);
   const base = 0x1f1e6;
@@ -225,7 +236,7 @@ function runHeuristicLocation(title: string, description: string | null) {
     for (const hint of hints) {
       const token = normalize(hint);
       if (!token) continue;
-      if (!normalized.includes(token)) continue;
+      if (!containsLocationHint(normalized, hint)) continue;
       const isCityHint = hint.includes(" ");
       return {
         query: hint,
@@ -391,12 +402,20 @@ async function getManualQueue(channelId: string): Promise<ManualVerificationItem
     title: string;
     thumbnail_url: string | null;
     published_at: string | null;
+    location_status: string | null;
     needs_manual_reason: string | null;
   }>>`
-    select id, youtube_video_id, title, thumbnail_url, published_at, needs_manual_reason
+    select id, youtube_video_id, title, thumbnail_url, published_at, location_status, needs_manual_reason
     from public.videos
     where channel_id = ${channelId}
-      and location_status = 'needs_manual'
+      and (
+        location_status = 'needs_manual'
+        or (
+          coalesce(is_travel, true) = true
+          and coalesce(is_short, false) = false
+          and location_status in ('no_location', 'failed')
+        )
+      )
     order by published_at desc
     limit 250
   `;
@@ -409,7 +428,11 @@ async function getManualQueue(channelId: string): Promise<ManualVerificationItem
     published_at: row.published_at,
     country_code: null,
     city: null,
-    needs_manual_reason: row.needs_manual_reason || "No se pudo verificar automaticamente.",
+    needs_manual_reason:
+      row.needs_manual_reason ||
+      (row.location_status === "failed"
+        ? "No se pudo geocodificar automaticamente la ubicacion detectada."
+        : "No se pudo verificar automaticamente."),
   }));
 }
 
@@ -703,9 +726,9 @@ export async function syncChannelIncremental(input: {
         continue;
       }
 
-      if (heuristic) {
+      if (heuristic && heuristic.evidence.type === "flag_emoji") {
         const geo = await geocodeLocation(heuristic.query);
-        if (geo && heuristic.score >= 0.75) {
+        if (geo && heuristic.score >= 0.9) {
           const location = buildVideoLocation({
             videoId: youtubeVideoId,
             title,
