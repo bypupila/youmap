@@ -36,7 +36,7 @@ Use the demo route to inspect the product without external credentials:
 1. Set `DATABASE_URL`.
 2. Set `AUTH_SESSION_SECRET`.
 3. Apply `neon/migrations/0001_initial.sql` and `neon/seed/demo.sql` via `./scripts/bootstrap-local.sh`.
-4. Set `GEMINI_API_KEY`, `YOUTUBE_API_KEY`, `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET`.
+4. Set `YOUTUBE_API_KEY`, one Gemini key (`GOOGLE_GENAI_API_KEY` or `GEMINI_API_KEY` or `GOOGLE_API_KEY`), `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET`.
 5. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
 
 No external CLI or linked project is required for local bootstrap anymore.
@@ -61,7 +61,7 @@ For stable deploys, configure this in Vercel Project Settings:
    - `DATABASE_URL`
    - `AUTH_SESSION_SECRET` (or `SESSION_SECRET`)
    - `YOUTUBE_API_KEY`
-   - `GEMINI_API_KEY`
+   - `GOOGLE_GENAI_API_KEY` (or `GEMINI_API_KEY` / `GOOGLE_API_KEY`)
    - `NOMINATIM_USER_AGENT`
    - `NOMINATIM_EMAIL`
 4. Optional billing envs if checkout is enabled:

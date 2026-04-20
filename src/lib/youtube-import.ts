@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { geocodeLocation } from "@/lib/geocode";
-import { getGeminiClient, getGeminiModel } from "@/lib/gemini";
+import { getGeminiClient, getGeminiModel, hasGeminiApiKey } from "@/lib/gemini";
 import { LOCATION_PROMPT } from "@/lib/youtube-location-prompt";
 import { loadUploadsPlaylistVideos, loadVideoDetails, resolveYouTubeChannel } from "@/lib/youtube";
 import { sql } from "@/lib/neon";
@@ -70,6 +70,39 @@ const geminiJsonSchema = {
   },
   required: ["has_location", "additional_locations"],
 } as const;
+
+const COUNTRY_HINTS: Record<string, string[]> = {
+  MX: ["mexico", "mexico df", "cdmx", "ciudad de mexico", "mexicano"],
+  US: ["usa", "united states", "estados unidos", "eeuu", "new york", "los angeles", "las vegas", "miami"],
+  JP: ["japan", "japon", "tokyo", "kyoto", "osaka"],
+  ES: ["spain", "espana", "madrid", "barcelona", "sevilla", "valencia"],
+  FR: ["france", "francia", "paris"],
+  IT: ["italy", "italia", "rome", "roma", "milan", "venice", "venecia"],
+  BR: ["brazil", "brasil", "rio de janeiro", "sao paulo"],
+  AR: ["argentina", "buenos aires", "mendoza", "patagonia"],
+  CL: ["chile", "santiago", "valparaiso"],
+  CO: ["colombia", "bogota", "medellin", "cartagena"],
+  PE: ["peru", "lima", "cusco", "machu picchu"],
+  GB: ["uk", "united kingdom", "reino unido", "london", "inglaterra"],
+  DE: ["germany", "alemania", "berlin", "munich"],
+  IN: ["india", "nueva delhi", "mumbai", "delhi"],
+  TH: ["thailand", "tailandia", "bangkok", "phuket"],
+  KR: ["korea", "corea", "seoul"],
+  CN: ["china", "beijing", "shanghai"],
+  EG: ["egypt", "egipto", "cairo"],
+  MA: ["morocco", "marruecos", "marrakesh", "casablanca"],
+  ZA: ["south africa", "sudafrica", "cape town"],
+  AU: ["australia", "sydney", "melbourne"],
+  NZ: ["new zealand", "nueva zelanda", "auckland", "queenstown"],
+  TR: ["turkey", "turquia", "istanbul"],
+  PT: ["portugal", "lisbon", "lisboa", "porto"],
+  SA: ["saudi", "arabia saudita", "riyadh", "jeddah"],
+  SG: ["singapore", "singapur"],
+  VN: ["vietnam", "hanoi", "ho chi minh"],
+  ID: ["indonesia", "bali", "jakarta"],
+  CA: ["canada", "toronto", "montreal", "vancouver"],
+  IS: ["iceland", "islandia", "reykjavik"],
+};
 
 interface ImportYoutubeChannelInput {
   userId: string;
@@ -244,10 +277,42 @@ async function extractLocationForVideo(channel: { channel_name: string; descript
   published_at: string | null;
   youtube_video_id: string;
 }) {
-  const ai = getGeminiClient();
-  const response = await ai.models.generateContent({
-    model: getGeminiModel(),
-    contents: `${LOCATION_PROMPT}
+  function buildHeuristicFallback() {
+    const heuristic = runHeuristicLocation(video.title, video.description || null);
+    if (!heuristic) {
+      return extractionSchema.parse({
+        has_location: false,
+        primary_location: null,
+        additional_locations: [],
+        summary: "heuristic_fallback_no_match",
+      });
+    }
+
+    return extractionSchema.parse({
+      has_location: true,
+      primary_location: {
+        country_code: heuristic.countryCode,
+        country_name: heuristic.countryCode,
+        city: null,
+        region: null,
+        location_label: heuristic.query,
+        confidence: heuristic.score,
+        travel_type: null,
+      },
+      additional_locations: [],
+      summary: "heuristic_fallback",
+    });
+  }
+
+  if (!hasGeminiApiKey()) {
+    return buildHeuristicFallback();
+  }
+
+  try {
+    const ai = getGeminiClient();
+    const response = await ai.models.generateContent({
+      model: getGeminiModel(),
+      contents: `${LOCATION_PROMPT}
 
 Channel: ${channel.channel_name}
 Channel description: ${channel.description || "No description"}
@@ -256,20 +321,72 @@ Video description: ${(video.description || "").slice(0, 5000)}
 Published at: ${video.published_at || "unknown"}
 
 Return the location data only. If there are several places, focus on the main filming destination.`,
-    config: {
-      responseMimeType: "application/json",
-      responseJsonSchema: geminiJsonSchema,
-    },
-  });
+      config: {
+        responseMimeType: "application/json",
+        responseJsonSchema: geminiJsonSchema,
+      },
+    });
 
-  const parsed = extractionSchema.parse(JSON.parse(response.text || "{}"));
-  return parsed;
+    return extractionSchema.parse(JSON.parse(response.text || "{}"));
+  } catch {
+    return buildHeuristicFallback();
+  }
 }
 
 function createGeoQuery(primaryLocation: z.infer<typeof locationSchema>) {
   return [primaryLocation.location_label, primaryLocation.city, primaryLocation.region, primaryLocation.country_name]
     .filter(Boolean)
     .join(", ");
+}
+
+function normalize(text: string) {
+  return String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function flagToCountryCode(text: string) {
+  const codepoints = Array.from(String(text || "")).map((char) => char.codePointAt(0) || 0);
+  const base = 0x1f1e6;
+  for (let index = 0; index < codepoints.length - 1; index += 1) {
+    const first = codepoints[index];
+    const second = codepoints[index + 1];
+    if (first < base || first > base + 25) continue;
+    if (second < base || second > base + 25) continue;
+    return `${String.fromCharCode(first - base + 65)}${String.fromCharCode(second - base + 65)}`;
+  }
+  return null;
+}
+
+function runHeuristicLocation(title: string, description: string | null) {
+  const merged = `${title} ${(description || "").slice(0, 2500)}`;
+  const normalized = normalize(merged);
+  const fromFlag = flagToCountryCode(merged);
+
+  if (fromFlag) {
+    return {
+      query: fromFlag,
+      countryCode: fromFlag,
+      score: 0.9,
+    };
+  }
+
+  for (const [countryCode, hints] of Object.entries(COUNTRY_HINTS)) {
+    for (const hint of hints) {
+      const token = normalize(hint);
+      if (!token) continue;
+      if (!normalized.includes(token)) continue;
+      const isCityHint = hint.includes(" ");
+      return {
+        query: hint,
+        countryCode,
+        score: isCityHint ? 0.82 : 0.68,
+      };
+    }
+  }
+
+  return null;
 }
 
 function toTravelVideoLocation(input: {
@@ -475,6 +592,8 @@ export async function importYoutubeChannel({
       processedVideos: 0,
       mappedVideos: 0,
       skippedVideos: 0,
+      countriesMapped: 0,
+      totalViews: 0,
       stage: "starting",
       progress: 0,
     };
@@ -497,6 +616,8 @@ export async function importYoutubeChannel({
     let processedVideos = 0;
     let mappedVideos = 0;
     let skippedVideos = 0;
+    let mappedViews = 0;
+    const mappedCountryCodes = new Set<string>();
 
     async function updateProgress(stage: string) {
       await upsertChannelImportRun({
@@ -510,6 +631,8 @@ export async function importYoutubeChannel({
           processedVideos,
           mappedVideos,
           skippedVideos,
+          countriesMapped: mappedCountryCodes.size,
+          totalViews: mappedViews,
           stage,
           progress: eligibleVideoCount > 0 ? Number((processedVideos / eligibleVideoCount).toFixed(4)) : 1,
         },
@@ -770,6 +893,8 @@ export async function importYoutubeChannel({
       `;
       processedVideos += 1;
       mappedVideos += 1;
+      mappedViews += Number(viewCount || 0);
+      mappedCountryCodes.add(String(primaryLocation.country_code || "").trim().toUpperCase());
       await updateProgress("done");
 
       await upsertExtractionRun({
@@ -865,6 +990,8 @@ export async function importYoutubeChannel({
           processedVideos: eligibleVideoCount,
           mappedVideos: normalizedLocations.length,
           skippedVideos,
+          countriesMapped: new Set(normalizedLocations.map((row) => String(row.country_code || "").trim().toUpperCase()).filter(Boolean)).size,
+          totalViews: normalizedLocations.reduce((sum, row) => sum + Number(row.view_count || 0), 0),
           channel: source,
           stage: "completed",
           progress: 1,

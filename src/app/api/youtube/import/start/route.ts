@@ -5,6 +5,7 @@ import { importYoutubeChannel } from "@/lib/youtube-import";
 import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
+const STALE_RUNNING_RUN_MS = 5 * 60 * 1000;
 
 export async function POST(request: Request) {
   try {
@@ -24,23 +25,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing YouTube channel reference" }, { status: 400 });
     }
 
-    const existingRuns = await sql<Array<{ id: string; status: string }>>`
-      select cir.id, cir.status
+    const existingRuns = await sql<Array<{ id: string; status: string; updated_at: string | null }>>`
+      select cir.id, cir.status, cir.updated_at
       from public.channel_import_runs cir
       inner join public.channels c on c.id = cir.channel_id
       where c.user_id = ${userId}
         and cir.input ->> 'channelUrl' = ${channelReference}
-        and cir.status in ('running', 'completed')
+        and cir.status in ('queued', 'running', 'completed')
       order by cir.started_at desc
       limit 1
     `;
     const existingRun = existingRuns[0] || null;
     if (existingRun?.id) {
-      return NextResponse.json({
-        import_run_id: existingRun.id,
-        status: existingRun.status,
-        already_started: true,
-      });
+      const updatedAtMs = existingRun.updated_at ? new Date(existingRun.updated_at).getTime() : 0;
+      const isStaleRunningRun =
+        (existingRun.status === "running" || existingRun.status === "queued") &&
+        Number.isFinite(updatedAtMs) &&
+        updatedAtMs > 0 &&
+        Date.now() - updatedAtMs > STALE_RUNNING_RUN_MS;
+
+      if (isStaleRunningRun) {
+        await sql`
+          update public.channel_import_runs
+          set
+            status = 'failed',
+            error_message = 'Import run was stale and has been reset automatically.',
+            finished_at = ${new Date().toISOString()},
+            updated_at = ${new Date().toISOString()}
+          where id = ${existingRun.id}
+        `;
+      } else {
+        if (existingRun.status === "completed" || existingRun.status === "running" || existingRun.status === "queued") {
+          return NextResponse.json({
+            import_run_id: existingRun.id,
+            status: existingRun.status,
+            already_started: true,
+          });
+        }
+      }
     }
 
     const nowIso = new Date().toISOString();
@@ -101,6 +123,8 @@ export async function POST(request: Request) {
           processedVideos: 0,
           mappedVideos: 0,
           skippedVideos: 0,
+          countriesMapped: 0,
+          totalViews: 0,
           stage: "queued",
           progress: 0,
         })}::jsonb,
@@ -128,6 +152,8 @@ export async function POST(request: Request) {
               processedVideos: 0,
               mappedVideos: 0,
               skippedVideos: 0,
+              countriesMapped: 0,
+              totalViews: 0,
               stage: "failed",
               progress: 0,
             })}::jsonb,

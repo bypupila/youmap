@@ -23,6 +23,7 @@ type LandingCopy = {
   videosLabel: string;
   countriesLabel: string;
   platformVideosLabel: string;
+  platformCountriesLabel: string;
 };
 
 const creatorByLocale = {
@@ -45,17 +46,22 @@ interface MapPayload {
 
 interface PlatformStatsPayload {
   total_videos: number;
+  total_countries: number;
   demo_videos?: number;
   user_videos?: number;
+  demo_countries?: number;
+  user_countries?: number;
 }
 
 const DEFAULT_PLATFORM_DEMO_VIDEOS = 2371;
+const DEFAULT_PLATFORM_DEMO_COUNTRIES = 165;
 
 export function CinematicLanding() {
   const [locale, setLocale] = useState<Locale>("es");
   const [mapChannel, setMapChannel] = useState<TravelChannel>(DEMO_CHANNEL);
   const [mapVideos, setMapVideos] = useState<TravelVideoLocation[]>(DEMO_VIDEO_LOCATIONS);
   const [platformTotalVideos, setPlatformTotalVideos] = useState(DEFAULT_PLATFORM_DEMO_VIDEOS);
+  const [platformTotalCountries, setPlatformTotalCountries] = useState(DEFAULT_PLATFORM_DEMO_COUNTRIES);
 
   const activeCreator = creatorByLocale[locale];
 
@@ -98,6 +104,9 @@ export function CinematicLanding() {
         if (typeof payload.total_videos === "number" && Number.isFinite(payload.total_videos)) {
           setPlatformTotalVideos(payload.total_videos);
         }
+        if (typeof payload.total_countries === "number" && Number.isFinite(payload.total_countries)) {
+          setPlatformTotalCountries(payload.total_countries);
+        }
       } catch {
         if (!isCurrent) return;
       }
@@ -130,6 +139,7 @@ export function CinematicLanding() {
             videosLabel: "videos",
             countriesLabel: "países",
             platformVideosLabel: "videos procesados en toda la plataforma",
+            platformCountriesLabel: "países con videos en toda la plataforma",
           }
         : {
             topTitle: "Your Content Map",
@@ -143,6 +153,7 @@ export function CinematicLanding() {
             videosLabel: "videos",
             countriesLabel: "countries",
             platformVideosLabel: "processed videos across the platform",
+            platformCountriesLabel: "countries with videos across the platform",
           },
     [activeCreator.name, locale]
   );
@@ -151,7 +162,7 @@ export function CinematicLanding() {
   const onboardingPath = `/onboarding?lang=${locale}`;
   const localeTag = locale === "es" ? "es-ES" : "en-US";
   const totalVideos = mapVideos.length;
-  const totalCountries = new Set(mapVideos.map((video) => video.country_code).filter(Boolean)).size;
+  const creatorMapCountries = new Set(mapVideos.map((video) => video.country_code).filter(Boolean)).size;
 
   return (
     <main className="relative isolate min-h-[100dvh] overflow-hidden text-foreground">
@@ -234,8 +245,8 @@ export function CinematicLanding() {
                     <p className="mt-1 text-sm text-muted-foreground">{copy.platformVideosLabel}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
-                    <p className="text-[2rem] leading-none font-semibold tracking-tight">{totalCountries.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{locale === "es" ? "países visibles en el mapa" : "countries visible on the map"}</p>
+                    <p className="text-[2rem] leading-none font-semibold tracking-tight">{platformTotalCountries.toLocaleString(localeTag)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{copy.platformCountriesLabel}</p>
                   </div>
                 </div>
               </div>
@@ -260,7 +271,7 @@ export function CinematicLanding() {
                     <span className="platform-country-code">{locale === "es" ? "ES" : "EN"}</span>
                   </div>
                   <p className="mt-1 text-[12px] leading-4 text-muted-foreground">
-                    {totalVideos.toLocaleString(localeTag)} {copy.videosLabel} · {totalCountries.toLocaleString(localeTag)} {copy.countriesLabel}
+                    {totalVideos.toLocaleString(localeTag)} {copy.videosLabel} · {creatorMapCountries.toLocaleString(localeTag)} {copy.countriesLabel}
                   </p>
                   <p className="mt-1 text-[12px] leading-4 text-muted-foreground">{activeCreator.handle}</p>
                 </div>

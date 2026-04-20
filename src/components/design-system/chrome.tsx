@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { GlobeHemisphereWest, MagnifyingGlass } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -29,9 +30,13 @@ export function FloatingTopBar({
   return (
     <div className={cn("mx-auto yt-navbar tm-refraction pointer-events-auto", className)}>
       <div className="yt-logo-lockup">
-        <div className="yt-logo-badge" aria-hidden="true">
+        <Link
+          href="/"
+          aria-label="Go to homepage"
+          className="yt-logo-badge cursor-pointer transition-transform duration-200 hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
           {logoBadgeContent || <GlobeHemisphereWest size={20} weight="duotone" />}
-        </div>
+        </Link>
         <div className="min-w-0">
           <p className="yt-overline">{eyebrow}</p>
           <p className="truncate text-[15px] font-medium text-foreground">{title}</p>

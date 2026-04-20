@@ -14,6 +14,14 @@ export interface PublicYouTubeChannelValidation {
   totalViews: number | null;
 }
 
+export interface PublicYouTubeFeedVideo {
+  videoId: string;
+  title: string;
+  description: string | null;
+  publishedAt: string | null;
+  thumbnailUrl: string | null;
+}
+
 function normalizeYoutubeChannelUrl(input: string) {
   const raw = sanitizeEnvValue(input);
   if (!raw) {
@@ -113,7 +121,7 @@ async function fetchChannelPage(urlValue: string) {
   };
 }
 
-async function countVideosFromFeed(channelId: string) {
+async function fetchChannelFeedXml(channelId: string) {
   const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
   const response = await fetch(feedUrl, {
     cache: "no-store",
@@ -124,9 +132,44 @@ async function countVideosFromFeed(channelId: string) {
     },
   });
   if (!response.ok) return null;
-  const xml = await response.text();
+  return response.text();
+}
+
+async function countVideosFromFeed(channelId: string) {
+  const xml = await fetchChannelFeedXml(channelId);
+  if (!xml) return null;
   const entries = xml.match(/<entry\b/g);
   return entries ? entries.length : 0;
+}
+
+function extractTagValue(input: string, tag: string) {
+  const match = input.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return sanitizeEnvValue(match?.[1] || "");
+}
+
+function extractThumbnailUrl(entryXml: string) {
+  const thumbMatch = entryXml.match(/<media:thumbnail[^>]*url="([^"]+)"/i);
+  return sanitizeEnvValue(thumbMatch?.[1] || "") || null;
+}
+
+export async function loadPublicChannelFeedVideos(channelId: string): Promise<PublicYouTubeFeedVideo[]> {
+  const xml = await fetchChannelFeedXml(channelId);
+  if (!xml) return [];
+
+  const entries = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
+  return entries
+    .map((entryXml) => {
+      const videoId = extractTagValue(entryXml, "yt:videoId");
+      if (!videoId) return null;
+      return {
+        videoId,
+        title: extractTagValue(entryXml, "title") || "Untitled video",
+        description: extractTagValue(entryXml, "media:description") || null,
+        publishedAt: extractTagValue(entryXml, "published") || null,
+        thumbnailUrl: extractThumbnailUrl(entryXml),
+      } satisfies PublicYouTubeFeedVideo;
+    })
+    .filter((row): row is PublicYouTubeFeedVideo => Boolean(row));
 }
 
 function parseLocalizedCount(input: string) {

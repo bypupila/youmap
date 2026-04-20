@@ -10,12 +10,14 @@ const required = [
   "NEXT_PUBLIC_APP_URL",
   "DATABASE_URL",
   "YOUTUBE_API_KEY",
-  "GEMINI_API_KEY",
   "NOMINATIM_USER_AGENT",
   "NOMINATIM_EMAIL",
 ];
 
-const requiredOneOf = [["AUTH_SESSION_SECRET", "SESSION_SECRET"]];
+const requiredOneOf = [
+  ["AUTH_SESSION_SECRET", "SESSION_SECRET"],
+  ["GOOGLE_GENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"],
+];
 
 const optional = [
   "GEMINI_MODEL",

@@ -5,6 +5,7 @@ import { buildAnalyticsFromVideoLocations } from "@/lib/analytics";
 import { createPreviewSession } from "@/lib/preview-session";
 import { importYoutubeChannel, importYoutubeChannelPreview } from "@/lib/youtube-import";
 import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { hasGeminiApiKey } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -18,15 +19,17 @@ function assertImportProvidersConfigured() {
   const missing: string[] = [];
 
   if (!process.env.YOUTUBE_API_KEY) missing.push("YOUTUBE_API_KEY");
-  if (!process.env.GEMINI_API_KEY) missing.push("GEMINI_API_KEY");
 
   if (missing.length > 0) {
-    throw new Error(`Configura ${missing.join(" y ")} en .env.local para probar el import real con YouTube y Gemini.`);
+    throw new Error(`Configura ${missing.join(" y ")} en .env.local para probar el import real con YouTube.`);
   }
 }
 
 async function createPreviewImportResponse(channelUrl: string) {
   assertImportProvidersConfigured();
+  if (!hasGeminiApiKey()) {
+    console.warn("[api/youtube/import] Gemini API key missing. Using heuristic fallback for location extraction.");
+  }
 
   const previewImport = await importYoutubeChannelPreview(channelUrl);
   const previewSession = await createPreviewSession({

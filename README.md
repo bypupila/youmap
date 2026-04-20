@@ -83,7 +83,7 @@ Revisa `.env.example` para los valores obligatorios.
 Minimo para pipeline real:
 
 - `YOUTUBE_API_KEY`
-- `GEMINI_API_KEY`
+- `GOOGLE_GENAI_API_KEY` (o `GEMINI_API_KEY` / `GOOGLE_API_KEY`)
 - `NOMINATIM_USER_AGENT`
 - `NOMINATIM_EMAIL`
 - `DATABASE_URL`
@@ -116,7 +116,7 @@ En Vercel, `Project Settings > Environment Variables`, configura las mismas clav
 - `DATABASE_URL`
 - `AUTH_SESSION_SECRET` (o `SESSION_SECRET`)
 - `YOUTUBE_API_KEY`
-- `GEMINI_API_KEY`
+- `GOOGLE_GENAI_API_KEY` (o `GEMINI_API_KEY` / `GOOGLE_API_KEY`)
 - `NOMINATIM_USER_AGENT`
 - `NOMINATIM_EMAIL`
 - `NEXT_PUBLIC_APP_URL`

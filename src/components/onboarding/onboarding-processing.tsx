@@ -15,6 +15,9 @@ type ProcessingCopy = {
   title: string;
   description: string;
   statusPill: string;
+  loadingTitle: string;
+  loadingDescription: string;
+  loadingWorldProgress: string;
   profileTitle: string;
   profileDescription: string;
   displayName: string;
@@ -35,6 +38,9 @@ const copyByLocale: Record<Locale, ProcessingCopy> = {
     title: "Tu canal se está convirtiendo en un mundo.",
     description: "Mientras se extraen y mapean los videos, dejamos listo el acceso final para que entres sin fricción.",
     statusPill: "Procesando",
+    loadingTitle: "Iniciando importación...",
+    loadingDescription: "Esta visual se llena con cada video mapeado en tiempo real.",
+    loadingWorldProgress: "Planeta mapeado",
     profileTitle: "Completa tu perfil",
     profileDescription: "Confirma tus datos finales y define tu contraseña antes de entrar a tu dashboard.",
     displayName: "Nombre público",
@@ -59,6 +65,9 @@ const copyByLocale: Record<Locale, ProcessingCopy> = {
     title: "Your channel is becoming a world.",
     description: "While videos are extracted and mapped, we prepare the final access step so everything is ready when processing ends.",
     statusPill: "Processing",
+    loadingTitle: "Starting import...",
+    loadingDescription: "This visual fills in real time as each video is mapped.",
+    loadingWorldProgress: "Mapped world",
     profileTitle: "Complete your profile",
     profileDescription: "Confirm your final details and set your password before entering your dashboard.",
     displayName: "Display name",
@@ -83,18 +92,23 @@ const copyByLocale: Record<Locale, ProcessingCopy> = {
 type ImportRunResponse = {
   id?: string;
   status?: string;
+  updated_at?: string | null;
   channel_id?: string | null;
   output?: {
     totalVideos?: number;
     processedVideos?: number;
     mappedVideos?: number;
     skippedVideos?: number;
+    countriesMapped?: number;
+    totalViews?: number;
     progress?: number;
     stage?: string;
   } | null;
   error_message?: string | null;
   finished_at?: string | null;
 };
+
+const STALE_RUN_MS = 5 * 60 * 1000;
 
 async function readResponseMessage(response: Response, fallback: string) {
   const contentType = response.headers.get("content-type") || "";
@@ -129,6 +143,9 @@ export function OnboardingProcessing({
   const [runStatus, setRunStatus] = useState<string>("idle");
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState<string>("starting");
+  const [countriesMapped, setCountriesMapped] = useState(0);
+  const [mappedVideos, setMappedVideos] = useState(0);
+  const [mappedViews, setMappedViews] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState(copy.loadingFallback);
   const [error, setError] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -164,14 +181,27 @@ export function OnboardingProcessing({
           const validateResponse = await fetch(`/api/youtube/import/${encodeURIComponent(cachedRunId)}`, { cache: "no-store" });
           if (validateResponse.ok) {
             const validatePayload = (await validateResponse.json().catch(() => null)) as ImportRunResponse | null;
-            if (!active) return;
-            setError(null);
-            setRunId(cachedRunId);
-            setRunStatus(String(validatePayload?.status || "running"));
-            return;
+            const status = String(validatePayload?.status || "running");
+            const updatedAtMs = validatePayload?.updated_at ? new Date(validatePayload.updated_at).getTime() : 0;
+            const isStaleRunningRun =
+              (status === "running" || status === "queued") &&
+              Number.isFinite(updatedAtMs) &&
+              updatedAtMs > 0 &&
+              Date.now() - updatedAtMs > STALE_RUN_MS;
+
+            if (status === "failed" || isStaleRunningRun) {
+              sessionStorage.removeItem(storageKey);
+            } else {
+              if (!active) return;
+              setError(null);
+              setRunId(cachedRunId);
+              setRunStatus(status);
+              return;
+            }
+          } else {
+            invalidRunIdsRef.current.add(cachedRunId);
+            sessionStorage.removeItem(storageKey);
           }
-          invalidRunIdsRef.current.add(cachedRunId);
-          sessionStorage.removeItem(storageKey);
         }
 
         const startResponse = await fetch("/api/youtube/import/start", {
@@ -223,6 +253,9 @@ export function OnboardingProcessing({
             setRunStatus("idle");
             setProgress(0);
             setStage("restarting");
+            setCountriesMapped(0);
+            setMappedVideos(0);
+            setMappedViews(0);
           }
           return;
         }
@@ -230,6 +263,7 @@ export function OnboardingProcessing({
         const payload = (await response.json()) as ImportRunResponse;
         if (!active) return;
 
+        const status = String(payload.status || "running");
         const output = payload.output || {};
         const total = Number(output.totalVideos || 0);
         const processed = Number(output.processedVideos || 0);
@@ -239,18 +273,23 @@ export function OnboardingProcessing({
             ? processed / total
             : 0;
 
-        setRunStatus(String(payload.status || "running"));
+        setRunStatus(status);
         setProgress(Math.max(0, Math.min(1, derivedProgress)));
-        setStage(String(output.stage || payload.status || "running"));
+        setStage(String(output.stage || status || "running"));
+        setCountriesMapped(Math.max(0, Number(output.countriesMapped || 0)));
+        setMappedVideos(Math.max(0, Number(output.mappedVideos || 0)));
+        setMappedViews(Math.max(0, Number(output.totalViews || 0)));
 
-        if (payload.status === "completed") {
+        if (status === "completed") {
           setProgress(1);
           setShowProfile(true);
           setRunStatus("completed");
         }
 
-        if (payload.status === "failed") {
+        if (status === "failed") {
+          sessionStorage.removeItem(storageKey);
           setError(payload.error_message || copy.errorFallback);
+          setRunId(null);
         }
       } catch (pollError) {
         if (!active) return;
@@ -271,6 +310,8 @@ export function OnboardingProcessing({
     if (error) return error;
     return loadingMessage;
   }, [copy.profileFallback, error, loadingMessage, runStatus]);
+
+  const progressPercent = useMemo(() => Math.max(0, Math.min(100, Math.round(progress * 100))), [progress]);
 
   async function submitProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -344,7 +385,7 @@ export function OnboardingProcessing({
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#2a2a2a]">
                 <div
                   className="h-full rounded-full bg-[linear-gradient(90deg,rgba(255,0,0,0.88)_0%,rgba(204,0,0,1)_100%)] transition-all duration-500"
-                  style={{ width: `${Math.max(6, Math.round(progress * 100))}%` }}
+                  style={{ width: `${Math.round(progress * 100)}%` }}
                 />
               </div>
 
@@ -363,9 +404,9 @@ export function OnboardingProcessing({
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <MiniMetric label={locale === "es" ? "Países" : "Countries"} value={Math.max(1, Math.round(progress * 14))} />
-                <MiniMetric label={locale === "es" ? "Videos mapeados" : "Mapped videos"} value={Math.round(progress * 100)} />
-                <MiniMetric label={locale === "es" ? "Views" : "Views"} value={Math.round(1000 + progress * 65000)} />
+                <MiniMetric label={locale === "es" ? "Países" : "Countries"} value={countriesMapped} />
+                <MiniMetric label={locale === "es" ? "Videos mapeados" : "Mapped videos"} value={mappedVideos} />
+                <MiniMetric label={locale === "es" ? "Views" : "Views"} value={mappedViews} />
               </div>
             </div>
           </div>
@@ -412,11 +453,18 @@ export function OnboardingProcessing({
               </>
             ) : (
               <>
-                <p className="yt-overline text-[#aaaaaa]">{copy.loadingFallback}</p>
-                <h2 className="mt-2 text-[28px] leading-[32px] font-bold text-[#f1f1f1]">{copy.loadingFallback}</h2>
-                <p className="mt-3 text-[14px] leading-6 text-[#aaaaaa]">{copy.description}</p>
+                <p className="yt-overline text-[#aaaaaa]">{copy.loadingTitle}</p>
+                <h2 className="mt-2 text-[28px] leading-[32px] font-bold text-[#f1f1f1]">{copy.loadingTitle}</h2>
+                <p className="mt-3 text-[14px] leading-6 text-[#aaaaaa]">{copy.loadingDescription}</p>
                 <div className="mt-5 rounded-[24px] border border-white/10 bg-[#212121] p-4">
-                  <p className="text-[14px] leading-6 text-[#f1f1f1]">{loadingMessage}</p>
+                  <ImportPlanet progress={progress} mappedVideos={mappedVideos} locale={locale} />
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-[#181818] px-4 py-3">
+                    <p className="text-[14px] leading-6 text-[#f1f1f1]">{loadingMessage}</p>
+                    <p className="mt-2 text-[12px] text-[#9a9a9a]">
+                      {copy.loadingWorldProgress}: {progressPercent}% · {formatCompactNumber(mappedVideos)}{" "}
+                      {locale === "es" ? "videos mapeados" : "mapped videos"}
+                    </p>
+                  </div>
                 </div>
               </>
             )}
@@ -437,6 +485,86 @@ function MiniMetric({ label, value }: { label: string; value: number }) {
       <p className="mt-1 text-[12px] text-[#aaaaaa]">{label}</p>
     </div>
   );
+}
+
+function ImportPlanet({ progress, mappedVideos, locale }: { progress: number; mappedVideos: number; locale: Locale }) {
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const progressPercent = Math.max(0, Math.min(100, Math.round(clampedProgress * 100)));
+  const markerCount = Math.min(150, Math.max(0, Math.floor(mappedVideos)));
+  const markers = useMemo(() => buildPlanetMarkers(markerCount), [markerCount]);
+
+  return (
+    <div className="mx-auto w-full max-w-[360px]">
+      <div className="relative mx-auto h-[250px] w-[250px] rounded-full border border-white/20 bg-[#070b16] p-2 shadow-[0_0_60px_rgba(0,0,0,0.55)] sm:h-[280px] sm:w-[280px]">
+        <div className="relative h-full w-full overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_35%_28%,rgba(109,160,255,0.2),rgba(7,11,22,0.92)_62%),linear-gradient(180deg,#0a1427_0%,#05070d_100%)]">
+          <div className="pointer-events-none absolute inset-0 animate-[spin_42s_linear_infinite]">
+            <span className="absolute left-[14%] top-[28%] h-11 w-16 rounded-[65%_35%_57%_43%/48%_55%_45%_52%] bg-[#0b1d37]/75 blur-[0.3px]" />
+            <span className="absolute left-[56%] top-[20%] h-12 w-14 rounded-[37%_63%_63%_37%/39%_44%_56%_61%] bg-[#102746]/80 blur-[0.3px]" />
+            <span className="absolute left-[23%] top-[56%] h-10 w-14 rounded-[46%_54%_41%_59%/55%_45%_55%_45%] bg-[#0a223f]/80 blur-[0.3px]" />
+            <span className="absolute left-[58%] top-[60%] h-9 w-16 rounded-[58%_42%_64%_36%/57%_35%_65%_43%] bg-[#0e2340]/80 blur-[0.3px]" />
+
+            {markers.map((marker) => (
+              <span
+                key={marker.id}
+                className="absolute rounded-full bg-[#ff6a6a] shadow-[0_0_14px_rgba(255,72,72,0.7)] animate-pulse"
+                style={{
+                  left: `${marker.left}%`,
+                  top: `${marker.top}%`,
+                  width: `${marker.size}px`,
+                  height: `${marker.size}px`,
+                  transform: "translate(-50%, -50%)",
+                  animationDelay: `${marker.delayMs}ms`,
+                  animationDuration: "2.6s",
+                }}
+              />
+            ))}
+          </div>
+
+          <div
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,0,0,0.15)_0%,rgba(255,0,0,0.55)_58%,rgba(94,0,0,0.92)_100%)] transition-transform duration-700 ease-out"
+            style={{ transform: `translateY(${100 - progressPercent}%)` }}
+          />
+          <div
+            className="pointer-events-none absolute inset-x-5 h-[2px] rounded-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.88),transparent)] transition-[top] duration-700 ease-out"
+            style={{ top: `${Math.max(0, Math.min(100, 100 - progressPercent))}%` }}
+          />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.24),transparent_42%),radial-gradient(circle_at_68%_73%,rgba(255,0,0,0.2),transparent_40%)]" />
+        </div>
+
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-[38px] leading-none font-semibold tracking-tight text-[#f1f1f1] sm:text-[44px]">{progressPercent}%</p>
+          <p className="mt-2 text-[12px] uppercase tracking-[0.16em] text-[#c9c9c9]">{locale === "es" ? "Videos mapeados" : "Mapped videos"}</p>
+          <p className="mt-1 text-[22px] leading-none font-medium text-[#f1f1f1]">{formatCompactNumber(mappedVideos)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildPlanetMarkers(count: number) {
+  const safeCount = Math.max(0, count);
+  if (safeCount === 0) return [];
+
+  const markers: Array<{ id: string; left: number; top: number; size: number; delayMs: number }> = [];
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
+  for (let index = 0; index < safeCount; index += 1) {
+    const ratio = (index + 0.5) / safeCount;
+    const radius = 8 + Math.sqrt(ratio) * 42;
+    const angle = index * goldenAngle;
+    const left = Math.max(8, Math.min(92, 50 + Math.cos(angle) * radius));
+    const top = Math.max(8, Math.min(92, 50 + Math.sin(angle) * radius * 0.72));
+
+    markers.push({
+      id: `marker-${index}`,
+      left,
+      top,
+      size: 2 + (index % 3),
+      delayMs: (index % 10) * 90,
+    });
+  }
+
+  return markers;
 }
 
 function formatCompactNumber(value: number) {
