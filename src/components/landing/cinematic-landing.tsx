@@ -45,13 +45,17 @@ interface MapPayload {
 
 interface PlatformStatsPayload {
   total_videos: number;
+  demo_videos?: number;
+  user_videos?: number;
 }
+
+const DEFAULT_PLATFORM_DEMO_VIDEOS = 2371;
 
 export function CinematicLanding() {
   const [locale, setLocale] = useState<Locale>("es");
   const [mapChannel, setMapChannel] = useState<TravelChannel>(DEMO_CHANNEL);
   const [mapVideos, setMapVideos] = useState<TravelVideoLocation[]>(DEMO_VIDEO_LOCATIONS);
-  const [platformTotalVideos, setPlatformTotalVideos] = useState(1393);
+  const [platformTotalVideos, setPlatformTotalVideos] = useState(DEFAULT_PLATFORM_DEMO_VIDEOS);
 
   const activeCreator = creatorByLocale[locale];
 

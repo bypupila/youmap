@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/neon";
+import { resolvePlatformVideoStats } from "@/lib/platform-stats";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const rows = await sql<Array<{ total_videos: number }>>`
-      select count(*)::int as total_videos
-      from public.videos
-    `;
+    const stats = await resolvePlatformVideoStats();
 
     return NextResponse.json(
-      {
-        total_videos: rows[0]?.total_videos || 0,
-      },
+      stats,
       {
         headers: {
           "Cache-Control": "no-store, max-age=0",
