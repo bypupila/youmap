@@ -10,6 +10,7 @@
 
 ```bash
 npm install
+npm run security:install-hooks
 npm run dev
 ```
 
@@ -40,6 +41,16 @@ Use the demo route to inspect the product without external credentials:
 5. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
 
 No external CLI or linked project is required for local bootstrap anymore.
+
+## Secret safety checks
+
+Before pushing changes:
+
+```bash
+npm run security:secrets
+```
+
+Only `.env.example` can be committed. Keep real credentials only in local `.env.local` or provider env settings.
 
 ## Verification order
 

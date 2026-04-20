@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "security:secrets": "node scripts/check-secrets.mjs",
+    "security:install-hooks": "./scripts/install-git-hooks.sh",
     "validate:env": "node scripts/validate-env.mjs",
     "polar:bootstrap": "node scripts/polar-bootstrap-travel.mjs"
   },

@@ -5,10 +5,10 @@ node_modules/
 .next/
 out/
 
-# local env
-.env.local
-.env.*.local
-.env.vercel.*
+# local env and secret files (only keep template tracked)
+.env
+.env.*
+!.env.example
 
 # logs
 npm-debug.log*

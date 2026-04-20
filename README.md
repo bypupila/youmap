@@ -109,6 +109,24 @@ Verificacion rapida local:
 npm run validate:env
 ```
 
+## Seguridad de secretos
+
+- Solo se permite commitear `.env.example`.
+- Todos los `.env*` reales estan bloqueados por `.gitignore`.
+- Escaneo manual de secretos:
+
+```bash
+npm run security:secrets
+```
+
+- Instala hook pre-push (una vez por clon):
+
+```bash
+npm run security:install-hooks
+```
+
+Procedimiento de remediacion y rotacion: `docs/SECURITY_SECRETS.md`.
+
 ## Vercel (produccion)
 
 En Vercel, `Project Settings > Environment Variables`, configura las mismas claves requeridas de `.env.example` para `Production` y `Preview`, especialmente:
