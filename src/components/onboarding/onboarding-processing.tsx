@@ -20,6 +20,8 @@ type ProcessingCopy = {
   displayName: string;
   username: string;
   email: string;
+  password: string;
+  passwordHint: string;
   continueLabel: string;
   errorFallback: string;
   loadingFallback: string;
@@ -34,10 +36,12 @@ const copyByLocale: Record<Locale, ProcessingCopy> = {
     description: "Mientras se extraen y mapean los videos, dejamos listo el acceso final para que entres sin fricción.",
     statusPill: "Procesando",
     profileTitle: "Completa tu perfil",
-    profileDescription: "Confirma tus datos finales antes de entrar a tu dashboard.",
+    profileDescription: "Confirma tus datos finales y define tu contraseña antes de entrar a tu dashboard.",
     displayName: "Nombre público",
     username: "Usuario",
     email: "Email",
+    password: "Contraseña",
+    passwordHint: "Esta será tu clave final para entrar al dashboard.",
     continueLabel: "Entrar a tu mundo",
     errorFallback: "No pudimos cargar el estado de importación.",
     loadingFallback: "Iniciando importación...",
@@ -56,10 +60,12 @@ const copyByLocale: Record<Locale, ProcessingCopy> = {
     description: "While videos are extracted and mapped, we prepare the final access step so everything is ready when processing ends.",
     statusPill: "Processing",
     profileTitle: "Complete your profile",
-    profileDescription: "Confirm your final details before entering your dashboard.",
+    profileDescription: "Confirm your final details and set your password before entering your dashboard.",
     displayName: "Display name",
     username: "Username",
     email: "Email",
+    password: "Password",
+    passwordHint: "This will be your final dashboard password.",
     continueLabel: "Enter your world",
     errorFallback: "We couldn't load the import status.",
     loadingFallback: "Starting import...",
@@ -90,6 +96,25 @@ type ImportRunResponse = {
   finished_at?: string | null;
 };
 
+async function readResponseMessage(response: Response, fallback: string) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try {
+      const payload = (await response.json()) as { error?: string; message?: string } | null;
+      return payload?.error || payload?.message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  try {
+    const text = (await response.text()).trim();
+    return text || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function OnboardingProcessing({
   locale,
   user,
@@ -109,6 +134,7 @@ export function OnboardingProcessing({
   const [showProfile, setShowProfile] = useState(false);
   const [displayName, setDisplayName] = useState(user.display_name || "");
   const [username, setUsername] = useState(user.username || "");
+  const [password, setPassword] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
@@ -152,9 +178,10 @@ export function OnboardingProcessing({
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
+        const startResponseForMessage = startResponse.clone();
         const startPayload = (await startResponse.json().catch(() => null)) as { import_run_id?: string; status?: string; error?: string } | null;
         if (!startResponse.ok || !startPayload?.import_run_id) {
-          throw new Error(startPayload?.error || copy.errorFallback);
+          throw new Error(startPayload?.error || (await readResponseMessage(startResponseForMessage, copy.errorFallback)));
         }
         if (invalidRunIdsRef.current.has(startPayload.import_run_id)) {
           throw new Error(copy.errorFallback);
@@ -258,6 +285,7 @@ export function OnboardingProcessing({
         body: JSON.stringify({
           displayName,
           username,
+          password: password.trim() || null,
         }),
       });
 
@@ -362,8 +390,19 @@ export function OnboardingProcessing({
                     <span className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-[#8f8f8f]">{copy.email}</span>
                     <Input value={user.email} disabled readOnly />
                   </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-[#8f8f8f]">{copy.password}</span>
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder={copy.password}
+                      required
+                    />
+                    <span className="mt-1 block text-[12px] text-[#9a9a9a]">{copy.passwordHint}</span>
+                  </label>
 
-                  <Button type="submit" className="w-full" disabled={profileBusy}>
+                  <Button type="submit" className="w-full" disabled={profileBusy || password.trim().length < 8}>
                     {profileBusy ? copy.profileFallback : copy.continueLabel}
                   </Button>
                 </form>

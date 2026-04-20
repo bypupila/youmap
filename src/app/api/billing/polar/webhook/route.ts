@@ -21,6 +21,21 @@ interface PolarSubscriptionWebhookData {
   metadata?: Record<string, unknown> | null;
 }
 
+function resolveWebhookSecret() {
+  let rawSecret = String(process.env.POLAR_WEBHOOK_SECRET || "").trim();
+  if (
+    (rawSecret.startsWith('"') && rawSecret.endsWith('"')) ||
+    (rawSecret.startsWith("'") && rawSecret.endsWith("'"))
+  ) {
+    rawSecret = rawSecret.slice(1, -1).trim();
+  }
+  if (!rawSecret) return "";
+  if (rawSecret.startsWith("polar_whs_")) {
+    return `whsec_${rawSecret.slice("polar_whs_".length)}`;
+  }
+  return rawSecret;
+}
+
 async function resolvePlanIdByProductId(productId: string | null | undefined) {
   if (!productId) return null;
   const rows = await sql<Array<{ id: string }>>`
@@ -105,7 +120,8 @@ export async function POST(request: Request) {
   const body = await request.text();
 
   try {
-    const webhook = new Webhook(process.env.POLAR_WEBHOOK_SECRET || "");
+    const webhookSecret = resolveWebhookSecret();
+    const webhook = new Webhook(webhookSecret);
     const event = webhook.verify(body, {
       "webhook-id": request.headers.get("webhook-id") || "",
       "webhook-timestamp": request.headers.get("webhook-timestamp") || "",
@@ -142,4 +158,8 @@ export async function POST(request: Request) {
     console.error("[api/billing/polar/webhook]", error);
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 400 });
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ ok: true }, { status: 200 });
 }

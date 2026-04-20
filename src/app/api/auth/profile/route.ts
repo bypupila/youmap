@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { hashPassword } from "@/lib/auth-password";
 import { isValidUsername, normalizeUsername, toPublicMapPath } from "@/lib/auth-identifiers";
 import { sql } from "@/lib/neon";
 
@@ -10,6 +11,7 @@ export const runtime = "nodejs";
 const payloadSchema = z.object({
   displayName: z.string().min(1),
   username: z.string().min(3),
+  password: z.string().min(8).max(128).optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -39,6 +41,13 @@ export async function POST(request: Request) {
     }
 
     const nowIso = new Date().toISOString();
+    const password = String(payload.password || "").trim();
+    if (!password) {
+      return NextResponse.json({ error: "La contraseña es obligatoria para completar el perfil." }, { status: 400 });
+    }
+    if (password.length < 8) {
+      return NextResponse.json({ error: "La contraseña debe tener al menos 8 caracteres." }, { status: 400 });
+    }
     await sql`
       update public.users
       set
@@ -46,6 +55,16 @@ export async function POST(request: Request) {
         display_name = ${displayName},
         updated_at = ${nowIso}
       where id = ${userId}
+    `;
+
+    const passwordHash = hashPassword(password);
+    await sql`
+      insert into public.user_credentials (user_id, password_hash, updated_at)
+      values (${userId}, ${passwordHash}, ${nowIso})
+      on conflict (user_id)
+      do update set
+        password_hash = excluded.password_hash,
+        updated_at = excluded.updated_at
     `;
 
     await sql`

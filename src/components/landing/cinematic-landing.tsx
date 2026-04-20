@@ -11,6 +11,20 @@ import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
 type Locale = "es" | "en";
 
+type LandingCopy = {
+  topTitle: string;
+  searchPlaceholder: string;
+  signalPills: string[];
+  headline: string;
+  body: string;
+  ctaPrimary: string;
+  cardTitle: string;
+  ctaDemo: string;
+  videosLabel: string;
+  countriesLabel: string;
+  platformVideosLabel: string;
+};
+
 const creatorByLocale = {
   es: {
     channelId: "luisito-global-map",
@@ -29,10 +43,15 @@ interface MapPayload {
   videoLocations: TravelVideoLocation[];
 }
 
+interface PlatformStatsPayload {
+  total_videos: number;
+}
+
 export function CinematicLanding() {
   const [locale, setLocale] = useState<Locale>("es");
   const [mapChannel, setMapChannel] = useState<TravelChannel>(DEMO_CHANNEL);
   const [mapVideos, setMapVideos] = useState<TravelVideoLocation[]>(DEMO_VIDEO_LOCATIONS);
+  const [platformTotalVideos, setPlatformTotalVideos] = useState(1393);
 
   const activeCreator = creatorByLocale[locale];
 
@@ -58,7 +77,41 @@ export function CinematicLanding() {
     };
   }, [activeCreator.channelId]);
 
-  const copy = useMemo(
+  useEffect(() => {
+    let isCurrent = true;
+    const controller = new AbortController();
+
+    async function loadPlatformStats() {
+      try {
+        const response = await fetch("/api/platform/stats", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as PlatformStatsPayload;
+        if (!isCurrent) return;
+        if (typeof payload.total_videos === "number" && Number.isFinite(payload.total_videos)) {
+          setPlatformTotalVideos(payload.total_videos);
+        }
+      } catch {
+        if (!isCurrent) return;
+      }
+    }
+
+    void loadPlatformStats();
+    const interval = window.setInterval(() => {
+      void loadPlatformStats();
+    }, 30000);
+
+    return () => {
+      isCurrent = false;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const copy = useMemo<LandingCopy>(
     () =>
       locale === "es"
         ? {
@@ -72,9 +125,10 @@ export function CinematicLanding() {
             ctaDemo: "Ver Demo",
             videosLabel: "videos",
             countriesLabel: "países",
+            platformVideosLabel: "videos procesados en toda la plataforma",
           }
         : {
-            topTitle: "Tu Mapa de Contenido",
+            topTitle: "Your Content Map",
             searchPlaceholder: "Search across videos, countries, or creators",
             signalPills: ["Interactive map", "Country analytics", "Sponsor hub"],
             headline: "Your channel turned into an interactive web page.",
@@ -84,6 +138,7 @@ export function CinematicLanding() {
             ctaDemo: "View Demo",
             videosLabel: "videos",
             countriesLabel: "countries",
+            platformVideosLabel: "processed videos across the platform",
           },
     [activeCreator.name, locale]
   );
@@ -171,12 +226,12 @@ export function CinematicLanding() {
               <div className="tm-surface rounded-[2rem] p-5">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
-                    <p className="text-[2rem] leading-none font-semibold tracking-tight">{totalVideos.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">videos procesados</p>
+                    <p className="text-[2rem] leading-none font-semibold tracking-tight">{platformTotalVideos.toLocaleString(localeTag)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{copy.platformVideosLabel}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
                     <p className="text-[2rem] leading-none font-semibold tracking-tight">{totalCountries.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">países visibles en el mapa</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{locale === "es" ? "países visibles en el mapa" : "countries visible on the map"}</p>
                   </div>
                 </div>
               </div>
