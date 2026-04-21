@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MapExperience } from "@/components/map/map-experience";
-import { FloatingTopBar, MetricPill } from "@/components/design-system/chrome";
-import { Button } from "@/components/ui/button";
-import { DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
-import { loadMapDataByChannelId, type MapDataPayload } from "@/lib/map-data";
+import { buildPublicShareUrl, loadPublicMapPayload, loadPublicMapPayloadByChannelId } from "@/lib/map-public";
+import { DEMO_CHANNEL_SLUG, DEMO_USER, DEMO_USERNAME } from "@/lib/demo-data";
+import type { MapDataPayload } from "@/lib/map-data";
 import { readPreviewSession } from "@/lib/preview-session";
 import { getSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
@@ -24,26 +22,32 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const previewId = searchParams.preview || "";
   const previewSession = previewId ? await readPreviewSession(previewId) : null;
   let fallbackChannelId = "";
+  let sessionUserId = "";
 
   if (isDemoMode) {
     fallbackChannelId = DEMO_CHANNEL_SLUG;
   } else if (!previewSession) {
-    const userId = await getSessionUserIdFromServerCookies();
-    if (!userId) redirect("/auth");
-    const hasSubscription = await userHasActiveSubscription(userId);
-    if (!hasSubscription) redirect(await resolveCheckoutRedirectPath(userId));
-    fallbackChannelId = await resolveUserChannelId(userId);
+    sessionUserId = (await getSessionUserIdFromServerCookies()) || "";
+    if (!sessionUserId) redirect("/auth");
+    const hasSubscription = await userHasActiveSubscription(sessionUserId);
+    if (!hasSubscription) redirect(await resolveCheckoutRedirectPath(sessionUserId));
+    fallbackChannelId = await resolveUserChannelId(sessionUserId);
   }
 
   const channelId = searchParams.channelId || fallbackChannelId;
-
-  const payload: MapDataPayload | null = previewSession
+  const previewPayload: MapDataPayload | null = previewSession
     ? buildPreviewPayload(previewSession.channel, previewSession.videoLocations)
-    : channelId
-      ? await loadMapDataByChannelId(channelId)
-      : null;
+    : null;
+  const experiencePayload = previewSession
+    ? null
+    : isDemoMode
+      ? await loadPublicMapPayload({ identifier: DEMO_USERNAME, viewerUserId: DEMO_USER.id })
+      : channelId
+        ? await loadPublicMapPayloadByChannelId({ channelId, viewerUserId: sessionUserId })
+        : null;
+  const payload = experiencePayload || previewPayload;
 
-  if (!payload) {
+  if (!payload || (!channelId && !previewSession && !isDemoMode)) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center text-foreground">
         <div className="tm-surface-strong rounded-[2rem] p-6 text-sm">
@@ -63,34 +67,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           videoLocations={payload.videoLocations}
           manualQueue={payload.manualQueue}
           summary={payload.summary}
-          channelId={canRefresh ? channelId : null}
+          channelId={previewSession ? null : payload.channel.id}
           allowRefresh={canRefresh}
+          viewer={
+            experiencePayload?.viewer || {
+              isOwner: true,
+              shareUrl: buildPublicShareUrl(payload.channel.channel_handle || payload.channel.canonicalHandle),
+              adminUrl: "/dashboard",
+            }
+          }
+          sponsors={experiencePayload?.sponsors || []}
+          activePoll={experiencePayload?.activePoll || null}
+          availablePollOptions={experiencePayload?.availablePollOptions || []}
+          headerEyebrow={previewSession ? "Preview local" : isDemoMode ? "Demo map" : "Owner view"}
         />
       </div>
 
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
-
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-40 px-4 pt-3 sm:px-6">
-        <FloatingTopBar
-          eyebrow="Creator Dashboard"
-          title={
-            previewSession
-              ? "Preview local con Gemini"
-              : isDemoMode
-                ? "Modo demo"
-                : "Canal real"
-          }
-          actions={
-            <>
-              <MetricPill text={`${payload.summary.total_videos} videos`} />
-              <MetricPill text={`${payload.summary.total_countries} paises`} />
-              <Button asChild size="sm">
-                <Link href="/">Volver</Link>
-              </Button>
-            </>
-          }
-        />
-      </header>
     </main>
   );
 }

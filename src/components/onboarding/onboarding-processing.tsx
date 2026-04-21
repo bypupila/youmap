@@ -371,7 +371,7 @@ export function OnboardingProcessing({
             <h1 className="mt-3 max-w-2xl text-[32px] leading-[36px] font-bold tracking-tight text-[#f1f1f1] sm:text-[42px] sm:leading-[46px]">
               {copy.title}
             </h1>
-            <p className="mt-4 max-w-xl text-[14px] leading-6 text-[#aaaaaa]">{copy.description}</p>
+            <p className="onboarding-description mt-4 max-w-xl text-[14px] leading-6">{copy.description}</p>
 
             <div className="mt-6 rounded-[24px] border border-white/10 bg-[#212121] p-5">
               <div className="flex items-center justify-between gap-3">
@@ -416,7 +416,7 @@ export function OnboardingProcessing({
               <>
                 <p className="yt-overline text-[#aaaaaa]">{copy.profileTitle}</p>
                 <h2 className="mt-2 text-[28px] leading-[32px] font-bold text-[#f1f1f1]">{copy.profileTitle}</h2>
-                <p className="mt-3 text-[14px] leading-6 text-[#aaaaaa]">{copy.profileDescription}</p>
+                <p className="onboarding-description mt-3 text-[14px] leading-6">{copy.profileDescription}</p>
 
                 <form className="mt-5 space-y-3" onSubmit={submitProfile}>
                   <label className="block">
@@ -455,7 +455,7 @@ export function OnboardingProcessing({
               <>
                 <p className="yt-overline text-[#aaaaaa]">{copy.loadingTitle}</p>
                 <h2 className="mt-2 text-[28px] leading-[32px] font-bold text-[#f1f1f1]">{copy.loadingTitle}</h2>
-                <p className="mt-3 text-[14px] leading-6 text-[#aaaaaa]">{copy.loadingDescription}</p>
+                <p className="onboarding-description mt-3 text-[14px] leading-6">{copy.loadingDescription}</p>
                 <div className="mt-5 rounded-[24px] border border-white/10 bg-[#212121] p-4">
                   <ImportPlanet progress={progress} mappedVideos={mappedVideos} locale={locale} />
                   <div className="mt-4 rounded-2xl border border-white/10 bg-[#181818] px-4 py-3">

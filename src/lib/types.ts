@@ -44,6 +44,7 @@ export interface TravelChannel {
   user_id: string;
   channel_name: string;
   channel_handle?: string | null;
+  canonicalHandle?: string | null;
   youtube_channel_id?: string | null;
   thumbnail_url?: string | null;
   subscriber_count?: number | null;

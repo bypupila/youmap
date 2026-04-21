@@ -116,6 +116,7 @@ a {
 .yt-navbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   min-height: 64px;
   width: min(100%, 1400px);
@@ -126,6 +127,12 @@ a {
   -webkit-backdrop-filter: blur(20px) saturate(1.1);
   backdrop-filter: blur(20px) saturate(1.1);
   box-shadow: 0 26px 72px -38px rgba(0, 0, 0, 0.88);
+}
+
+@media (min-width: 768px) {
+  .yt-navbar {
+    flex-wrap: nowrap;
+  }
 }
 
 .yt-logo-lockup {
@@ -357,6 +364,10 @@ a {
   text-transform: uppercase;
   letter-spacing: 0.18em;
   color: var(--travel-text-secondary);
+}
+
+.onboarding-description {
+  color: #ff8b8b;
 }
 
 .platform-grid-glow {

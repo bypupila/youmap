@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { MapExperience } from "@/components/map/map-experience";
-import { FloatingTopBar } from "@/components/design-system/chrome";
-import { Button } from "@/components/ui/button";
-import { loadMapDataByChannelId } from "@/lib/map-data";
+import { loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -30,7 +27,7 @@ interface MapPageProps {
 
 export default async function MapPage({ searchParams }: MapPageProps) {
   const channelId = searchParams.channelId || "luisito-global-map";
-  const payload = await loadMapDataByChannelId(channelId);
+  const payload = await loadPublicMapPayloadByChannelId({ channelId });
   if (!payload) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center text-foreground">
@@ -38,7 +35,6 @@ export default async function MapPage({ searchParams }: MapPageProps) {
       </main>
     );
   }
-  const channelTitle = String(payload.channel.channel_name || "").split("·")[0].trim() || payload.channel.channel_name;
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
@@ -48,35 +44,17 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           videoLocations={payload.videoLocations}
           manualQueue={payload.manualQueue}
           summary={payload.summary}
-          channelId={channelId}
+          channelId={payload.channel.id}
           allowRefresh={isUuid(channelId)}
+          viewer={payload.viewer}
+          sponsors={payload.sponsors}
+          activePoll={payload.activePoll}
+          availablePollOptions={payload.availablePollOptions}
+          headerEyebrow="Public map"
         />
       </div>
 
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
-
-      <header className="absolute inset-x-0 top-0 z-[320] px-4 py-3 pointer-events-auto">
-        <FloatingTopBar
-          eyebrow="Mapa Fullscreen"
-          title={channelTitle}
-          searchPlaceholder="Busca videos y lugares en este mapa"
-          className="relative z-[321]"
-          actions={
-            <>
-              <Button
-                asChild
-                size="xs"
-                className="border border-black/10 bg-white text-black shadow-none hover:bg-white/90"
-              >
-                <Link href="/">Volver</Link>
-              </Button>
-              <Button asChild size="xs">
-                <Link href="/onboarding">Crear mi mapa</Link>
-              </Button>
-            </>
-          }
-        />
-      </header>
     </main>
   );
 }

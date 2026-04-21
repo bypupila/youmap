@@ -12,6 +12,7 @@ interface FloatingTopBarProps {
   actions?: ReactNode;
   className?: string;
   searchPlaceholder?: string;
+  searchInput?: ReactNode;
   centerContent?: ReactNode;
   logoBadgeContent?: ReactNode;
   hideSearch?: boolean;
@@ -23,13 +24,14 @@ export function FloatingTopBar({
   actions,
   className,
   searchPlaceholder = "Search across videos, countries, or creators",
+  searchInput,
   centerContent,
   logoBadgeContent,
   hideSearch = false,
 }: FloatingTopBarProps) {
   return (
     <div className={cn("mx-auto yt-navbar tm-refraction pointer-events-auto", className)}>
-      <div className="yt-logo-lockup">
+      <div className="yt-logo-lockup min-w-0 shrink-0">
         <Link
           href="/"
           aria-label="Go to homepage"
@@ -43,9 +45,9 @@ export function FloatingTopBar({
         </div>
       </div>
 
-      {centerContent || !hideSearch ? (
-        <div className="hidden flex-1 justify-center lg:flex">
-          {centerContent || (
+      {centerContent || searchInput || !hideSearch ? (
+        <div className="order-3 w-full md:order-none md:flex-1 md:justify-center">
+          {searchInput || centerContent || (
             <div className="yt-search platform-shimmer" aria-hidden="true">
               <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
                 <MagnifyingGlass size={16} />
@@ -61,7 +63,7 @@ export function FloatingTopBar({
         </div>
       ) : null}
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         {actions}
       </div>
     </div>

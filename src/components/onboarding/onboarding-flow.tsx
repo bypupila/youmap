@@ -774,6 +774,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
           showLegend={false}
           showOperationsPanel={false}
           showActiveVideoCard={false}
+          showHeader={false}
         />
       </div>
 
@@ -812,7 +813,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
                 <h1 className="mx-auto mt-2 max-w-3xl text-[30px] leading-[34px] font-bold tracking-tight text-[#f1f1f1] sm:text-[38px] sm:leading-[42px]">
                   {currentMeta.title}
                 </h1>
-                <p className="mx-auto mt-3 max-w-2xl text-[14px] leading-6 text-[#aaaaaa]">{currentMeta.description}</p>
+                <p className="onboarding-description mx-auto mt-3 max-w-2xl text-[14px] leading-6">{currentMeta.description}</p>
               </div>
 
               <div className="px-6 py-6 sm:px-8 sm:py-8">
@@ -919,7 +920,7 @@ function renderStepBody(
                 <Icon size={30} weight="regular" />
               </div>
               <p className="text-[16px] leading-[22px] font-medium text-[#f1f1f1]">{feature.title}</p>
-              <p className="mt-2 text-[14px] leading-6 text-[#aaaaaa]">{feature.copy}</p>
+              <p className="onboarding-description mt-2 text-[14px] leading-6">{feature.copy}</p>
             </div>
           );
         })}
@@ -959,7 +960,7 @@ function renderStepBody(
           <div className="mx-auto max-w-3xl text-center">
             <p className="yt-overline text-[#aaaaaa]">{ctx.copy.importStatusEyebrow}</p>
             <p className="mt-2 text-[22px] leading-8 font-semibold text-[#f1f1f1]">{ctx.copy.importStatusTitle}</p>
-            <p className="mt-3 text-[14px] leading-6 text-[#aaaaaa]">{ctx.copy.importStatusBody}</p>
+            <p className="onboarding-description mt-3 text-[14px] leading-6">{ctx.copy.importStatusBody}</p>
           </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <StudioMetric label={ctx.copy.importMetricCountries} value={countries} />
@@ -1011,7 +1012,7 @@ function renderStepBody(
               <img src={sponsor.image} alt={sponsor.brand} className="h-full w-full object-contain p-4" />
             </div>
             <p className="text-[16px] font-medium text-[#f1f1f1]">{sponsor.brand}</p>
-            <p className="mt-2 text-[13px] leading-5 text-[#aaaaaa]">{ctx.copy.sponsorsDescription}</p>
+            <p className="onboarding-description mt-2 text-[13px] leading-5">{ctx.copy.sponsorsDescription}</p>
             <button type="button" className="yt-btn-secondary mt-5 w-full border border-black/10 bg-white text-black hover:bg-white hover:text-black">
               {ctx.copy.sponsorsConnect}
             </button>
@@ -1027,7 +1028,7 @@ function renderStepBody(
         <div className="rounded-[28px] border border-[rgba(255,0,0,0.24)] bg-[rgba(255,0,0,0.12)] p-6">
           <p className="yt-overline text-[#ff8b8b]">{ctx.copy.fanVoteEyebrow}</p>
           <h3 className="mt-2 text-[26px] leading-[30px] font-bold text-[#f1f1f1]">{ctx.copy.fanVoteTitle}</h3>
-          <p className="mt-3 max-w-xl text-[14px] leading-6 text-[#dec5b8]">{ctx.copy.fanVoteDescription}</p>
+          <p className="onboarding-description mt-3 max-w-xl text-[14px] leading-6">{ctx.copy.fanVoteDescription}</p>
         </div>
         <div className="space-y-3">
           {[
@@ -1081,7 +1082,7 @@ function renderStepBody(
                 </div>
                 {badgeLabel ? <Badge variant={unavailable ? "outline" : "secondary"}>{badgeLabel}</Badge> : null}
               </div>
-              <p className="mt-3 text-[13px] leading-5 text-[#aaaaaa]">{localizedPlan.description}</p>
+              <p className="onboarding-description mt-3 text-[13px] leading-5">{localizedPlan.description}</p>
               {localizedPlan.trialCopy ? <p className="mt-3 text-[12px] font-medium text-[#ff6a6a]">{localizedPlan.trialCopy}</p> : null}
               <ul className="mt-4 space-y-1.5 text-[12px] leading-5 text-[#d5d5d5]">
                 {localizedPlan.features.map((feature) => (

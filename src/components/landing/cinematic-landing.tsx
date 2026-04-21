@@ -177,6 +177,7 @@ export function CinematicLanding() {
           showLegend={false}
           showOperationsPanel={false}
           showActiveVideoCard={false}
+          showHeader={false}
         />
       </div>
 
