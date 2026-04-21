@@ -1,108 +1,8 @@
 import { randomUUID } from "crypto";
-import { z } from "zod";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
-import { geocodeLocation } from "@/lib/geocode";
-import { getGeminiClient, getGeminiModel, hasGeminiApiKey } from "@/lib/gemini";
-import { LOCATION_PROMPT } from "@/lib/youtube-location-prompt";
-import { loadUploadsPlaylistVideos, loadVideoDetails, resolveYouTubeChannel } from "@/lib/youtube";
 import { sql } from "@/lib/neon";
-
-const travelTypeSchema = z.enum(["city_tour", "nature", "food", "culture", "adventure", "beach", "road_trip", "other"]);
-
-const locationSchema = z
-  .object({
-    country_code: z.string().length(2).optional().nullable(),
-    country_name: z.string().optional().nullable(),
-    city: z.string().optional().nullable(),
-    region: z.string().optional().nullable(),
-    location_label: z.string().optional().nullable(),
-    confidence: z.number().min(0).max(1).optional().nullable(),
-    travel_type: travelTypeSchema.optional().nullable(),
-  })
-  .passthrough();
-
-const extractionSchema = z
-  .object({
-    has_location: z.boolean(),
-    primary_location: locationSchema.optional().nullable(),
-    additional_locations: z.array(locationSchema).optional().default([]),
-    summary: z.string().optional().nullable(),
-  })
-  .passthrough();
-
-const geminiJsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    has_location: { type: "boolean" },
-    primary_location: {
-      type: ["object", "null"],
-      additionalProperties: false,
-      properties: {
-        country_code: { type: ["string", "null"] },
-        country_name: { type: ["string", "null"] },
-        city: { type: ["string", "null"] },
-        region: { type: ["string", "null"] },
-        location_label: { type: ["string", "null"] },
-        confidence: { type: ["number", "null"] },
-        travel_type: { type: ["string", "null"] },
-      },
-      required: [],
-    },
-    additional_locations: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          country_code: { type: ["string", "null"] },
-          country_name: { type: ["string", "null"] },
-          city: { type: ["string", "null"] },
-          region: { type: ["string", "null"] },
-          location_label: { type: ["string", "null"] },
-          confidence: { type: ["number", "null"] },
-          travel_type: { type: ["string", "null"] },
-        },
-        required: [],
-      },
-    },
-    summary: { type: ["string", "null"] },
-  },
-  required: ["has_location", "additional_locations"],
-} as const;
-
-const COUNTRY_HINTS: Record<string, string[]> = {
-  MX: ["mexico", "mexico df", "cdmx", "ciudad de mexico", "mexicano"],
-  US: ["usa", "united states", "estados unidos", "eeuu", "new york", "los angeles", "las vegas", "miami"],
-  JP: ["japan", "japon", "tokyo", "kyoto", "osaka"],
-  ES: ["spain", "espana", "madrid", "barcelona", "sevilla", "valencia"],
-  FR: ["france", "francia", "paris"],
-  IT: ["italy", "italia", "rome", "roma", "milan", "venice", "venecia"],
-  BR: ["brazil", "brasil", "rio de janeiro", "sao paulo"],
-  AR: ["argentina", "buenos aires", "mendoza", "patagonia"],
-  CL: ["chile", "santiago", "valparaiso"],
-  CO: ["colombia", "bogota", "medellin", "cartagena"],
-  PE: ["peru", "lima", "cusco", "machu picchu"],
-  GB: ["uk", "united kingdom", "reino unido", "london", "inglaterra"],
-  DE: ["germany", "alemania", "berlin", "munich"],
-  IN: ["india", "nueva delhi", "mumbai", "delhi"],
-  TH: ["thailand", "tailandia", "bangkok", "phuket"],
-  KR: ["korea", "corea", "seoul"],
-  CN: ["china", "beijing", "shanghai"],
-  EG: ["egypt", "egipto", "cairo"],
-  MA: ["morocco", "marruecos", "marrakesh", "casablanca"],
-  ZA: ["south africa", "sudafrica", "cape town"],
-  AU: ["australia", "sydney", "melbourne"],
-  NZ: ["new zealand", "nueva zelanda", "auckland", "queenstown"],
-  TR: ["turkey", "turquia", "istanbul"],
-  PT: ["portugal", "lisbon", "lisboa", "porto"],
-  SA: ["saudi", "arabia saudita", "riyadh", "jeddah"],
-  SG: ["singapore", "singapur"],
-  VN: ["vietnam", "hanoi", "ho chi minh"],
-  ID: ["indonesia", "bali", "jakarta"],
-  CA: ["canada", "toronto", "montreal", "vancouver"],
-  IS: ["iceland", "islandia", "reykjavik"],
-};
+import { analyzeVideoLocation, persistVideoAnalysis } from "@/lib/video-location-engine";
+import { loadChannelPlaylistSignals, loadUploadsPlaylistVideos, loadVideoDetails, resolveYouTubeChannel } from "@/lib/youtube";
 
 interface ImportYoutubeChannelInput {
   userId: string;
@@ -127,82 +27,20 @@ export interface ImportYoutubeChannelResult {
   };
 }
 
-async function upsertExtractionRun(input: {
-  channelId: string;
-  videoId: string;
-  status: string;
-  promptVersion: string;
-  model: string | null;
-  inputPayload: Record<string, unknown>;
-  outputPayload: Record<string, unknown>;
-  errorMessage?: string | null;
-  attempts?: number;
-  startedAt?: string | null;
-  finishedAt?: string | null;
-}) {
-  const existingRows = await sql<Array<{ id: string }>>`
-    select id
-    from public.location_extraction_runs
-    where video_id = ${input.videoId}
-    limit 1
-  `;
-  const existing = existingRows[0] || null;
+function processVideosInBatches<T>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<void>) {
+  let index = 0;
+  return Promise.all(
+    Array.from({ length: Math.max(1, concurrency) }, async () => {
+      while (index < items.length) {
+        const current = index++;
+        await worker(items[current], current);
+      }
+    })
+  );
+}
 
-  if (existing?.id) {
-    await sql`
-      update public.location_extraction_runs
-      set
-        channel_id = ${input.channelId},
-        video_id = ${input.videoId},
-        status = ${input.status},
-        prompt_version = ${input.promptVersion},
-        model = ${input.model},
-        input = ${JSON.stringify(input.inputPayload || {})}::jsonb,
-        output = ${JSON.stringify(input.outputPayload || {})}::jsonb,
-        error_message = ${input.errorMessage || null},
-        attempts = ${input.attempts ?? 1},
-        started_at = ${input.startedAt || null},
-        finished_at = ${input.finishedAt || null},
-        updated_at = ${new Date().toISOString()}
-      where id = ${existing.id}
-    `;
-    return existing.id;
-  }
-
-  const inserted = await sql<Array<{ id: string }>>`
-    insert into public.location_extraction_runs (
-      channel_id,
-      video_id,
-      status,
-      prompt_version,
-      model,
-      input,
-      output,
-      error_message,
-      attempts,
-      started_at,
-      finished_at,
-      updated_at
-    )
-    values (
-      ${input.channelId},
-      ${input.videoId},
-      ${input.status},
-      ${input.promptVersion},
-      ${input.model},
-      ${JSON.stringify(input.inputPayload || {})}::jsonb,
-      ${JSON.stringify(input.outputPayload || {})}::jsonb,
-      ${input.errorMessage || null},
-      ${input.attempts ?? 1},
-      ${input.startedAt || null},
-      ${input.finishedAt || null},
-      ${new Date().toISOString()}
-    )
-    returning id
-  `;
-  const row = inserted[0];
-  if (!row?.id) throw new Error("Could not create extraction run");
-  return row.id;
+function filterOutShortVideoIds(videoIds: string[], detailsByVideoId: Map<string, { is_short?: boolean }>) {
+  return videoIds.filter((videoId) => !detailsByVideoId.get(videoId)?.is_short);
 }
 
 async function upsertChannelImportRun(input: {
@@ -271,187 +109,203 @@ async function upsertChannelImportRun(input: {
   return input.importRunId;
 }
 
-async function extractLocationForVideo(channel: { channel_name: string; description: string | null }, video: {
-  title: string;
-  description: string | null;
-  published_at: string | null;
-  youtube_video_id: string;
-}) {
-  type ExtractionOrigin = "gemini" | "heuristic";
-
-  function buildHeuristicFallback() {
-    const heuristic = runHeuristicLocation(video.title, video.description || null);
-    if (!heuristic) {
-      return {
-        extraction: extractionSchema.parse({
-          has_location: false,
-          primary_location: null,
-          additional_locations: [],
-          summary: "heuristic_fallback_no_match",
-        }),
-        origin: "heuristic" as ExtractionOrigin,
-      };
-    }
-
-    return {
-      extraction: extractionSchema.parse({
-        has_location: true,
-        primary_location: {
-          country_code: heuristic.countryCode,
-          country_name: heuristic.countryCode,
-          city: null,
-          region: null,
-          location_label: heuristic.query,
-          confidence: heuristic.score,
-          travel_type: null,
-        },
-        additional_locations: [],
-        summary: "heuristic_fallback",
-      }),
-      origin: "heuristic" as ExtractionOrigin,
-    };
-  }
-
-  if (!hasGeminiApiKey()) {
-    return buildHeuristicFallback();
-  }
-
-  try {
-    const ai = getGeminiClient();
-    const response = await ai.models.generateContent({
-      model: getGeminiModel(),
-      contents: `${LOCATION_PROMPT}
-
-Channel: ${channel.channel_name}
-Channel description: ${channel.description || "No description"}
-Video title: ${video.title}
-Video description: ${(video.description || "").slice(0, 5000)}
-Published at: ${video.published_at || "unknown"}
-
-Return the location data only. If there are several places, focus on the main filming destination.`,
-      config: {
-        responseMimeType: "application/json",
-        responseJsonSchema: geminiJsonSchema,
-      },
-    });
-
-    return {
-      extraction: extractionSchema.parse(JSON.parse(response.text || "{}")),
-      origin: "gemini" as ExtractionOrigin,
-    };
-  } catch {
-    return buildHeuristicFallback();
-  }
-}
-
-function createGeoQuery(primaryLocation: z.infer<typeof locationSchema>) {
-  return [primaryLocation.location_label, primaryLocation.city, primaryLocation.region, primaryLocation.country_name]
-    .filter(Boolean)
-    .join(", ");
-}
-
-function normalize(text: string) {
-  return String(text || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function flagToCountryCode(text: string) {
-  const codepoints = Array.from(String(text || "")).map((char) => char.codePointAt(0) || 0);
-  const base = 0x1f1e6;
-  for (let index = 0; index < codepoints.length - 1; index += 1) {
-    const first = codepoints[index];
-    const second = codepoints[index + 1];
-    if (first < base || first > base + 25) continue;
-    if (second < base || second > base + 25) continue;
-    return `${String.fromCharCode(first - base + 65)}${String.fromCharCode(second - base + 65)}`;
-  }
-  return null;
-}
-
-function runHeuristicLocation(title: string, description: string | null) {
-  const merged = `${title} ${(description || "").slice(0, 2500)}`;
-  const normalized = normalize(merged);
-  const fromFlag = flagToCountryCode(merged);
-
-  if (fromFlag) {
-    return {
-      query: fromFlag,
-      countryCode: fromFlag,
-      score: 0.9,
-    };
-  }
-
-  for (const [countryCode, hints] of Object.entries(COUNTRY_HINTS)) {
-    for (const hint of hints) {
-      const token = normalize(hint);
-      if (!token) continue;
-      if (!normalized.includes(token)) continue;
-      const isCityHint = hint.includes(" ");
-      return {
-        query: hint,
-        countryCode,
-        score: isCityHint ? 0.82 : 0.68,
-      };
-    }
-  }
-
-  return null;
-}
-
-function toTravelVideoLocation(input: {
+async function upsertVideoSkeleton(input: {
+  channelId: string;
   youtubeVideoId: string;
-  title: string;
-  thumbnailUrl: string | null;
-  publishedAt: string | null;
-  viewCount: number | null;
-  location: z.infer<typeof locationSchema>;
-  geo: Awaited<ReturnType<typeof geocodeLocation>>;
-}): TravelVideoLocation | null {
-  if (!input.geo) return null;
-
-  return {
-    youtube_video_id: input.youtubeVideoId,
-    title: input.title,
-    thumbnail_url: input.thumbnailUrl,
-    published_at: input.publishedAt,
-    view_count: input.viewCount,
-    travel_type: input.location.travel_type || null,
-    country_code: input.geo.countryCode || input.location.country_code || "XX",
-    country_name: input.geo.countryName || input.location.country_name || input.geo.countryCode || "Unknown",
-    location_label: input.location.location_label || input.geo.label,
-    lat: input.geo.lat,
-    lng: input.geo.lng,
-    confidence_score: input.location.confidence ?? null,
-  };
+  details: Awaited<ReturnType<typeof loadVideoDetails>> extends Map<string, infer T> ? T : never;
+  sourcePayload: Record<string, unknown>;
+}) {
+  const now = new Date().toISOString();
+  const rows = await sql<Array<{ id: string }>>`
+    insert into public.videos (
+      channel_id,
+      youtube_video_id,
+      title,
+      description,
+      thumbnail_url,
+      published_at,
+      view_count,
+      like_count,
+      comment_count,
+      duration_seconds,
+      is_short,
+      recording_lat,
+      recording_lng,
+      recording_location_description,
+      location_status,
+      playlist_signals,
+      geo_hints,
+      source_payload,
+      updated_at
+    )
+    values (
+      ${input.channelId},
+      ${input.youtubeVideoId},
+      ${input.details?.title || "Untitled video"},
+      ${input.details?.description || null},
+      ${input.details?.thumbnail_url || null},
+      ${input.details?.published_at || null},
+      ${input.details?.view_count ?? 0},
+      ${input.details?.like_count ?? null},
+      ${input.details?.comment_count ?? null},
+      ${input.details?.duration_seconds ?? null},
+      ${Boolean(input.details?.is_short)},
+      ${input.details?.recording_lat ?? null},
+      ${input.details?.recording_lng ?? null},
+      ${input.details?.recording_location_description ?? null},
+      'processing',
+      '[]'::jsonb,
+      '[]'::jsonb,
+      ${JSON.stringify(input.sourcePayload)}::jsonb,
+      ${now}
+    )
+    on conflict (channel_id, youtube_video_id)
+    do update set
+      title = excluded.title,
+      description = excluded.description,
+      thumbnail_url = excluded.thumbnail_url,
+      published_at = excluded.published_at,
+      view_count = excluded.view_count,
+      like_count = excluded.like_count,
+      comment_count = excluded.comment_count,
+      duration_seconds = excluded.duration_seconds,
+      is_short = excluded.is_short,
+      recording_lat = excluded.recording_lat,
+      recording_lng = excluded.recording_lng,
+      recording_location_description = excluded.recording_location_description,
+      source_payload = excluded.source_payload,
+      updated_at = excluded.updated_at
+    returning id
+  `;
+  const row = rows[0];
+  if (!row?.id) throw new Error(`Could not persist video ${input.youtubeVideoId}`);
+  return row.id;
 }
 
-async function processVideosInBatches<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>) {
-  const results: R[] = [];
-  let index = 0;
+async function loadPrimaryLocations(channelId: string) {
+  const rows = await sql<
+    Array<{
+      country_code: string;
+      country_name: string | null;
+      location_label: string | null;
+      city: string | null;
+      region: string | null;
+      lat: number | string;
+      lng: number | string;
+      confidence_score: number | string | null;
+      location_score: number | string | null;
+      verification_source: string | null;
+      location_evidence: Record<string, unknown> | null;
+      location_precision: string | null;
+      source: string | null;
+      youtube_video_id: string;
+      title: string;
+      description: string | null;
+      thumbnail_url: string | null;
+      published_at: string | null;
+      view_count: number | string | null;
+      like_count: number | string | null;
+      comment_count: number | string | null;
+      duration_seconds: number | string | null;
+      is_short: boolean | null;
+      is_travel: boolean | null;
+      travel_score: number | string | null;
+      travel_signals: string[] | null;
+      inclusion_reason: string | null;
+      exclusion_reason: string | null;
+      recording_lat: number | string | null;
+      recording_lng: number | string | null;
+      recording_location_description: string | null;
+      location_status: string | null;
+      playlist_signals: Array<Record<string, unknown>> | null;
+      geo_hints: Array<Record<string, unknown>> | null;
+      needs_manual_reason: string | null;
+    }>
+  >`
+    select
+      vl.country_code,
+      vl.country_name,
+      vl.location_label,
+      vl.city,
+      vl.region,
+      vl.lat,
+      vl.lng,
+      vl.confidence_score,
+      vl.location_score,
+      vl.verification_source,
+      vl.location_evidence,
+      vl.location_precision,
+      vl.source,
+      v.youtube_video_id,
+      v.title,
+      v.description,
+      v.thumbnail_url,
+      v.published_at,
+      v.view_count,
+      v.like_count,
+      v.comment_count,
+      v.duration_seconds,
+      v.is_short,
+      v.is_travel,
+      v.travel_score,
+      v.travel_signals,
+      v.inclusion_reason,
+      v.exclusion_reason,
+      v.recording_lat,
+      v.recording_lng,
+      v.recording_location_description,
+      v.location_status,
+      v.playlist_signals,
+      v.geo_hints,
+      v.needs_manual_reason
+    from public.video_locations vl
+    inner join public.videos v on v.id = vl.video_id
+    where vl.channel_id = ${channelId}
+      and vl.is_primary = true
+      and v.location_status in ('mapped', 'verified_auto', 'verified_manual')
+      and coalesce(v.is_travel, true) = true
+      and coalesce(v.is_short, false) = false
+    order by vl.created_at desc
+  `;
 
-  const runners = Array.from({ length: Math.max(1, concurrency) }, async () => {
-    while (index < items.length) {
-      const current = index++;
-      results[current] = await worker(items[current], current);
-    }
-  });
-
-  await Promise.all(runners);
-  return results;
-}
-
-function filterOutShortPlaylistItems<T extends { contentDetails?: { videoId?: string } }>(
-  playlistItems: T[],
-  detailsByVideoId: Map<string, { is_short?: boolean }>
-) {
-  return playlistItems.filter((item) => {
-    const videoId = item.contentDetails?.videoId;
-    if (!videoId) return false;
-    const details = detailsByVideoId.get(videoId);
-    return !details?.is_short;
-  });
+  return rows.map((row) => ({
+    youtube_video_id: row.youtube_video_id,
+    video_url: `https://youtube.com/watch?v=${row.youtube_video_id}`,
+    title: row.title,
+    description: row.description,
+    thumbnail_url: row.thumbnail_url,
+    published_at: row.published_at,
+    view_count: Number(row.view_count || 0),
+    like_count: Number(row.like_count || 0) || null,
+    comment_count: Number(row.comment_count || 0) || null,
+    duration_seconds: Number(row.duration_seconds || 0) || null,
+    is_short: Boolean(row.is_short),
+    is_travel: row.is_travel !== false,
+    travel_score: Number(row.travel_score || 0) || null,
+    travel_signals: Array.isArray(row.travel_signals) ? row.travel_signals : [],
+    inclusion_reason: row.inclusion_reason || null,
+    exclusion_reason: row.exclusion_reason || null,
+    recording_lat: Number(row.recording_lat || 0) || null,
+    recording_lng: Number(row.recording_lng || 0) || null,
+    recording_location_description: row.recording_location_description || null,
+    country_code: row.country_code,
+    country_name: row.country_name || row.country_code,
+    location_label: row.location_label,
+    city: row.city,
+    region: row.region,
+    lat: Number(row.lat),
+    lng: Number(row.lng),
+    confidence_score: Number(row.confidence_score || 0) || null,
+    location_status: row.location_status as TravelVideoLocation["location_status"],
+    verification_source: row.verification_source as TravelVideoLocation["verification_source"],
+    location_source: row.source || null,
+    location_score: Number(row.location_score || 0) || null,
+    location_evidence: row.location_evidence || null,
+    playlist_signals: Array.isArray(row.playlist_signals) ? row.playlist_signals : [],
+    geo_hints: Array.isArray(row.geo_hints) ? row.geo_hints : [],
+    location_precision: (row.location_precision as TravelVideoLocation["location_precision"]) || "unresolved",
+    needs_manual_reason: row.needs_manual_reason || null,
+  } satisfies TravelVideoLocation));
 }
 
 export async function importYoutubeChannelPreview(channelUrl: string): Promise<ImportYoutubeChannelResult> {
@@ -463,61 +317,39 @@ export async function importYoutubeChannelPreview(channelUrl: string): Promise<I
   const playlistVideos = await loadUploadsPlaylistVideos(source.uploads_playlist_id);
   const videoIds = playlistVideos.map((video) => video.contentDetails?.videoId).filter(Boolean) as string[];
   const videoDetails = videoIds.length ? await loadVideoDetails(videoIds) : new Map();
-  const eligiblePlaylistVideos = filterOutShortPlaylistItems(playlistVideos, videoDetails);
+  const playlistSignals = source.youtube_channel_id ? await loadChannelPlaylistSignals(source.youtube_channel_id) : new Map();
+  const eligibleVideoIds = filterOutShortVideoIds(videoIds, videoDetails);
+  const previewLocations: TravelVideoLocation[] = [];
 
-  const extractedLocations = await processVideosInBatches(eligiblePlaylistVideos, 3, async (playlistItem) => {
-    const videoId = playlistItem.contentDetails?.videoId;
-    if (!videoId) return null;
-
+  await processVideosInBatches(eligibleVideoIds.slice(0, 24), 3, async (videoId) => {
     const details = videoDetails.get(videoId);
-    const title = details?.title || playlistItem.snippet?.title || "Untitled video";
-    const description = details?.description || playlistItem.snippet?.description || null;
-    const thumbnailUrl =
-      details?.thumbnail_url ||
-      playlistItem.snippet?.thumbnails?.high?.url ||
-      playlistItem.snippet?.thumbnails?.medium?.url ||
-      playlistItem.snippet?.thumbnails?.default?.url ||
-      null;
-    const publishedAt = details?.published_at || playlistItem.snippet?.publishedAt || playlistItem.contentDetails?.videoPublishedAt || null;
-    const viewCount = details?.view_count ?? null;
+    if (!details) return;
 
-    const extractionAttempt = await extractLocationForVideo(
-      { channel_name: source.channel_name, description: source.description },
-      {
-        title,
-        description,
-        published_at: publishedAt,
-        youtube_video_id: videoId,
-      }
-    );
-    const extraction = extractionAttempt.extraction;
-
-    if (extractionAttempt.origin !== "gemini") {
-      return null;
-    }
-
-    if (!extraction.has_location || !extraction.primary_location) {
-      return null;
-    }
-
-    const geo = await geocodeLocation(createGeoQuery(extraction.primary_location));
-    if (!geo) {
-      return null;
-    }
-
-    return toTravelVideoLocation({
+    const analysis = await analyzeVideoLocation({
+      channelName: source.channel_name,
+      channelDescription: source.description,
       youtubeVideoId: videoId,
-      title,
-      thumbnailUrl,
-      publishedAt,
-      viewCount,
-      location: extraction.primary_location,
-      geo,
+      title: details.title,
+      description: details.description,
+      publishedAt: details.published_at,
+      playlistSignals: playlistSignals.get(videoId) || [],
+      recordingLat: details.recording_lat,
+      recordingLng: details.recording_lng,
+      recordingLocationDescription: details.recording_location_description,
+      mode: "initial",
     });
-  });
 
-  const videoLocations = extractedLocations.filter(Boolean) as TravelVideoLocation[];
-  const importedVideos = eligiblePlaylistVideos.length;
+    if (analysis.primaryLocation && analysis.locationStatus === "verified_auto") {
+      previewLocations.push({
+        ...analysis.primaryLocation,
+        thumbnail_url: details.thumbnail_url,
+        published_at: details.published_at,
+        view_count: details.view_count,
+        like_count: details.like_count,
+        comment_count: details.comment_count,
+      });
+    }
+  });
 
   return {
     import_run_id: importRunId,
@@ -530,10 +362,10 @@ export async function importYoutubeChannelPreview(channelUrl: string): Promise<I
       thumbnail_url: source.thumbnail_url,
       subscriber_count: source.subscriber_count,
     },
-    videoLocations,
-    importedVideos,
-    mappedVideos: videoLocations.length,
-    skippedVideos: importedVideos - videoLocations.length,
+    videoLocations: previewLocations,
+    importedVideos: eligibleVideoIds.length,
+    mappedVideos: previewLocations.length,
+    skippedVideos: eligibleVideoIds.length - previewLocations.length,
     channelSource: {
       youtube_channel_id: source.youtube_channel_id,
       channel_name: source.channel_name,
@@ -603,32 +435,31 @@ export async function importYoutubeChannel({
     const uploadChannel = channelRows[0];
     if (!uploadChannel) throw new Error("Could not save channel");
 
-    const initialOutput = {
-      totalVideos: 0,
-      processedVideos: 0,
-      mappedVideos: 0,
-      skippedVideos: 0,
-      countriesMapped: 0,
-      totalViews: 0,
-      stage: "starting",
-      progress: 0,
-    };
-
     await upsertChannelImportRun({
       importRunId,
       channelId: uploadChannel.id,
       status: "running",
       source: "youtube",
       inputPayload: { channelUrl },
-      outputPayload: initialOutput,
+      outputPayload: {
+        totalVideos: 0,
+        processedVideos: 0,
+        mappedVideos: 0,
+        skippedVideos: 0,
+        countriesMapped: 0,
+        totalViews: 0,
+        stage: "starting",
+        progress: 0,
+      },
       startedAt,
     });
 
     const playlistVideos = await loadUploadsPlaylistVideos(source.uploads_playlist_id);
     const videoIds = playlistVideos.map((video) => video.contentDetails?.videoId).filter(Boolean) as string[];
     const videoDetails = videoIds.length ? await loadVideoDetails(videoIds) : new Map();
-    const eligiblePlaylistVideos = filterOutShortPlaylistItems(playlistVideos, videoDetails);
-    const eligibleVideoCount = eligiblePlaylistVideos.length;
+    const playlistSignals = source.youtube_channel_id ? await loadChannelPlaylistSignals(source.youtube_channel_id) : new Map();
+    const eligibleVideoIds = filterOutShortVideoIds(videoIds, videoDetails);
+
     let processedVideos = 0;
     let mappedVideos = 0;
     let skippedVideos = 0;
@@ -643,14 +474,14 @@ export async function importYoutubeChannel({
         source: "youtube",
         inputPayload: { channelUrl },
         outputPayload: {
-          totalVideos: eligibleVideoCount,
+          totalVideos: eligibleVideoIds.length,
           processedVideos,
           mappedVideos,
           skippedVideos,
           countriesMapped: mappedCountryCodes.size,
           totalViews: mappedViews,
           stage,
-          progress: eligibleVideoCount > 0 ? Number((processedVideos / eligibleVideoCount).toFixed(4)) : 1,
+          progress: eligibleVideoIds.length > 0 ? Number((processedVideos / eligibleVideoIds.length).toFixed(4)) : 1,
         },
         startedAt,
       });
@@ -658,392 +489,64 @@ export async function importYoutubeChannel({
 
     await updateProgress("loading");
 
-    await processVideosInBatches(eligiblePlaylistVideos, 3, async (playlistItem) => {
-      const videoId = playlistItem.contentDetails?.videoId;
-      if (!videoId) return null;
-
+    await processVideosInBatches(eligibleVideoIds, 3, async (videoId) => {
       const details = videoDetails.get(videoId);
-      const title = details?.title || playlistItem.snippet?.title || "Untitled video";
-      const description = details?.description || playlistItem.snippet?.description || null;
-      const thumbnailUrl = details?.thumbnail_url || playlistItem.snippet?.thumbnails?.high?.url || playlistItem.snippet?.thumbnails?.medium?.url || playlistItem.snippet?.thumbnails?.default?.url || null;
-      const publishedAt = details?.published_at || playlistItem.snippet?.publishedAt || playlistItem.contentDetails?.videoPublishedAt || null;
-      const viewCount = details?.view_count ?? null;
+      if (!details) return;
 
-      const videoRows = await sql<Array<{ id: string }>>`
-        insert into public.videos (
-          channel_id,
-          youtube_video_id,
-          title,
-          description,
-          thumbnail_url,
-          published_at,
-          view_count,
-          like_count,
-          comment_count,
-          travel_type,
-          location_status,
-          needs_manual_reason,
-          source_payload,
-          updated_at
-        )
-        values (
-          ${uploadChannel.id},
-          ${videoId},
-          ${title},
-          ${description},
-          ${thumbnailUrl},
-          ${publishedAt},
-          ${viewCount ?? 0},
-          ${details?.like_count ?? null},
-          ${details?.comment_count ?? null},
-          null,
-          'processing',
-          null,
-          ${JSON.stringify({
-            playlist_item: playlistItem,
-            video_details: details?.raw || null,
-          })}::jsonb,
-          ${new Date().toISOString()}
-        )
-        on conflict (channel_id, youtube_video_id)
-        do update set
-          title = excluded.title,
-          description = excluded.description,
-          thumbnail_url = excluded.thumbnail_url,
-          published_at = excluded.published_at,
-          view_count = excluded.view_count,
-          like_count = excluded.like_count,
-          comment_count = excluded.comment_count,
-          travel_type = excluded.travel_type,
-          location_status = excluded.location_status,
-          needs_manual_reason = excluded.needs_manual_reason,
-          source_payload = excluded.source_payload,
-          updated_at = excluded.updated_at
-        returning id
-      `;
-      const videoRecordId = videoRows[0]?.id;
-      if (!videoRecordId) {
-        throw new Error(`Could not persist video ${videoId}`);
-      }
-      const now = new Date().toISOString();
-
-      const extractionAttempt = await extractLocationForVideo(
-        { channel_name: uploadChannel.channel_name, description: uploadChannel.description },
-        {
-          title,
-          description,
-          published_at: publishedAt,
-          youtube_video_id: videoId,
-        }
-      );
-      const extraction = extractionAttempt.extraction;
-      const fallbackToManualReason = extractionAttempt.origin === "heuristic"
-        ? "Fallback heuristico detectado: requiere revision manual."
-        : "No se detecto una ubicacion confiable automaticamente.";
-
-      if (extractionAttempt.origin === "heuristic") {
-        await sql`
-          delete from public.video_locations
-          where video_id = ${videoRecordId}
-        `;
-        await sql`
-          update public.videos
-          set
-            travel_type = ${extraction.primary_location?.travel_type || null},
-            location_status = 'needs_manual',
-            needs_manual_reason = ${fallbackToManualReason},
-            updated_at = ${now}
-          where id = ${videoRecordId}
-        `;
-        processedVideos += 1;
-        skippedVideos += 1;
-        await updateProgress("mapping");
-
-        await upsertExtractionRun({
-          channelId: uploadChannel.id,
-          videoId: videoRecordId,
-          status: "completed",
-          promptVersion: "gemini-v1",
-          model: getGeminiModel(),
-          inputPayload: {
-            channel: source,
-            video: { title, description, publishedAt, videoId },
-          },
-          outputPayload: {
-            ...extraction,
-            fallback_origin: extractionAttempt.origin,
-          },
-          startedAt: now,
-          finishedAt: now,
-        });
-
-        return null;
-      }
-
-      if (!extraction.has_location || !extraction.primary_location) {
-        await sql`
-          delete from public.video_locations
-          where video_id = ${videoRecordId}
-        `;
-        await sql`
-          update public.videos
-          set
-            travel_type = null,
-            location_status = 'needs_manual',
-            needs_manual_reason = ${fallbackToManualReason},
-            updated_at = ${now}
-          where id = ${videoRecordId}
-        `;
-        processedVideos += 1;
-        skippedVideos += 1;
-        await updateProgress("mapping");
-
-        await upsertExtractionRun({
-          channelId: uploadChannel.id,
-          videoId: videoRecordId,
-          status: "completed",
-          promptVersion: "gemini-v1",
-          model: getGeminiModel(),
-          inputPayload: {
-            channel: source,
-            video: { title, description, publishedAt, videoId },
-          },
-          outputPayload: extraction,
-          startedAt: now,
-          finishedAt: now,
-        });
-
-        return null;
-      }
-
-      const geo = await geocodeLocation(createGeoQuery(extraction.primary_location));
-      if (!geo) {
-        await sql`
-          delete from public.video_locations
-          where video_id = ${videoRecordId}
-        `;
-        await sql`
-          update public.videos
-          set
-            travel_type = ${extraction.primary_location.travel_type || null},
-            location_status = 'needs_manual',
-            needs_manual_reason = 'No se pudo geocodificar automaticamente la ubicacion detectada.',
-            updated_at = ${now}
-          where id = ${videoRecordId}
-        `;
-        processedVideos += 1;
-        skippedVideos += 1;
-        await updateProgress("geocoding");
-
-        await upsertExtractionRun({
-          channelId: uploadChannel.id,
-          videoId: videoRecordId,
-          status: "failed",
-          promptVersion: "gemini-v1",
-          model: getGeminiModel(),
-          inputPayload: {
-            channel: source,
-            video: { title, description, publishedAt, videoId },
-          },
-          outputPayload: extraction,
-          errorMessage: "Geocoding failed",
-          startedAt: now,
-          finishedAt: now,
-        });
-
-        return null;
-      }
-
-      const primaryLocation = toTravelVideoLocation({
-        youtubeVideoId: videoId,
-        title,
-        thumbnailUrl,
-        publishedAt,
-        viewCount,
-        location: extraction.primary_location,
-        geo,
-      });
-
-      if (!primaryLocation) return null;
-
-      await sql`
-        delete from public.video_locations
-        where video_id = ${videoRecordId}
-      `;
-      await sql`
-        insert into public.video_locations (
-          id,
-          channel_id,
-          video_id,
-          is_primary,
-          country_code,
-          country_name,
-          location_label,
-          city,
-          region,
-          lat,
-          lng,
-          confidence_score,
-          travel_type,
-          source,
-          raw_payload
-        )
-        values (
-          ${randomUUID()},
-          ${uploadChannel.id},
-          ${videoRecordId},
-          true,
-          ${primaryLocation.country_code},
-          ${primaryLocation.country_name || null},
-          ${primaryLocation.location_label || null},
-          ${extraction.primary_location.city || geo.city || null},
-          ${extraction.primary_location.region || geo.region || null},
-          ${primaryLocation.lat},
-          ${primaryLocation.lng},
-          ${primaryLocation.confidence_score || null},
-          ${primaryLocation.travel_type || null},
-          'gemini',
-          ${JSON.stringify({
-            gemini: extraction,
-            geocode: geo.raw,
-          })}::jsonb
-        )
-      `;
-
-      for (const extra of extraction.additional_locations) {
-        const extraGeo = await geocodeLocation(createGeoQuery(extra));
-        if (!extraGeo) continue;
-
-        await sql`
-          insert into public.video_locations (
-            id,
-            channel_id,
-            video_id,
-            is_primary,
-            country_code,
-            country_name,
-            location_label,
-            city,
-            region,
-            lat,
-            lng,
-            confidence_score,
-            travel_type,
-            source,
-            raw_payload
-          )
-          values (
-            ${randomUUID()},
-            ${uploadChannel.id},
-            ${videoRecordId},
-            false,
-            ${extraGeo.countryCode || extra.country_code || "XX"},
-            ${extraGeo.countryName || extra.country_name || "Unknown"},
-            ${extra.location_label || extraGeo.label || null},
-            ${extra.city || extraGeo.city || null},
-            ${extra.region || extraGeo.region || null},
-            ${extraGeo.lat},
-            ${extraGeo.lng},
-            ${extra.confidence ?? null},
-            ${extra.travel_type || null},
-            'gemini',
-            ${JSON.stringify({
-              gemini: extraction,
-              geocode: extraGeo.raw,
-            })}::jsonb
-          )
-        `;
-      }
-
-      await sql`
-        update public.videos
-        set
-          travel_type = ${primaryLocation.travel_type || null},
-          location_status = 'mapped',
-          needs_manual_reason = null,
-          updated_at = ${now}
-        where id = ${videoRecordId}
-      `;
-      processedVideos += 1;
-      mappedVideos += 1;
-      mappedViews += Number(viewCount || 0);
-      mappedCountryCodes.add(String(primaryLocation.country_code || "").trim().toUpperCase());
-      await updateProgress("done");
-
-      await upsertExtractionRun({
+      const videoRecordId = await upsertVideoSkeleton({
         channelId: uploadChannel.id,
-        videoId: videoRecordId,
-        status: "completed",
-        promptVersion: "gemini-v1",
-        model: getGeminiModel(),
-        inputPayload: {
-          channel: source,
-          video: { title, description, publishedAt, videoId },
+        youtubeVideoId: videoId,
+        details,
+        sourcePayload: {
+          video_details: details.raw || null,
         },
-        outputPayload: {
-          gemini: extraction,
-          geocode: geo.raw,
-        },
-        startedAt: now,
-        finishedAt: now,
       });
 
-      return primaryLocation;
+      const analysis = await analyzeVideoLocation({
+        channelName: uploadChannel.channel_name,
+        channelDescription: uploadChannel.description,
+        youtubeVideoId: videoId,
+        title: details.title,
+        description: details.description,
+        publishedAt: details.published_at,
+        playlistSignals: playlistSignals.get(videoId) || [],
+        recordingLat: details.recording_lat,
+        recordingLng: details.recording_lng,
+        recordingLocationDescription: details.recording_location_description,
+        mode: "initial",
+      });
+
+      const persistedLocation = await persistVideoAnalysis({
+        channelId: uploadChannel.id,
+        videoRecordId,
+        youtubeVideoId: videoId,
+        title: details.title,
+        description: details.description,
+        thumbnailUrl: details.thumbnail_url,
+        publishedAt: details.published_at,
+        viewCount: details.view_count,
+        likeCount: details.like_count,
+        commentCount: details.comment_count,
+        durationSeconds: details.duration_seconds,
+        recordingLat: details.recording_lat,
+        recordingLng: details.recording_lng,
+        recordingLocationDescription: details.recording_location_description,
+        analysis,
+      });
+
+      processedVideos += 1;
+      if (analysis.locationStatus === "verified_auto" && persistedLocation) {
+        mappedVideos += 1;
+        mappedViews += Number(details.view_count || 0);
+        mappedCountryCodes.add(String(persistedLocation.country_code || "").trim().toUpperCase());
+      } else {
+        skippedVideos += 1;
+      }
+
+      await updateProgress(processedVideos === eligibleVideoIds.length ? "completed" : "mapping");
     });
 
-    const allLocations = await sql<
-      Array<{
-        country_code: string;
-        country_name: string | null;
-        location_label: string | null;
-        lat: number | string;
-        lng: number | string;
-        confidence_score: number | string | null;
-        travel_type: string | null;
-        youtube_video_id: string;
-        title: string;
-        description: string | null;
-        thumbnail_url: string | null;
-        published_at: string | null;
-        view_count: number | string | null;
-      }>
-    >`
-      select
-        vl.country_code,
-        vl.country_name,
-        vl.location_label,
-        vl.lat,
-        vl.lng,
-        vl.confidence_score,
-        vl.travel_type,
-        v.youtube_video_id,
-        v.title,
-        v.description,
-        v.thumbnail_url,
-        v.published_at,
-        v.view_count
-      from public.video_locations vl
-      inner join public.videos v on v.id = vl.video_id
-      where vl.channel_id = ${uploadChannel.id}
-        and vl.is_primary = true
-      order by vl.created_at desc
-    `;
-
-    const normalizedLocations = allLocations.map((row) => ({
-      youtube_video_id: row.youtube_video_id,
-      title: row.title,
-      description: row.description,
-      thumbnail_url: row.thumbnail_url,
-      published_at: row.published_at,
-      view_count: Number(row.view_count || 0),
-      travel_type: row.travel_type,
-      country_code: row.country_code,
-      country_name: row.country_name || row.country_code,
-      location_label: row.location_label,
-      lat: Number(row.lat),
-      lng: Number(row.lng),
-      confidence_score: Number(row.confidence_score || 0),
-    } satisfies TravelVideoLocation));
+    const normalizedLocations = await loadPrimaryLocations(uploadChannel.id);
 
     const channel: TravelChannel = {
       id: uploadChannel.id,
@@ -1059,8 +562,8 @@ export async function importYoutubeChannel({
       set
         status = 'completed',
         output = ${JSON.stringify({
-          totalVideos: eligibleVideoCount,
-          processedVideos: eligibleVideoCount,
+          totalVideos: eligibleVideoIds.length,
+          processedVideos,
           mappedVideos: normalizedLocations.length,
           skippedVideos,
           countriesMapped: new Set(normalizedLocations.map((row) => String(row.country_code || "").trim().toUpperCase()).filter(Boolean)).size,
@@ -1110,7 +613,7 @@ export async function importYoutubeChannel({
       import_run_id: importRunId,
       channel,
       videoLocations: normalizedLocations,
-      importedVideos: eligibleVideoCount,
+      importedVideos: eligibleVideoIds.length,
       mappedVideos: normalizedLocations.length,
       skippedVideos,
       channelSource: {

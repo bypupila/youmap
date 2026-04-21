@@ -11,7 +11,7 @@ const payloadSchema = z.object({
   channelId: z.string().uuid(),
   videoId: z.string().uuid(),
   country_code: z.string().length(2),
-  city: z.string().min(1),
+  city: z.string().trim().optional().default(""),
 });
 
 export async function GET(request: Request) {
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       channelId: payload.channelId,
       videoId: payload.videoId,
       countryCode: payload.country_code.toUpperCase(),
-      city: payload.city.trim(),
+      city: payload.city.trim() || null,
     });
 
     return NextResponse.json({ ok: true, location });

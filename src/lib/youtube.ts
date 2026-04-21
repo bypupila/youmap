@@ -1,4 +1,5 @@
 import { readRequiredEnv, sanitizeEnvValue } from "@/lib/env";
+import { detectCatalogPlaces, NON_TRAVEL_PLAYLIST_KEYWORDS, normalizeForLookup, TRAVEL_KEYWORDS } from "@/lib/video-location-catalog";
 import { loadPublicChannelFeedVideos, validateYouTubeChannelWithoutApiKey } from "@/lib/youtube-public";
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
@@ -159,34 +160,24 @@ function isYouTubeShort(params: { durationSeconds: number | null; title?: string
   return false;
 }
 
-const TRAVEL_PLAYLIST_HINTS = [
-  "travel",
-  "trip",
-  "journey",
-  "world",
-  "viaje",
-  "viajes",
-  "turismo",
-  "aventura",
-  "adventure",
-  "vacation",
-  "vacaciones",
-  "backpacking",
-  "roadtrip",
-  "road trip",
-  "nomad",
-];
-
-function normalize(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+function looksLikeTravelPlaylist(input: { title?: string; description?: string }) {
+  const merged = normalizeForLookup(`${input.title || ""} ${input.description || ""}`);
+  return TRAVEL_KEYWORDS.some((hint) => merged.includes(normalizeForLookup(hint)));
 }
 
-function looksLikeTravelPlaylist(input: { title?: string; description?: string }) {
-  const merged = normalize(`${input.title || ""} ${input.description || ""}`);
-  return TRAVEL_PLAYLIST_HINTS.some((hint) => merged.includes(normalize(hint)));
+function looksLikeNonTravelPlaylist(input: { title?: string; description?: string }) {
+  const merged = normalizeForLookup(`${input.title || ""} ${input.description || ""}`);
+  return NON_TRAVEL_PLAYLIST_KEYWORDS.some((hint) => merged.includes(normalizeForLookup(hint)));
+}
+
+export type PlaylistSignalClassification = "travel" | "geo-specific" | "non-travel" | "ambiguous";
+
+export interface YouTubePlaylistGeoSignal {
+  playlistId: string;
+  title: string;
+  description: string | null;
+  classification: PlaylistSignalClassification;
+  matchedPlaces: ReturnType<typeof detectCatalogPlaces>;
 }
 
 function getYoutubeApiKey() {
@@ -608,7 +599,18 @@ export async function loadVideoDetails(videoIds: string[]) {
 }
 
 export async function loadTravelPlaylistVideoIds(channelId: string) {
-  const playlistIds: string[] = [];
+  const signalMap = await loadChannelPlaylistSignals(channelId);
+  const videoIds = new Set<string>();
+  for (const [videoId, signals] of signalMap.entries()) {
+    if (signals.some((signal) => signal.classification === "travel" || signal.classification === "geo-specific")) {
+      videoIds.add(videoId);
+    }
+  }
+  return videoIds;
+}
+
+export async function loadChannelPlaylistSignals(channelId: string) {
+  const relevantPlaylists: YouTubePlaylistGeoSignal[] = [];
   let playlistToken: string | undefined;
 
   do {
@@ -630,20 +632,37 @@ export async function loadTravelPlaylistVideoIds(channelId: string) {
 
     for (const playlist of response.items || []) {
       if (!playlist.id) continue;
-      if (!looksLikeTravelPlaylist({
-        title: playlist.snippet?.title,
-        description: playlist.snippet?.description,
-      })) {
-        continue;
-      }
-      playlistIds.push(playlist.id);
+      const matchedPlaces = detectCatalogPlaces(`${playlist.snippet?.title || ""}\n${playlist.snippet?.description || ""}`);
+      const classification: PlaylistSignalClassification = matchedPlaces.length > 0
+        ? "geo-specific"
+        : looksLikeTravelPlaylist({
+              title: playlist.snippet?.title,
+              description: playlist.snippet?.description,
+            })
+          ? "travel"
+          : looksLikeNonTravelPlaylist({
+                title: playlist.snippet?.title,
+                description: playlist.snippet?.description,
+              })
+            ? "non-travel"
+            : "ambiguous";
+
+      if (classification === "non-travel") continue;
+
+      relevantPlaylists.push({
+        playlistId: playlist.id,
+        title: playlist.snippet?.title || "Untitled playlist",
+        description: playlist.snippet?.description || null,
+        classification,
+        matchedPlaces,
+      });
     }
 
     playlistToken = response.nextPageToken;
   } while (playlistToken);
 
-  const videoIds = new Set<string>();
-  for (const playlistId of playlistIds) {
+  const signalMap = new Map<string, YouTubePlaylistGeoSignal[]>();
+  for (const playlist of relevantPlaylists) {
     let itemToken: string | undefined;
     do {
       const response = await youtubeFetch<{
@@ -655,19 +674,22 @@ export async function loadTravelPlaylistVideoIds(channelId: string) {
         nextPageToken?: string;
       }>("playlistItems", {
         part: "contentDetails",
-        playlistId,
+        playlistId: playlist.playlistId,
         maxResults: 50,
         pageToken: itemToken,
       });
 
       for (const item of response.items || []) {
         const videoId = item.contentDetails?.videoId;
-        if (videoId) videoIds.add(videoId);
+        if (!videoId) continue;
+        const current = signalMap.get(videoId) || [];
+        current.push(playlist);
+        signalMap.set(videoId, current);
       }
 
       itemToken = response.nextPageToken;
     } while (itemToken);
   }
 
-  return videoIds;
+  return signalMap;
 }

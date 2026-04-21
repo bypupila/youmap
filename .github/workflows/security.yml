@@ -6,38 +6,54 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   tracked-secrets:
     name: Tracked Secrets Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Scan tracked files
         run: npm run security:secrets
+
+      - name: Verify workflow pinning
+        run: npm run security:workflow-pinning
+
+      - name: Enforce minimum package release age
+        env:
+          MIN_PACKAGE_RELEASE_AGE_HOURS: "72"
+        run: npm run security:deps-age
 
   history-secrets:
     name: History Secrets Scan
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20"
 

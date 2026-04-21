@@ -42,6 +42,8 @@ interface RawLocationRow {
   location_score: number | string | null;
   verification_source: string | null;
   location_evidence: Record<string, unknown> | null;
+  playlist_signals: Array<Record<string, unknown>> | null;
+  geo_hints: Array<Record<string, unknown>> | null;
   needs_manual_reason: string | null;
   source: string | null;
   video_id: string;
@@ -68,7 +70,10 @@ interface RawLocationRow {
   video_verification_source: string | null;
   video_location_score: number | string | null;
   video_location_evidence: Record<string, unknown> | null;
+  video_playlist_signals: Array<Record<string, unknown>> | null;
+  video_geo_hints: Array<Record<string, unknown>> | null;
   video_needs_manual_reason: string | null;
+  video_location_precision: string | null;
 }
 
 function computeSummary(videoLocations: TravelVideoLocation[], manualQueue: ManualVerificationItem[]): MapSummary {
@@ -212,6 +217,8 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         vl.verification_source,
         vl.location_evidence,
         vl.needs_manual_reason,
+        null::jsonb as playlist_signals,
+        null::jsonb as geo_hints,
         vl.source,
         v.id as video_id,
         v.youtube_video_id,
@@ -237,7 +244,11 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         v.verification_source as video_verification_source,
         v.location_score as video_location_score,
         v.location_evidence as video_location_evidence,
+        v.playlist_signals as video_playlist_signals,
+        v.geo_hints as video_geo_hints,
         v.needs_manual_reason as video_needs_manual_reason
+        ,
+        v.location_precision as video_location_precision
       from public.video_locations vl
       inner join public.videos v on v.id = vl.video_id
       where vl.channel_id = ${channelRow.id}
@@ -323,6 +334,10 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         verification_source: verificationSource,
         location_score: Number(row.video_location_score || row.location_score || 0) || null,
         location_evidence: (row.video_location_evidence || row.location_evidence || null) as Record<string, unknown> | null,
+        playlist_signals: Array.isArray(row.video_playlist_signals) ? row.video_playlist_signals : [],
+        geo_hints: Array.isArray(row.video_geo_hints) ? row.video_geo_hints : [],
+        location_precision:
+          (row.video_location_precision as TravelVideoLocation["location_precision"]) || "unresolved",
         needs_manual_reason: row.video_needs_manual_reason || row.needs_manual_reason || null,
       } satisfies TravelVideoLocation;
     })

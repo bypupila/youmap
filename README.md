@@ -109,6 +109,24 @@ Verificacion rapida local:
 npm run validate:env
 ```
 
+## Supply Chain Security
+
+El repo ahora endurece la cadena de suministro con:
+
+- Actions de GitHub fijados por commit SHA
+- instalacion de dependencias sin lifecycle scripts en el workflow de seguridad
+- politica minima de antiguedad para paquetes del lockfile
+- Dependabot para npm y GitHub Actions
+
+Checks disponibles:
+
+```bash
+npm run security:workflow-pinning
+npm run security:deps-age
+```
+
+Detalle operativo y mitigaciones aplicadas: `docs/security-supply-chain.md`
+
 ## Seguridad de secretos
 
 - Solo se permite commitear `.env.example`.

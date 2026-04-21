@@ -27,6 +27,9 @@ export interface TravelVideo {
   verification_source?: "heuristic" | "nominatim" | "gemini" | "manual" | "youtube_recording_details" | null;
   location_score?: number | null;
   location_evidence?: Record<string, unknown> | null;
+  playlist_signals?: Array<Record<string, unknown>> | null;
+  geo_hints?: Array<Record<string, unknown>> | null;
+  location_precision?: "city" | "region" | "country" | "unresolved" | null;
   needs_manual_reason?: string | null;
 }
 

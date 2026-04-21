@@ -95,6 +95,7 @@ export function MapExperience({
   const [lastSyncSummary, setLastSyncSummary] = useState<SyncSummary | null>(null);
   const [manualDrafts, setManualDrafts] = useState<Record<string, { country_code: string; city: string }>>({});
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [secondCheckState, setSecondCheckState] = useState<"idle" | "running" | "success" | "error">("idle");
   const [pollState, setPollState] = useState<MapPollRecord | null>(activePoll);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -260,22 +261,45 @@ export function MapExperience({
       city: video.city || "",
     };
 
-    if (!draft.country_code.trim() || !draft.city.trim()) return;
+    if (!draft.country_code.trim()) return;
 
     const response = await fetch("/api/map/manual-verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        channelId,
-        videoId: video.video_id,
-        country_code: draft.country_code.trim().toUpperCase(),
-        city: draft.city.trim(),
-      }),
-    });
+        body: JSON.stringify({
+          channelId,
+          videoId: video.video_id,
+          country_code: draft.country_code.trim().toUpperCase(),
+          city: draft.city.trim(),
+        }),
+      });
 
     const payload = (await response.json()) as { error?: string };
     if (!response.ok) throw new Error(payload.error || "No se pudo confirmar manualmente");
     await reloadMapData();
+  }
+
+  async function handleSecondCheck() {
+    if (!channelId || !viewer.isOwner) return;
+    setSecondCheckState("running");
+    setSyncError(null);
+
+    try {
+      const response = await fetch("/api/map/second-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId }),
+      });
+      const payload = (await response.json()) as { summary?: SyncSummary; manualQueue?: ManualVerificationItem[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo completar la segunda pasada.");
+      setLastSyncSummary(payload.summary || null);
+      setPendingManual(payload.manualQueue || []);
+      await reloadMapData();
+      setSecondCheckState("success");
+    } catch (error) {
+      setSecondCheckState("error");
+      setSyncError(error instanceof Error ? error.message : "Error de segunda pasada");
+    }
   }
 
   function locateFirstSearchResult() {
@@ -466,7 +490,7 @@ export function MapExperience({
                       <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">{channel.channel_name}</CardTitle>
                     </div>
                     {allowRefresh ? (
-                      <Button type="button" size="sm" onClick={handleRefresh} disabled={syncState === "running"}>
+                      <Button type="button" size="sm" onClick={handleRefresh} disabled={syncState === "running" || secondCheckState === "running"}>
                         {syncState === "running" ? "Refreshing..." : "Refresh"}
                       </Button>
                     ) : null}
@@ -492,6 +516,12 @@ export function MapExperience({
                       <p className="text-[11px] uppercase tracking-[0.14em] text-[#8e8e8e]">Tu mundo</p>
                       <p className="mt-2 break-all text-[13px] leading-5 text-[#f1f1f1]">{viewer.shareUrl}</p>
                     </div>
+                  ) : null}
+
+                  {viewer.isOwner && pendingManual.length > 0 ? (
+                    <Button type="button" variant="outline" onClick={handleSecondCheck} disabled={secondCheckState === "running" || syncState === "running"}>
+                      {secondCheckState === "running" ? "Second check..." : "Second check manuales"}
+                    </Button>
                   ) : null}
 
                   {syncError ? <p className="text-[12px] text-[#ff8b8b]">{syncError}</p> : null}
@@ -731,7 +761,7 @@ function ManualQueuePanel({
                             [video.video_id]: { ...draft, city: event.target.value },
                           }))
                         }
-                        placeholder="City"
+                        placeholder="City (optional)"
                       />
                       <Button
                         type="button"

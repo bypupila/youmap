@@ -9,6 +9,8 @@
     "lint": "next lint",
     "security:secrets": "node scripts/check-secrets.mjs",
     "security:history": "node scripts/check-secrets-history.mjs",
+    "security:deps-age": "node scripts/check-package-release-age.mjs",
+    "security:workflow-pinning": "node scripts/check-workflow-pinning.mjs",
     "security:install-hooks": "./scripts/install-git-hooks.sh",
     "security:rotate-auth": "node scripts/rotate-auth-session-secret.mjs",
     "validate:env": "node scripts/validate-env.mjs",
