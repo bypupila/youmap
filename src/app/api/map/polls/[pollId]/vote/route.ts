@@ -9,13 +9,14 @@ const payloadSchema = z.object({
   city: z.string().trim().min(1),
 });
 
-export async function POST(request: Request, { params }: { params: { pollId: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ pollId: string }> }) {
   try {
+    const { pollId } = await params;
     const payload = payloadSchema.parse(await request.json());
     const fingerprint = await getOrCreateVoterFingerprint();
     const requestHashes = await getRequestHashes();
     const poll = await recordMapPollVote({
-      pollId: params.pollId,
+      pollId,
       countryCode: payload.countryCode,
       city: payload.city,
       voterFingerprint: fingerprint.hashed,

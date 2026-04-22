@@ -4,14 +4,15 @@ import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: { runId: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   try {
     const userId = getSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const runId = String(params.runId || "").trim();
+    const { runId: rawRunId } = await params;
+    const runId = String(rawRunId || "").trim();
     if (!runId) {
       return NextResponse.json({ error: "runId is required" }, { status: 400 });
     }

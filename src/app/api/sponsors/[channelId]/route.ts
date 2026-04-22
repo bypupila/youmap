@@ -19,19 +19,20 @@ interface SponsorRow {
 
 export async function GET(
   request: Request,
-  { params }: { params: { channelId: string } }
+  { params }: { params: Promise<{ channelId: string }> }
 ) {
+  const { channelId } = await params;
   const countryCode = new URL(request.url).searchParams.get("country")?.toUpperCase() || null;
 
   try {
-    if (isDemoChannelId(params.channelId)) {
+    if (isDemoChannelId(channelId)) {
       return NextResponse.json({ sponsor: getDemoSponsorByCountry(countryCode) });
     }
 
     const channels = await sql<Array<{ id: string; user_id: string }>>`
       select id, user_id
       from public.channels
-      where id = ${params.channelId}
+      where id = ${channelId}
       limit 1
     `;
     const channel = channels[0] || null;

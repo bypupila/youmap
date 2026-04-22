@@ -5,10 +5,11 @@ import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: { pollId: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ pollId: string }> }) {
   try {
     const userId = getSessionUserIdFromRequest(request);
-    const poll = await loadMapPollById(params.pollId);
+    const { pollId } = await params;
+    const poll = await loadMapPollById(pollId);
 
     if (!poll) {
       return NextResponse.json({ error: "Poll not found" }, { status: 404 });
@@ -19,7 +20,7 @@ export async function GET(request: Request, { params }: { params: { pollId: stri
         select c.user_id
         from public.map_polls p
         inner join public.channels c on c.id = p.channel_id
-        where p.id = ${params.pollId}
+        where p.id = ${pollId}
         limit 1
       `;
       if (!userId || rows[0]?.user_id !== userId) {

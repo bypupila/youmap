@@ -46,6 +46,7 @@ interface PublicChannelRow {
 
 const FALLBACK_SHARE_HOST = "https://youmap.bypupila.com";
 const BY_PUPILA_KEYS = new Set(["bypupila", "by.pupila"]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const EXAMPLE_SPONSORS: MapRailSponsor[] = [
   {
@@ -103,7 +104,7 @@ async function resolvePublicChannel(identifier: string): Promise<PublicChannelRo
 
   if (isDemoUsername(normalized)) {
     return {
-      id: DEMO_CHANNEL_SLUG,
+      id: DEMO_CHANNEL_ID,
       user_id: DEMO_CHANNEL.user_id,
       username: DEMO_USERNAME,
       channel_name: DEMO_CHANNEL.channel_name,
@@ -216,6 +217,16 @@ export async function loadPublicMapPayloadByChannelId({
     const demoChannelRef = await resolvePublicChannel(DEMO_USERNAME);
     if (!demoChannelRef) return null;
     return loadPublicMapPayloadByChannelRef(demoChannelRef, viewerUserId || null, voterFingerprint || null);
+  }
+
+  // Backward compatibility: old links may pass handle/username in channelId.
+  // Avoid hitting `where c.id = ...` with non-UUID values, which throws 22P02.
+  if (!UUID_PATTERN.test(channelId)) {
+    return loadPublicMapPayload({
+      identifier: channelId,
+      viewerUserId,
+      voterFingerprint,
+    });
   }
 
   const channelRows = await sql<PublicChannelRow[]>`

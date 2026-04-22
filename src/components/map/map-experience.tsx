@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FloatingTopBar } from "@/components/design-system/chrome";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
+import { MissingVideosDialog } from "@/components/map/missing-videos-dialog";
+import { VideoCarouselDialog } from "@/components/map/video-carousel-dialog";
 import { TravelGlobe } from "@/components/travel-globe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -85,7 +87,6 @@ export function MapExperience({
   const [windowFilter, setWindowFilter] = useState<FilterWindow>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileLegendOpen, setMobileLegendOpen] = useState(false);
-  const [mobileManualOpen, setMobileManualOpen] = useState(false);
   const [selectedCountryCode, setSelectedCountryCode] = useState<string | null>(null);
   const [focusCountryCode, setFocusCountryCode] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<TravelVideoLocation | null>(null);
@@ -95,7 +96,7 @@ export function MapExperience({
   const [lastSyncSummary, setLastSyncSummary] = useState<SyncSummary | null>(null);
   const [manualDrafts, setManualDrafts] = useState<Record<string, { country_code: string; city: string }>>({});
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
-  const [secondCheckState, setSecondCheckState] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [missingVideosOpen, setMissingVideosOpen] = useState(false);
   const [pollState, setPollState] = useState<MapPollRecord | null>(activePoll);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -217,7 +218,6 @@ export function MapExperience({
     sponsors.length > 0 ||
     Boolean(pollState);
 
-  const shouldShowManualQueue = viewer.isOwner && pendingManual.length > 0;
   const railTopOffset = showHeader ? "top-24" : "top-4";
   const railBottomOffset = showHeader ? "bottom-4" : "bottom-4";
 
@@ -254,9 +254,12 @@ export function MapExperience({
     }
   }
 
-  async function handleManualConfirm(video: ManualVerificationItem) {
+  async function handleManualConfirm(
+    video: ManualVerificationItem,
+    draftInput?: { country_code: string; city: string }
+  ) {
     if (!channelId) return;
-    const draft = manualDrafts[video.video_id] || {
+    const draft = draftInput || manualDrafts[video.video_id] || {
       country_code: video.country_code || "",
       city: video.city || "",
     };
@@ -276,30 +279,6 @@ export function MapExperience({
 
     const payload = (await response.json()) as { error?: string };
     if (!response.ok) throw new Error(payload.error || "No se pudo confirmar manualmente");
-    await reloadMapData();
-  }
-
-  async function handleSecondCheck() {
-    if (!channelId || !viewer.isOwner) return;
-    setSecondCheckState("running");
-    setSyncError(null);
-
-    try {
-      const response = await fetch("/api/map/second-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId }),
-      });
-      const payload = (await response.json()) as { summary?: SyncSummary; manualQueue?: ManualVerificationItem[]; error?: string };
-      if (!response.ok) throw new Error(payload.error || "No se pudo completar la segunda pasada.");
-      setLastSyncSummary(payload.summary || null);
-      setPendingManual(payload.manualQueue || []);
-      await reloadMapData();
-      setSecondCheckState("success");
-    } catch (error) {
-      setSecondCheckState("error");
-      setSyncError(error instanceof Error ? error.message : "Error de segunda pasada");
-    }
   }
 
   function locateFirstSearchResult() {
@@ -378,6 +357,9 @@ export function MapExperience({
                       </Link>
                     </Button>
                   ) : null}
+                  <Button type="button" size="sm" variant="outline" onClick={() => setMissingVideosOpen(true)}>
+                    Missing videos
+                  </Button>
                   <Button type="button" size="sm" onClick={copyShareUrl}>
                     {copyState === "copied" ? <Check size={14} /> : <Copy size={14} />}
                     {copyState === "copied" ? "Copiado" : copyState === "error" ? "Reintentar" : "Copiar link"}
@@ -490,7 +472,7 @@ export function MapExperience({
                       <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">{channel.channel_name}</CardTitle>
                     </div>
                     {allowRefresh ? (
-                      <Button type="button" size="sm" onClick={handleRefresh} disabled={syncState === "running" || secondCheckState === "running"}>
+                      <Button type="button" size="sm" onClick={handleRefresh} disabled={syncState === "running"}>
                         {syncState === "running" ? "Refreshing..." : "Refresh"}
                       </Button>
                     ) : null}
@@ -503,43 +485,9 @@ export function MapExperience({
                     <StatTile label="Manual" value={resolvedSummary.needs_manual} />
                   </div>
 
-                  {shouldShowManualQueue ? (
-                    <div className="flex items-center gap-2 lg:hidden">
-                      <Button type="button" variant="outline" className="w-full" onClick={() => setMobileManualOpen(true)}>
-                        Manual queue ({pendingManual.length})
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  {viewer.shareUrl ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-[#8e8e8e]">Tu mundo</p>
-                      <p className="mt-2 break-all text-[13px] leading-5 text-[#f1f1f1]">{viewer.shareUrl}</p>
-                    </div>
-                  ) : null}
-
-                  {viewer.isOwner && pendingManual.length > 0 ? (
-                    <Button type="button" variant="outline" onClick={handleSecondCheck} disabled={secondCheckState === "running" || syncState === "running"}>
-                      {secondCheckState === "running" ? "Second check..." : "Second check manuales"}
-                    </Button>
-                  ) : null}
-
                   {syncError ? <p className="text-[12px] text-[#ff8b8b]">{syncError}</p> : null}
                 </CardContent>
               </Card>
-            </motion.div>
-          ) : null}
-
-          {shouldShowManualQueue ? (
-            <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="pointer-events-auto hidden lg:block">
-              <ManualQueuePanel
-                pendingManual={pendingManual}
-                manualDrafts={manualDrafts}
-                setManualDrafts={setManualDrafts}
-                onConfirm={handleManualConfirm}
-                setSyncError={setSyncError}
-                lastSyncSummary={lastSyncSummary}
-              />
             </motion.div>
           ) : null}
 
@@ -610,26 +558,17 @@ export function MapExperience({
         </aside>
       ) : null}
 
-      {shouldShowManualQueue ? (
-        <Sheet open={mobileManualOpen} onOpenChange={setMobileManualOpen}>
-          <SheetContent side="right" className="tm-surface-strong w-[92vw] p-0">
-            <SheetHeader className="border-b border-white/10 px-5 py-4">
-              <SheetTitle className="text-[#f1f1f1]">Extraction report</SheetTitle>
-            </SheetHeader>
-            <div className="px-4 py-4">
-              <ManualQueuePanel
-                pendingManual={pendingManual}
-                manualDrafts={manualDrafts}
-                setManualDrafts={setManualDrafts}
-                onConfirm={handleManualConfirm}
-                setSyncError={setSyncError}
-                lastSyncSummary={lastSyncSummary}
-                mobile
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
-      ) : null}
+      <MissingVideosDialog
+        open={missingVideosOpen}
+        onOpenChange={setMissingVideosOpen}
+        pendingManual={pendingManual}
+        manualDrafts={manualDrafts}
+        setManualDrafts={setManualDrafts}
+        availableOptions={availablePollOptions}
+        lastSyncSummary={lastSyncSummary}
+        onConfirm={handleManualConfirm}
+        onReload={reloadMapData}
+      />
 
       {selectedCountryCode ? (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className={cn("pointer-events-auto absolute left-1/2 z-40 -translate-x-1/2", showHeader ? "top-24" : "top-4")}>
@@ -639,147 +578,14 @@ export function MapExperience({
         </motion.div>
       ) : null}
 
-      {pinnedVideo ? (
-        <div className="absolute inset-0 z-[520] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setPinnedVideo(null)}>
-          <a
-            href={pinnedVideo.video_url || `https://youtube.com/watch?v=${pinnedVideo.youtube_video_id}`}
-            target="_blank"
-            rel="noreferrer"
-            className="block w-full max-w-[640px]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <Card className="tm-surface-strong overflow-hidden">
-              <CardContent className="px-4 py-4">
-                <div className="yt-video-thumb aspect-video">
-                  {pinnedVideo.thumbnail_url ? (
-                    <Image
-                      src={toCompactYouTubeThumbnail(pinnedVideo.thumbnail_url) || pinnedVideo.thumbnail_url}
-                      alt={pinnedVideo.title}
-                      width={1280}
-                      height={720}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[#212121] text-[#717171]">No thumbnail</div>
-                  )}
-                </div>
-                <div className="mt-4">
-                  <h3 className="text-[20px] leading-7 font-medium text-[#f1f1f1]">{pinnedVideo.title}</h3>
-                  <p className="mt-2 text-[12px] leading-4 text-[#aaaaaa]">
-                    {formatNumber(Number(pinnedVideo.view_count || 0))} views • {formatNumber(Number(pinnedVideo.like_count || 0))} likes • {formatNumber(Number(pinnedVideo.comment_count || 0))} comments
-                  </p>
-                  <p className="mt-1 text-[12px] leading-4 text-[#aaaaaa]">
-                    <span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(pinnedVideo.country_code)}</span>
-                    {pinnedVideo.country_name || pinnedVideo.country_code} · {formatDate(pinnedVideo.published_at)}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </a>
-        </div>
-      ) : null}
+      <VideoCarouselDialog
+        open={Boolean(pinnedVideo)}
+        videos={searchFilteredVideos}
+        currentVideo={pinnedVideo}
+        onClose={() => setPinnedVideo(null)}
+        onChangeVideo={(video) => setPinnedVideo(video)}
+      />
     </div>
-  );
-}
-
-function ManualQueuePanel({
-  pendingManual,
-  manualDrafts,
-  setManualDrafts,
-  onConfirm,
-  setSyncError,
-  lastSyncSummary,
-  mobile = false,
-}: {
-  pendingManual: ManualVerificationItem[];
-  manualDrafts: Record<string, { country_code: string; city: string }>;
-  setManualDrafts: React.Dispatch<React.SetStateAction<Record<string, { country_code: string; city: string }>>>;
-  onConfirm: (video: ManualVerificationItem) => Promise<void>;
-  setSyncError: React.Dispatch<React.SetStateAction<string | null>>;
-  lastSyncSummary: SyncSummary | null;
-  mobile?: boolean;
-}) {
-  return (
-    <Card className={cn("tm-surface-strong flex flex-col", mobile ? "min-h-[calc(100dvh-120px)]" : "max-h-[38dvh]") }>
-      <CardHeader className="border-b border-white/10">
-        <CardTitle className="text-[16px] font-medium text-[#f1f1f1]">Extraction report</CardTitle>
-        <p className="text-[12px] text-[#aaaaaa]">Review the last sync summary and resolve ambiguous videos manually when needed.</p>
-      </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 px-4 pb-4">
-        <div className="grid grid-cols-3 gap-2">
-          <StatTile label="Scanned" value={lastSyncSummary?.videos_scanned || 0} />
-          <StatTile label="Auto" value={lastSyncSummary?.videos_verified_auto || 0} />
-          <StatTile label="Manual" value={lastSyncSummary?.videos_needs_manual || pendingManual.length} />
-        </div>
-
-        <ScrollArea className="min-h-0 flex-1" data-map-scroll="true">
-          <div className="space-y-3 pr-2">
-            {pendingManual.length === 0 ? (
-              <p className="text-[14px] text-[#aaaaaa]">No videos need manual verification right now.</p>
-            ) : (
-              pendingManual.map((video) => {
-                const draft = manualDrafts[video.video_id] || { country_code: video.country_code || "", city: video.city || "" };
-                return (
-                  <div key={video.video_id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                    <div className="flex gap-3">
-                      <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-[#121212]">
-                        {video.thumbnail_url ? (
-                          <Image
-                            src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
-                            alt={video.title}
-                            fill
-                            sizes="96px"
-                            className="object-cover"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-2 text-[13px] leading-5 font-medium text-[#f1f1f1]">{video.title}</p>
-                        <p className="mt-1 text-[12px] leading-4 text-[#aaaaaa]">
-                          {video.needs_manual_reason || "Location could not be resolved automatically."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[88px_1fr_auto]">
-                      <Input
-                        value={draft.country_code}
-                        onChange={(event) =>
-                          setManualDrafts((current) => ({
-                            ...current,
-                            [video.video_id]: { ...draft, country_code: event.target.value.toUpperCase() },
-                          }))
-                        }
-                        maxLength={2}
-                        placeholder="Country"
-                      />
-                      <Input
-                        value={draft.city}
-                        onChange={(event) =>
-                          setManualDrafts((current) => ({
-                            ...current,
-                            [video.video_id]: { ...draft, city: event.target.value },
-                          }))
-                        }
-                        placeholder="City (optional)"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          onConfirm(video).catch((error) => setSyncError(error.message));
-                        }}
-                      >
-                        Confirm
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
   );
 }
 

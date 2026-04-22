@@ -9,17 +9,20 @@ import { sql } from "@/lib/neon";
 import { resolveCheckoutPlanSlug } from "@/lib/plans";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 interface DashboardPageProps {
-  searchParams: {
+  searchParams: Promise<{
     channelId?: string;
     demo?: string;
     preview?: string;
-  };
+  }>;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const isDemoMode = searchParams.demo === "1";
-  const previewId = searchParams.preview || "";
+  const resolvedSearchParams = await searchParams;
+  const isDemoMode = resolvedSearchParams.demo === "1";
+  const previewId = resolvedSearchParams.preview || "";
   const previewSession = previewId ? await readPreviewSession(previewId) : null;
   let fallbackChannelId = "";
   let sessionUserId = "";
@@ -34,7 +37,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     fallbackChannelId = await resolveUserChannelId(sessionUserId);
   }
 
-  const channelId = searchParams.channelId || fallbackChannelId;
+  const channelId = resolvedSearchParams.channelId || fallbackChannelId;
   const previewPayload: MapDataPayload | null = previewSession
     ? buildPreviewPayload(previewSession.channel, previewSession.videoLocations)
     : null;

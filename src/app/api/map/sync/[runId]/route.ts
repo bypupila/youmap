@@ -5,9 +5,10 @@ import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: { runId: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
   try {
-    const runId = String(params.runId || "").trim();
+    const { runId: rawRunId } = await params;
+    const runId = String(rawRunId || "").trim();
     if (!runId) {
       return NextResponse.json({ error: "runId is required" }, { status: 400 });
     }

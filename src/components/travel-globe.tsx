@@ -167,6 +167,12 @@ export function TravelGlobe({
     globeRef.current.pointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 0);
   }, [GlobeComponent]);
 
+  function focusCountryOnGlobe(countrySelection: GlobePoint) {
+    const { lat, lng, altitude } = getCountryPointOfView(countrySelection.videos, pointMode);
+    setSelectedPoint(countrySelection);
+    globeRef.current?.pointOfView({ lat, lng, altitude }, 900);
+  }
+
   useEffect(() => {
     if (!initialCountryCode || didApplyInitialSelection.current || pointsData.length === 0) return;
     const initialSelection = pointsData.find((point) => point.country_code.toUpperCase() === initialCountryCode.toUpperCase());
@@ -183,15 +189,11 @@ export function TravelGlobe({
   useEffect(() => {
     if (!focusCountryCode || pointsData.length === 0) return;
     if (didApplyFocusSelection.current === focusCountryCode.toUpperCase()) return;
-
-    const candidate = pointsData.find((point) => point.country_code.toUpperCase() === focusCountryCode.toUpperCase());
+    const candidate = buildCountrySelectionPoint(videoLocations, focusCountryCode);
     if (!candidate) return;
-
     didApplyFocusSelection.current = focusCountryCode.toUpperCase();
-    setRotationEnabled(false);
-    setSelectedPoint(candidate);
-    globeRef.current?.pointOfView({ lat: candidate.lat, lng: candidate.lng, altitude: pointMode === "video" ? 0.82 : 1.35 }, 900);
-  }, [focusCountryCode, pointMode, pointsData]);
+    focusCountryOnGlobe(candidate);
+  }, [focusCountryCode, videoLocations, pointMode, pointsData]);
 
   useEffect(() => {
     if (!globeRef.current || !rotationEnabled) return;
@@ -220,14 +222,13 @@ export function TravelGlobe({
   function handlePointSelection(selected: GlobePoint) {
     setRotationEnabled(false);
     setSelectedPoint(selected);
-    const altitude = selected.kind === "video" ? 0.52 : pointMode === "video" ? 0.78 : 0.95;
-    globeRef.current?.pointOfView({ lat: selected.lat, lng: selected.lng, altitude }, 900);
 
     if (selected.kind === "video") {
       onPinnedVideoChange?.(selected.videos?.[0] || null);
       return;
     }
 
+    focusCountryOnGlobe(selected);
     onPinnedVideoChange?.(null);
   }
 
@@ -239,15 +240,6 @@ export function TravelGlobe({
     onCountrySelect?.(countryCode);
     setRotationEnabled(false);
     setHoveredPoint(null);
-
-    const countrySelection = buildCountrySelectionPoint(videoLocations, countryCode);
-    if (countrySelection) {
-      setSelectedPoint(countrySelection);
-      globeRef.current?.pointOfView(
-        { lat: countrySelection.lat, lng: countrySelection.lng, altitude: pointMode === "video" ? 0.78 : 1.15 },
-        900
-      );
-    }
   }
 
   return (
@@ -739,6 +731,49 @@ function buildCountrySelectionPoint(videoLocations: TravelVideoLocation[], count
     video_count: videos.length,
     size: Math.log2(videos.length + 1) * 0.5 + 0.2,
   };
+}
+
+function getCountryPointOfView(videos: TravelVideoLocation[], pointMode: "country" | "video") {
+  const count = videos.length;
+  const aggregates = videos.reduce(
+    (acc, video) => ({
+      lat: acc.lat + Number(video.lat || 0),
+      lng: acc.lng + Number(video.lng || 0),
+      minLat: Math.min(acc.minLat, Number(video.lat || 0)),
+      maxLat: Math.max(acc.maxLat, Number(video.lat || 0)),
+      minLng: Math.min(acc.minLng, Number(video.lng || 0)),
+      maxLng: Math.max(acc.maxLng, Number(video.lng || 0)),
+    }),
+    { lat: 0, lng: 0, minLat: 90, maxLat: -90, minLng: 180, maxLng: -180 }
+  );
+
+  const centerLat = aggregates.lat / Math.max(1, count);
+  const centerLng = aggregates.lng / Math.max(1, count);
+  const latSpan = Math.abs(aggregates.maxLat - aggregates.minLat);
+  const lngSpan = Math.abs(aggregates.maxLng - aggregates.minLng);
+  const spread = Math.max(latSpan, lngSpan);
+
+  const altitude = pointMode === "video"
+    ? count > 1
+      ? spread < 1
+        ? 0.52
+        : spread < 5
+          ? 0.68
+          : spread < 12
+            ? 0.88
+            : 1.05
+      : 0.78
+    : count > 1
+      ? spread < 1
+        ? 0.88
+        : spread < 5
+          ? 1.0
+          : spread < 12
+            ? 1.12
+            : 1.24
+      : 1.15;
+
+  return { lat: centerLat, lng: centerLng, altitude };
 }
 
 function normalizeCountryName(raw: string) {

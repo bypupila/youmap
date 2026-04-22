@@ -3,15 +3,18 @@ import { OnboardingProcessing } from "@/components/onboarding/onboarding-process
 import { getSessionUserById, getSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 
+export const dynamic = "force-dynamic";
+
 interface OnboardingProcessingPageProps {
-  searchParams: {
+  searchParams: Promise<{
     lang?: string;
     checkout?: string;
     plan?: string;
-  };
+  }>;
 }
 
 export default async function OnboardingProcessingPage({ searchParams }: OnboardingProcessingPageProps) {
+  const resolvedSearchParams = await searchParams;
   const userId = await getSessionUserIdFromServerCookies();
   if (!userId) {
     redirect("/auth");
@@ -33,6 +36,6 @@ export default async function OnboardingProcessingPage({ searchParams }: Onboard
     redirect("/dashboard");
   }
 
-  const locale = searchParams.lang === "en" ? "en" : "es";
+  const locale = resolvedSearchParams.lang === "en" ? "en" : "es";
   return <OnboardingProcessing locale={locale} user={user} />;
 }

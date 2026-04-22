@@ -30,7 +30,7 @@ export function FloatingTopBar({
   hideSearch = false,
 }: FloatingTopBarProps) {
   return (
-    <div className={cn("mx-auto yt-navbar tm-refraction pointer-events-auto", className)}>
+    <div className={cn("mx-auto grid w-full grid-cols-1 gap-3 yt-navbar tm-refraction pointer-events-auto md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center", className)}>
       <div className="yt-logo-lockup min-w-0 shrink-0">
         <Link
           href="/"
@@ -46,7 +46,7 @@ export function FloatingTopBar({
       </div>
 
       {centerContent || searchInput || !hideSearch ? (
-        <div className="order-3 w-full md:order-none md:flex-1 md:justify-center">
+        <div className="w-full md:justify-self-center md:px-4">
           {searchInput || centerContent || (
             <div className="yt-search platform-shimmer" aria-hidden="true">
               <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
@@ -63,7 +63,7 @@ export function FloatingTopBar({
         </div>
       ) : null}
 
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 md:ml-auto md:justify-self-end">
         {actions}
       </div>
     </div>

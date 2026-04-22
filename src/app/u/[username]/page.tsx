@@ -6,16 +6,17 @@ import { MAP_VOTER_COOKIE, hashValue } from "@/lib/map-polls";
 import { loadPublicMapPayload } from "@/lib/map-public";
 
 interface PublicMapPageProps {
-  params: {
+  params: Promise<{
     username: string;
-  };
+  }>;
 }
 
 export default async function PublicMapPage({ params }: PublicMapPageProps) {
+  const resolvedParams = await params;
   const cookieStore = await cookies();
   const voterCookie = String(cookieStore.get(MAP_VOTER_COOKIE)?.value || "").trim();
   const payload = await loadPublicMapPayload({
-    identifier: params.username,
+    identifier: resolvedParams.username,
     viewerUserId: await getSessionUserIdFromServerCookies(),
     voterFingerprint: voterCookie ? hashValue(voterCookie) : null,
   });

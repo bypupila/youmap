@@ -4,10 +4,10 @@ import { sql } from "@/lib/neon";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { channelId: string } }
+  { params }: { params: Promise<{ channelId: string }> }
 ) {
   try {
-    const channelId = params.channelId;
+    const { channelId } = await params;
 
     if (isDemoChannelId(channelId)) {
       return NextResponse.json(DEMO_ANALYTICS);

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { MapExperience } from "@/components/map/map-experience";
+import { DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
 import { loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -20,13 +21,14 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 interface MapPageProps {
-  searchParams: {
+  searchParams: Promise<{
     channelId?: string;
-  };
+  }>;
 }
 
 export default async function MapPage({ searchParams }: MapPageProps) {
-  const channelId = searchParams.channelId || "luisito-global-map";
+  const resolvedSearchParams = await searchParams;
+  const channelId = resolvedSearchParams.channelId || DEMO_CHANNEL_SLUG;
   const payload = await loadPublicMapPayloadByChannelId({ channelId });
   if (!payload) {
     return (

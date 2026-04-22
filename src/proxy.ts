@@ -4,7 +4,7 @@ const SESSION_COOKIE_NAME = "travelmap_session";
 const VANITY_HOSTS = new Set(["youmap.bypupila.com", "www.youmap.bypupila.com"]);
 const RESERVED_PATHS = new Set(["", "auth", "dashboard", "onboarding", "pricing", "explore", "map", "api", "_next"]);
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const host = String(request.headers.get("host") || "").split(":")[0].toLowerCase();
   const pathname = request.nextUrl.pathname;
   const firstSegment = pathname.replace(/^\//, "").split("/")[0] || "";

@@ -18,13 +18,14 @@ Cada cambio relevante debe actualizar este archivo el mismo dia.
 
 ## Stack y componentes clave
 
-- Frontend: Next.js 14 + React 18 + TypeScript.
+- Frontend: Next.js 16 + React 19 + TypeScript.
 - UI: Tailwind + componentes en `src/components` y `src/components/design-system`.
 - Mapa: `react-globe.gl` + `three` + base `MapExperience`.
 - Backend app routes: `src/app/api/*`.
 - Persistencia/Auth: Neon Postgres + sesión HTTP-only.
 - Facturacion: Polar.
-- Ingesta y geolocalizacion: YouTube API + Nominatim + Gemini (casos ambiguos).
+- Ingesta y geolocalizacion: YouTube API + Nominatim + Gemini solo en ambiguos o segunda pasada.
+- Analitica y observabilidad: Microsoft Clarity, CSP endurecida y validacion de seguridad continua.
 
 ## Flujo de setup local
 
@@ -57,8 +58,33 @@ npm run dev
 2. Onboarding: captura de datos de creador y activacion.
 3. Auth: ingreso por email o username.
 4. Dashboard: estado de canal, sync y analitica base.
-5. Map: experiencia interactiva global con filtros, paises, card de video y refresh.
+5. Map: experiencia interactiva global con header centrado, buscador real, acciones owner, rail derecho persistente, votacion publica y carrusel de video.
 6. Explore/Pricing/Public profile (`/u/[username]`): descubrimiento y conversion.
+
+## Marca y posicionamiento
+
+- Marca principal: `TravelMap` / `YOUMAP - BY PUPILA`.
+- Promesa central: convertir un canal de viajes en una experiencia geografica interactiva y publicable.
+- Tono de marca: editorial, premium, tecnico y directo; evita UI generica o demasiado neutra.
+- Identidad visual: superficies oscuras, acentos rojos, glass/blur controlado y foco fuerte en el contenido.
+- Diferenciador funcional: el mapa no es solo un visor, es una capa de producto para comunidad, sponsors y votacion de audiencia.
+- Superficies clave de marca:
+  - home/landing con propuesta de valor
+  - onboarding como activacion
+  - mapa publico owner/public con acciones diferenciadas
+  - votacion fan-driven como mecanismo de engagement
+  - rail de sponsors como monetizacion nativa
+- Lenguaje recomendado:
+  - "tu mundo"
+  - "panel admin"
+  - "missing videos"
+  - "vota el siguiente destino"
+  - "mapa interactivo"
+- Forma de crecimiento de marca:
+  - creators de viaje como primer segmento
+  - sponsors por pais/ruta
+  - audiencia votando destinos
+  - SEO publico por canal y por ruta
 
 ## Flujo de desarrollo por tarea
 
@@ -187,6 +213,16 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 5. Registrar incidente y solucion en `Registro de memoria`.
 
 ## Registro de memoria
+
+### 2026-04-21
+
+- Se actualiza el stack real a Next.js 16 + React 19.
+- Se consolida la experiencia del mapa con header centrado, buscador funcional, acciones owner y share link canonico.
+- Se implementa votacion fan-driven con popup obligatorio, shortlist por pais/ciudad y resultados persistentes.
+- Se agrega carrusel de video con navegacion por pais, flechas laterales, estados visto/nuevo y CTA `Ver video`.
+- Se reemplaza el panel manual por un modal de `Missing videos` con bulk edit por pais y ciudad.
+- Se refuerza la seguridad del frontend con Clarity permitida en CSP y validaciones de rutas legacy de mapa.
+- Se documenta la capa de marca: posicionamiento, tono, superficies clave y lenguaje recomendado para el producto.
 
 ### 2026-04-16
 

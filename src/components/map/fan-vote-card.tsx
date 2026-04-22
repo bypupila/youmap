@@ -66,6 +66,7 @@ export function FanVoteCard({ channelId, viewer, poll, availableOptions, onPollC
   }, [autoPopupShown, poll, viewer.isOwner]);
 
   const currentPollCountries = poll?.country_options || [];
+  const mustVote = Boolean(poll && poll.status === "live" && poll.show_popup && !poll.has_voted && !viewer.isOwner);
 
   async function savePoll(status: "draft" | "live") {
     setBusyAction(status);
@@ -252,7 +253,7 @@ export function FanVoteCard({ channelId, viewer, poll, availableOptions, onPollC
       </Card>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="tm-surface-strong max-w-[780px]">
+        <DialogContent className="tm-surface-strong max-w-[min(780px,calc(100%-2rem))]">
           <DialogHeader>
             <DialogTitle className="text-[#f1f1f1]">Configurar votacion</DialogTitle>
             <DialogDescription className="text-[#aaaaaa]">
@@ -355,65 +356,87 @@ export function FanVoteCard({ channelId, viewer, poll, availableOptions, onPollC
       </Dialog>
 
       <Dialog open={voteOpen} onOpenChange={setVoteOpen}>
-        <DialogContent className="tm-surface-strong max-w-[680px]">
-          <DialogHeader>
-            <DialogTitle className="text-[#f1f1f1]">{poll?.title || "Vota el siguiente destino"}</DialogTitle>
-            <DialogDescription className="text-[#aaaaaa]">{poll?.prompt || "Elige un pais y una ciudad para priorizar el siguiente viaje."}</DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          className="tm-surface-strong max-w-[min(980px,calc(100%-1.5rem))] overflow-hidden p-0"
+          showCloseButton={!mustVote}
+          onInteractOutside={(event) => {
+            if (mustVote) event.preventDefault();
+          }}
+          onEscapeKeyDown={(event) => {
+            if (mustVote) event.preventDefault();
+          }}
+        >
+          <div className="border-b border-white/10 px-5 py-4">
+            <DialogHeader>
+              <DialogTitle className="text-[#f1f1f1]">{poll?.title || "Vota el siguiente destino"}</DialogTitle>
+              <DialogDescription className="text-[#aaaaaa]">{poll?.prompt || "Elige un pais y una ciudad para priorizar el siguiente viaje."}</DialogDescription>
+            </DialogHeader>
+          </div>
 
-          {poll ? (
-            <div className="grid gap-4 md:grid-cols-[0.9fr_1.1fr]">
-              <div className="space-y-2">
-                <p className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Pais</p>
-                {poll.country_options.map((country) => {
-                  const label = countryNameMap.get(country.country_code) || country.country_name || country.country_code;
-                  const active = selectedCountry === country.country_code;
-                  return (
-                    <button
-                      key={country.country_code}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCountry(country.country_code);
-                        setSelectedCity(country.cities[0]?.city || "");
-                      }}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors",
-                        active ? "border-[rgba(255,0,0,0.28)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
-                      )}
-                    >
-                      <span>{label}</span>
-                      <span className="text-[12px]">{country.votes} votos</span>
-                    </button>
-                  );
-                })}
-              </div>
+          <div className="grid gap-0 md:grid-cols-[0.9fr_1.1fr]">
+            {poll ? (
+              <>
+                <div className="border-b border-white/10 p-5 md:border-b-0 md:border-r">
+                  <p className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Pais</p>
+                  <div className="mt-3 space-y-2">
+                    {poll.country_options.map((country) => {
+                      const label = countryNameMap.get(country.country_code) || country.country_name || country.country_code;
+                      const active = selectedCountry === country.country_code;
+                      return (
+                        <button
+                          key={country.country_code}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCountry(country.country_code);
+                            setSelectedCity(country.cities[0]?.city || "");
+                          }}
+                          className={cn(
+                            "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors",
+                            active ? "border-[rgba(255,0,0,0.28)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
+                          )}
+                        >
+                          <span>{label}</span>
+                          <span className="text-[12px]">{country.votes} votos</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-              <div className="space-y-2">
-                <p className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Ciudad</p>
-                {voteCities.map((city) => {
-                  const active = selectedCity === city.city;
-                  return (
-                    <button
-                      key={city.city}
-                      type="button"
-                      onClick={() => setSelectedCity(city.city)}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors",
-                        active ? "border-[rgba(255,0,0,0.28)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
-                      )}
-                    >
-                      <span>{city.city}</span>
-                      <span className="text-[12px]">{city.votes} votos</span>
-                    </button>
-                  );
-                })}
-                {voteError ? <p className="text-[12px] text-[#ff9d9d]">{voteError}</p> : null}
-              </div>
-            </div>
-          ) : null}
+                <div className="p-5">
+                  <p className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Ciudad</p>
+                  <div className="mt-3 space-y-2">
+                    {voteCities.map((city) => {
+                      const active = selectedCity === city.city;
+                      return (
+                        <button
+                          key={city.city}
+                          type="button"
+                          onClick={() => setSelectedCity(city.city)}
+                          className={cn(
+                            "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors",
+                            active ? "border-[rgba(255,0,0,0.28)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
+                          )}
+                        >
+                          <span>{city.city}</span>
+                          <span className="text-[12px]">{city.votes} votos</span>
+                        </button>
+                      );
+                    })}
+                    {voteError ? <p className="text-[12px] text-[#ff9d9d]">{voteError}</p> : null}
+                    {mustVote ? (
+                      <p className="rounded-2xl border border-[rgba(255,0,0,0.2)] bg-[rgba(255,0,0,0.08)] px-4 py-3 text-[12px] leading-5 text-[#ffb4b4]">
+                        Esta ventana se queda abierta hasta que votes.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
 
           {poll && !poll.has_voted ? (
-            <div className="flex justify-end border-t border-white/10 pt-4">
+            <div className="flex justify-end border-t border-white/10 px-5 py-4">
               <Button type="button" onClick={submitVote} disabled={busyVote || !selectedCountry || !selectedCity}>
                 {busyVote ? "Enviando..." : "Confirmar voto"}
               </Button>
