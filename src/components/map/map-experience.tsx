@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { MagnifyingGlass, Copy, Check, ArrowSquareOut } from "@phosphor-icons/react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
+import posthog from "posthog-js";
 import { FloatingTopBar } from "@/components/design-system/chrome";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
 import { MissingVideosDialog } from "@/components/map/missing-videos-dialog";
@@ -15,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { ManualVerificationItem, MapSummary } from "@/lib/map-data";
 import type { MapPollRecord } from "@/lib/map-polls";
 import type { MapRailSponsor, MapViewerContext } from "@/lib/map-public";
@@ -86,7 +86,6 @@ export function MapExperience({
   const [pendingManual, setPendingManual] = useState<ManualVerificationItem[]>(incomingManualQueue);
   const [windowFilter, setWindowFilter] = useState<FilterWindow>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobileLegendOpen, setMobileLegendOpen] = useState(false);
   const [selectedCountryCode, setSelectedCountryCode] = useState<string | null>(null);
   const [focusCountryCode, setFocusCountryCode] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<TravelVideoLocation | null>(null);
@@ -218,9 +217,6 @@ export function MapExperience({
     sponsors.length > 0 ||
     Boolean(pollState);
 
-  const railTopOffset = showHeader ? "top-24" : "top-4";
-  const railBottomOffset = showHeader ? "bottom-4" : "bottom-4";
-
   async function reloadMapData() {
     if (!channelId) return;
     const response = await fetch(`/api/map/data?channelId=${encodeURIComponent(channelId)}`, { cache: "no-store" });
@@ -248,6 +244,12 @@ export function MapExperience({
       setPendingManual(payload.manualQueue || []);
       await reloadMapData();
       setSyncState("success");
+      posthog.capture("map_refreshed", {
+        channel_id: channelId,
+        channel_name: channel.channel_name,
+        videos_scanned: payload.summary?.videos_scanned ?? null,
+        videos_extracted: payload.summary?.videos_extracted ?? null,
+      });
     } catch (error) {
       setSyncState("error");
       setSyncError(error instanceof Error ? error.message : "Error de sincronización");
@@ -292,6 +294,13 @@ export function MapExperience({
     const normalized = countryCode ? String(countryCode).toUpperCase() : null;
     setSelectedCountryCode(normalized);
     setFocusCountryCode(normalized);
+    if (normalized) {
+      posthog.capture("map_country_selected", {
+        country_code: normalized,
+        channel_id: channelId,
+        channel_name: channel.channel_name,
+      });
+    }
   }
 
   async function copyShareUrl() {
@@ -301,6 +310,10 @@ export function MapExperience({
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopyState("copied");
+      posthog.capture("map_share_url_copied", {
+        channel_id: channelId,
+        channel_name: channel.channel_name,
+      });
     } catch {
       setCopyState("error");
     }
@@ -371,192 +384,289 @@ export function MapExperience({
         </header>
       ) : null}
 
-      {showLegend ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={() => setMobileLegendOpen(true)}
-          className={cn("pointer-events-auto absolute left-4 z-[360] lg:hidden", showHeader ? "top-24" : "top-4")}
+      {(showHeader || showLegend || shouldRenderRightRail) && (
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-x-0 bottom-0",
+            showHeader ? "top-24 sm:top-28" : "top-4"
+          )}
         >
-          Countries ({legend.length})
-        </Button>
-      ) : null}
-
-      {showLegend ? (
-        <aside className={cn("pointer-events-auto absolute left-4 z-[360] hidden w-[320px] lg:block", railTopOffset, railBottomOffset)}>
-          <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} className="h-full">
-            <Card className="tm-surface-strong h-full">
-              <CardHeader className="border-b border-white/10">
-                <CardTitle className="text-[16px] font-medium text-[#f1f1f1]">Countries</CardTitle>
-                <p className="text-[12px] text-[#aaaaaa]">Click a country to isolate its videos.</p>
-              </CardHeader>
-              <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-4">
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {(["30", "90", "365", "all"] as FilterWindow[]).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      className="yt-nav-pill"
-                      data-active={option === windowFilter ? "true" : "false"}
-                      onClick={() => setWindowFilter(option)}
-                    >
-                      {option === "all" ? "All" : `${option}d`}
-                    </button>
-                  ))}
-                </div>
-                <ScrollArea className="min-h-0 flex-1" data-map-scroll="true">
-                  <div className="space-y-2 pr-2">
-                    {legend.map((country) => (
-                      <button
-                        key={country.country_code}
-                        type="button"
-                        onClick={() => selectCountry(country.country_code)}
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-left transition-colors",
-                          selectedCountryCode === country.country_code ? "bg-[#f1f1f1] text-[#0f0f0f]" : "bg-[#212121] text-[#f1f1f1] hover:bg-[#2a2a2a]"
-                        )}
-                      >
-                        <span className="truncate text-[13px] font-medium">
-                          <span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(country.country_code)}</span>
-                          {country.country_name}
-                        </span>
-                        <span className={cn("rounded-lg px-2 py-0.5 text-[11px]", selectedCountryCode === country.country_code ? "bg-black/10" : "bg-white/10 text-[#aaaaaa]")}>{country.count}</span>
-                      </button>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </aside>
-      ) : null}
-
-      {showLegend ? (
-        <Sheet open={mobileLegendOpen} onOpenChange={setMobileLegendOpen}>
-          <SheetContent side="left" className="tm-surface-strong w-[92vw] p-0">
-            <SheetHeader className="border-b border-white/10 px-5 py-4">
-              <SheetTitle className="text-[#f1f1f1]">Countries</SheetTitle>
-            </SheetHeader>
-            <ScrollArea className="h-[calc(100dvh-72px)] px-4 py-4" data-map-scroll="true">
-              <div className="space-y-2">
-                {legend.map((country) => (
-                  <button
-                    key={country.country_code}
-                    type="button"
-                    className="tm-surface flex w-full items-center justify-between rounded-xl px-3 py-2 text-left"
-                    onClick={() => {
-                      selectCountry(country.country_code);
-                      setMobileLegendOpen(false);
-                    }}
-                  >
-                    <span className="text-[13px]"><span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(country.country_code)}</span>{country.country_name}</span>
-                    <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-[#aaaaaa]">{country.count}</span>
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
-          </SheetContent>
-        </Sheet>
-      ) : null}
-
-      {shouldRenderRightRail ? (
-        <aside className={cn("pointer-events-none absolute right-4 z-[360] flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-4", railTopOffset, railBottomOffset)}>
-          {showOperationsPanel ? (
-            <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="pointer-events-auto">
-              <Card className="tm-surface-strong">
-                <CardHeader className="border-b border-white/10">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="yt-overline text-[#aaaaaa]">{viewer.isOwner ? "Owner map" : "Creator map"}</p>
-                      <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">{channel.channel_name}</CardTitle>
+          <div
+            data-map-scroll="true"
+            className="pointer-events-auto mx-auto flex h-full w-full max-w-[1720px] flex-col gap-4 overflow-y-auto px-4 pb-4 sm:px-6 lg:grid lg:grid-cols-[minmax(320px,340px)_minmax(0,1fr)_minmax(360px,420px)] lg:items-start lg:overflow-visible"
+          >
+            {showLegend ? (
+              <motion.aside
+                layout
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                className="pointer-events-auto lg:sticky lg:top-0 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-1"
+              >
+                <Card className="tm-surface-strong flex h-full min-h-[540px] flex-col">
+                  <CardHeader className="border-b border-white/10">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="yt-overline text-[#aaaaaa]">Navigation</p>
+                        <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">Countries</CardTitle>
+                      </div>
+                      <Badge variant="outline">{legend.length}</Badge>
                     </div>
-                    {allowRefresh ? (
-                      <Button type="button" size="sm" onClick={handleRefresh} disabled={syncState === "running"}>
-                        {syncState === "running" ? "Refreshing..." : "Refresh"}
-                      </Button>
-                    ) : null}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4 px-4 pb-4">
-                  <div className="grid grid-cols-3 gap-2">
-                    <StatTile label="Videos" value={resolvedSummary.total_videos} />
-                    <StatTile label="Countries" value={resolvedSummary.total_countries} />
-                    <StatTile label="Manual" value={resolvedSummary.needs_manual} />
-                  </div>
-
-                  {syncError ? <p className="text-[12px] text-[#ff8b8b]">{syncError}</p> : null}
-                </CardContent>
-              </Card>
-            </motion.div>
-          ) : null}
-
-          {selectedCountryCode ? (
-            <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="pointer-events-auto min-h-0 flex-1">
-              <Card className="tm-surface-strong flex h-full flex-col">
-                <CardHeader className="border-b border-white/10">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="yt-overline text-[#aaaaaa]">Country panel</p>
-                      <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">
-                        <span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(selectedCountryCode)}</span>
-                        {selectedCountryName}
-                      </CardTitle>
-                    </div>
-                    <Badge variant="outline">{selectedCountryVideos.length} videos</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="min-h-0 flex-1 px-4 pb-4">
-                  <ScrollArea className="h-full" data-map-scroll="true">
-                    <div className="space-y-3 pr-2">
-                      {selectedCountryVideos.map((video) => (
+                    <p className="text-[12px] leading-5 text-[#aaaaaa]">Filter by time, then isolate countries to keep the globe readable.</p>
+                  </CardHeader>
+                  <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-4">
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {(["30", "90", "365", "all"] as FilterWindow[]).map((option) => (
                         <button
-                          key={`${video.youtube_video_id}-${video.published_at || "no-date"}`}
+                          key={option}
                           type="button"
-                          onClick={() => {
-                            setPinnedVideo(video);
-                            setFocusCountryCode(video.country_code || null);
-                          }}
-                          className="tm-surface flex w-full rounded-2xl p-3 text-left transition-colors hover:bg-white/10"
+                          className="yt-nav-pill"
+                          data-active={option === windowFilter ? "true" : "false"}
+                          onClick={() => setWindowFilter(option)}
                         >
-                          <VideoListItem video={video} />
+                          {option === "all" ? "All" : `${option}d`}
                         </button>
                       ))}
                     </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ) : null}
 
-          {showActiveVideoCard && activeVideo && !selectedCountryCode && !pinnedVideo ? (
-            <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="pointer-events-auto">
-              <Card className="tm-surface-strong">
-                <CardContent className="px-4 py-4">
-                  <p className="yt-overline text-[#aaaaaa]">Now hovering</p>
-                  <div className="mt-3">
-                    <VideoListItem video={activeVideo} compact />
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ) : null}
+                    <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                      <p className="text-[12px] text-[#aaaaaa]">
+                        {searchFilteredVideos.length} visible videos · {selectedCountryCode ? `${selectedCountryName} active` : "No country locked"}
+                      </p>
+                      <p className="mt-1 text-[12px] leading-5 text-[#d9d2c8]">
+                        Search lives in the top bar. Use this rail to narrow the map, not to replace it.
+                      </p>
+                    </div>
 
-          <div className="pointer-events-auto mt-auto flex flex-col gap-4">
-            {channelId && (pollState || viewer.isOwner) ? (
-              <FanVoteCard
-                channelId={channelId}
-                viewer={viewer}
-                poll={pollState}
-                availableOptions={availablePollOptions}
-                onPollChange={setPollState}
-              />
+                    <ScrollArea className="min-h-0 flex-1" data-map-scroll="true">
+                      <div className="space-y-2 pr-2">
+                        {legend.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-5 text-[13px] leading-5 text-[#aaaaaa]">
+                            No countries matched the current filters.
+                          </div>
+                        ) : (
+                          legend.map((country) => (
+                            <button
+                              key={country.country_code}
+                              type="button"
+                              onClick={() => selectCountry(country.country_code)}
+                              className={cn(
+                                "flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition-colors",
+                                selectedCountryCode === country.country_code
+                                  ? "border-[rgba(255,0,0,0.24)] bg-[rgba(255,0,0,0.1)] text-[#f1f1f1]"
+                                  : "border-white/10 bg-white/[0.03] text-[#f1f1f1] hover:bg-white/[0.06]"
+                              )}
+                            >
+                              <span className="min-w-0 truncate text-[13px] font-medium">
+                                <span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(country.country_code)}</span>
+                                {country.country_name}
+                              </span>
+                              <span
+                                className={cn(
+                                  "rounded-full px-2.5 py-1 text-[11px]",
+                                  selectedCountryCode === country.country_code ? "bg-black/10 text-[#111416]" : "bg-white/10 text-[#aaaaaa]"
+                                )}
+                              >
+                                {country.count}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </motion.aside>
             ) : null}
 
-            {sponsors.length > 0 ? <SponsorsRail sponsors={sponsors} /> : null}
+            <div className="hidden lg:block" />
+
+            {shouldRenderRightRail ? (
+              <motion.aside
+                layout
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                className="pointer-events-auto lg:sticky lg:top-0 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-1"
+              >
+                <div className="flex h-full min-h-[540px] flex-col gap-4 overflow-hidden">
+                  {showOperationsPanel ? (
+                    <Card className="tm-surface-strong">
+                      <CardHeader className="border-b border-white/10">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="yt-overline text-[#aaaaaa]">{viewer.isOwner ? "Owner map" : "Creator map"}</p>
+                            <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">{channel.channel_name}</CardTitle>
+                          </div>
+                          {allowRefresh ? (
+                            <Button type="button" size="sm" onClick={handleRefresh} disabled={syncState === "running"}>
+                              {syncState === "running" ? "Refreshing..." : "Refresh"}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4 px-4 pb-4 pt-4">
+                        <div className="grid grid-cols-3 gap-2">
+                          <StatTile label="Videos" value={resolvedSummary.total_videos} />
+                          <StatTile label="Countries" value={resolvedSummary.total_countries} />
+                          <StatTile label="Manual" value={resolvedSummary.needs_manual} />
+                        </div>
+
+                        {syncState === "running" ? (
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[12px] text-[#aaaaaa]">
+                            Syncing the map and refreshing the local dataset.
+                          </div>
+                        ) : null}
+
+                        {lastSyncSummary ? (
+                          <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-2">
+                            <MiniSummary label="Scanned" value={lastSyncSummary.videos_scanned} />
+                            <MiniSummary label="Auto" value={lastSyncSummary.videos_verified_auto} />
+                            <MiniSummary label="Manual" value={lastSyncSummary.videos_verified_manual} />
+                            <MiniSummary label="Shorts" value={lastSyncSummary.excluded_shorts} />
+                          </div>
+                        ) : null}
+
+                        {pendingManual.length > 0 ? (
+                          <div className="rounded-2xl border border-[rgba(255,0,0,0.2)] bg-[rgba(255,0,0,0.08)] px-4 py-3">
+                            <p className="text-[12px] uppercase tracking-[0.14em] text-[#ffb4b4]">Missing videos</p>
+                            <p className="mt-1 text-[13px] leading-5 text-[#f3d0d0]">
+                              {pendingManual.length} videos still need manual confirmation.
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => setMissingVideosOpen(true)}>
+                                Open queue
+                              </Button>
+                              <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] text-[#d0d0d0]">
+                                {pendingManual.length} pending
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {syncError ? <p className="text-[12px] leading-5 text-[#ff8b8b]">{syncError}</p> : null}
+                      </CardContent>
+                    </Card>
+                  ) : null}
+
+                  <AnimatePresence initial={false}>
+                    {selectedCountryCode ? (
+                      <motion.div
+                        key={`selected-country-${selectedCountryCode}`}
+                        layout
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                        className="pointer-events-auto"
+                      >
+                        <Card className="tm-surface-strong flex h-full flex-col">
+                          <CardHeader className="border-b border-white/10">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="yt-overline text-[#aaaaaa]">Country panel</p>
+                                <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">
+                                  <span className="mr-2 inline-block w-5 text-center">{countryCodeToFlag(selectedCountryCode)}</span>
+                                  {selectedCountryName}
+                                </CardTitle>
+                              </div>
+                              <Badge variant="outline">{selectedCountryVideos.length} videos</Badge>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="min-h-0 flex-1 px-4 pb-4 pt-4">
+                            <ScrollArea className="h-[340px] pr-2" data-map-scroll="true">
+                              <div className="space-y-3">
+                                {selectedCountryVideos.length === 0 ? (
+                                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-5 text-[13px] text-[#aaaaaa]">
+                                    No videos matched this country in the current filter window.
+                                  </div>
+                                ) : (
+                                  selectedCountryVideos.map((video) => (
+                                    <button
+                                      key={`${video.youtube_video_id}-${video.published_at || "no-date"}`}
+                                      type="button"
+                                      onClick={() => {
+                                        setPinnedVideo(video);
+                                        setFocusCountryCode(video.country_code || null);
+                                        posthog.capture("map_video_opened", {
+                                          video_id: video.youtube_video_id,
+                                          video_title: video.title,
+                                          country_code: video.country_code,
+                                          country_name: video.country_name,
+                                          channel_id: channelId,
+                                        });
+                                      }}
+                                      className="tm-surface flex w-full rounded-2xl p-3 text-left transition-colors hover:bg-white/10"
+                                    >
+                                      <VideoListItem video={video} />
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            </ScrollArea>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => selectCountry(null)}>
+                                Clear focus
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(viewer.shareUrl || "#", "_blank", "noreferrer")}
+                                disabled={!viewer.shareUrl}
+                              >
+                                <ArrowSquareOut size={14} />
+                                Share
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+
+                  <AnimatePresence initial={false}>
+                    {showActiveVideoCard && activeVideo && !selectedCountryCode && !pinnedVideo ? (
+                      <motion.div
+                        key={`hover-video-${activeVideo.youtube_video_id}`}
+                        layout
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                        className="pointer-events-auto"
+                      >
+                        <Card className="tm-surface-strong">
+                          <CardContent className="px-4 py-4">
+                            <p className="yt-overline text-[#aaaaaa]">Now hovering</p>
+                            <div className="mt-3">
+                              <VideoListItem video={activeVideo} compact />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+
+                  <div className="pointer-events-auto flex min-h-0 flex-1 flex-col gap-4">
+                    {channelId && (pollState || viewer.isOwner) ? (
+                      <FanVoteCard
+                        channelId={channelId}
+                        viewer={viewer}
+                        poll={pollState}
+                        availableOptions={availablePollOptions}
+                        onPollChange={setPollState}
+                      />
+                    ) : null}
+
+                    {sponsors.length > 0 ? <SponsorsRail sponsors={sponsors} /> : null}
+                  </div>
+                </div>
+              </motion.aside>
+            ) : null}
           </div>
-        </aside>
-      ) : null}
+        </div>
+      )}
 
       <MissingVideosDialog
         open={missingVideosOpen}
@@ -669,6 +779,15 @@ function StatTile({ label, value }: { label: string; value: number }) {
   );
 }
 
+function MiniSummary({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-[#8e8e8e]">{label}</p>
+      <p className="mt-1 text-[14px] font-medium text-[#f1f1f1]">{formatExactNumber(value)}</p>
+    </div>
+  );
+}
+
 function formatExactNumber(value: number) {
   if (!value) return "0";
   return Number(value).toLocaleString("en-US");
@@ -690,9 +809,9 @@ function formatDate(value?: string | null) {
 
 function countryCodeToFlag(countryCode?: string | null) {
   const code = String(countryCode || "").toUpperCase();
-  if (code.length !== 2) return "🌍";
+  if (code.length !== 2) return "TM";
   const first = code.charCodeAt(0) - 65;
   const second = code.charCodeAt(1) - 65;
-  if (first < 0 || first > 25 || second < 0 || second > 25) return "🌍";
+  if (first < 0 || first > 25 || second < 0 || second > 25) return "TM";
   return String.fromCodePoint(0x1f1e6 + first, 0x1f1e6 + second);
 }

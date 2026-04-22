@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Webhook, WebhookVerificationError } from "standardwebhooks";
 import { sql } from "@/lib/neon";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 
@@ -112,6 +113,18 @@ async function upsertSubscription(payload: PolarSubscriptionWebhookData) {
   `;
 
   if (payload.status === "active" || payload.status === "trialing") {
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: userId,
+      event: "subscription_activated",
+      properties: {
+        subscription_id: payload.id,
+        status: payload.status,
+        plan_id: planId,
+        polar_product_id: payload.product?.id || null,
+        current_period_end: payload.current_period_end || null,
+      },
+    });
     return;
   }
 }

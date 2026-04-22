@@ -4,6 +4,7 @@ import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
 import { verifyPassword } from "@/lib/auth-password";
 import { setSessionCookie } from "@/lib/auth-session";
 import { sql } from "@/lib/neon";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const payloadSchema = z.object({
   identifier: z.string().min(3),
@@ -52,6 +53,24 @@ export async function POST(request: Request) {
     if (!storedHash || !verifyPassword(payload.password, storedHash)) {
       return NextResponse.json({ error: "Credenciales inválidas." }, { status: 401 });
     }
+
+    const posthog = getPostHogClient();
+    posthog.identify({
+      distinctId: user.id,
+      properties: {
+        email: user.email,
+        username: user.username,
+        display_name: user.display_name,
+      },
+    });
+    posthog.capture({
+      distinctId: user.id,
+      event: "user_logged_in",
+      properties: {
+        username: user.username,
+        identifier_type: isEmail ? "email" : "username",
+      },
+    });
 
     const response = NextResponse.json({
       ok: true,

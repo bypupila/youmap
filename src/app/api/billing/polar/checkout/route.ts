@@ -4,6 +4,7 @@ import { createPolarCheckoutSession } from "@/lib/polar";
 import { getSessionUserById, getSessionUserIdFromRequest } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 import { getPlanSlugCandidates } from "@/lib/plans";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,17 @@ export async function GET(request: Request) {
         })
       );
     }
+
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: userId,
+      event: "checkout_initiated",
+      properties: {
+        plan: planRow.slug,
+        plan_name: planRow.name,
+        lang,
+      },
+    });
 
     return NextResponse.redirect(checkout.url);
   } catch (error) {

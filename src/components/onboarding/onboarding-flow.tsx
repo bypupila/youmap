@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AirplaneTilt, Handshake, MapPin } from "@phosphor-icons/react";
+import posthog from "posthog-js";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1065,7 +1066,12 @@ function renderStepBody(
               key={plan.slug}
               type="button"
               onClick={() => {
-                if (!unavailable) ctx.setSelectedPlan(plan.slug);
+                if (!unavailable) {
+                  ctx.setSelectedPlan(plan.slug);
+                  posthog.capture("onboarding_plan_selected", {
+                    plan: plan.slug,
+                  });
+                }
               }}
               disabled={unavailable}
               className={cn(

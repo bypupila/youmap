@@ -58,7 +58,7 @@ npm run dev
 2. Onboarding: captura de datos de creador y activacion.
 3. Auth: ingreso por email o username.
 4. Dashboard: estado de canal, sync y analitica base.
-5. Map: experiencia interactiva global con header centrado, buscador real, acciones owner, rail derecho persistente, votacion publica y carrusel de video.
+5. Map: experiencia interactiva global con header centrado, buscador real y workspace de rails persistentes donde conviven navegacion por paises, contexto de video, votacion publica, sponsors y revison manual sin romper el layout.
 6. Explore/Pricing/Public profile (`/u/[username]`): descubrimiento y conversion.
 
 ## Marca y posicionamiento
@@ -104,6 +104,7 @@ npm run dev
 - Navegacion y CTAs operativos.
 - Estados de carga, error y vacio verificados.
 - Interacciones de mapa estables (hover, click, filtro pais, salida de pais, refresh).
+- Workspace del mapa sin overflow horizontal: rails laterales coexistentes, scroll interno controlado y stacking responsive en mobile.
 - SEO tecnico minimo:
 - `title` y metadatos presentes en pantallas publicas.
 - `favicon` disponible.
@@ -213,6 +214,14 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 5. Registrar incidente y solucion en `Registro de memoria`.
 
 ## Registro de memoria
+
+### 2026-04-22
+
+- Se rediseña `MapExperience` como un workspace de rails persistentes para que paises, contexto de video, votacion, sponsors y queue manual convivan sin colisiones de layout.
+- Se elimina el sheet lateral del mapa y se integra la navegacion por paises dentro de un rail fijo con filtros por ventana temporal y estado de busqueda.
+- Se refuerza el rail derecho con secciones apiladas y scroll interno para overview, pais seleccionado, preview de hover, votacion y sponsors.
+- Se sanean fallbacks de banderas inválidas para evitar emojis en los helpers compartidos del mapa.
+- `/map` ahora intenta cargar primero el canal solicitado y, si no existe, degrada al mapa demo antes de mostrar un estado vacio con CTA util.
 
 ### 2026-04-21
 

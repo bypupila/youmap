@@ -140,9 +140,9 @@ function createMiniFlagPin(point: MiniMapPoint) {
 
 function countryCodeToFlag(countryCode?: string | null) {
   const code = String(countryCode || "").toUpperCase();
-  if (code.length !== 2) return "🌍";
+  if (code.length !== 2) return "TM";
   const first = code.charCodeAt(0) - 65;
   const second = code.charCodeAt(1) - 65;
-  if (first < 0 || first > 25 || second < 0 || second > 25) return "🌍";
+  if (first < 0 || first > 25 || second < 0 || second > 25) return "TM";
   return String.fromCodePoint(0x1f1e6 + first, 0x1f1e6 + second);
 }

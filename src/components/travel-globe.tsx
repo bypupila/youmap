@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GlobeMethods } from "react-globe.gl";
 import { feature } from "topojson-client";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
@@ -167,11 +167,11 @@ export function TravelGlobe({
     globeRef.current.pointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 0);
   }, [GlobeComponent]);
 
-  function focusCountryOnGlobe(countrySelection: GlobePoint) {
+  const focusCountryOnGlobe = useCallback((countrySelection: GlobePoint) => {
     const { lat, lng, altitude } = getCountryPointOfView(countrySelection.videos, pointMode);
     setSelectedPoint(countrySelection);
     globeRef.current?.pointOfView({ lat, lng, altitude }, 900);
-  }
+  }, [pointMode]);
 
   useEffect(() => {
     if (!initialCountryCode || didApplyInitialSelection.current || pointsData.length === 0) return;
@@ -193,7 +193,7 @@ export function TravelGlobe({
     if (!candidate) return;
     didApplyFocusSelection.current = focusCountryCode.toUpperCase();
     focusCountryOnGlobe(candidate);
-  }, [focusCountryCode, videoLocations, pointMode, pointsData]);
+  }, [focusCountryCode, videoLocations, pointMode, pointsData, focusCountryOnGlobe]);
 
   useEffect(() => {
     if (!globeRef.current || !rotationEnabled) return;
@@ -977,9 +977,9 @@ function escapeHtml(raw: string) {
 
 function countryCodeToFlag(countryCode?: string | null) {
   const code = String(countryCode || "").toUpperCase();
-  if (code.length !== 2) return "🌍";
+  if (code.length !== 2) return "TM";
   const first = code.charCodeAt(0) - 65;
   const second = code.charCodeAt(1) - 65;
-  if (first < 0 || first > 25 || second < 0 || second > 25) return "🌍";
+  if (first < 0 || first > 25 || second < 0 || second > 25) return "TM";
   return String.fromCodePoint(0x1f1e6 + first, 0x1f1e6 + second);
 }

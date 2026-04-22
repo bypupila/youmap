@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CaretLeft, CaretRight, X, ArrowSquareOut, MapPinLine } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, X, ArrowSquareOut } from "@phosphor-icons/react";
+import posthog from "posthog-js";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -293,7 +294,15 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
                     type="button"
                     variant="outline"
                     className="h-11 rounded-full border-white/10 bg-white/[0.03] px-4 text-[12px]"
-                    onClick={() => window.open(currentVideo?.video_url || `https://youtube.com/watch?v=${currentVideo?.youtube_video_id}`, "_blank", "noreferrer")}
+                    onClick={() => {
+                      posthog.capture("video_youtube_opened", {
+                        video_id: currentVideo?.youtube_video_id,
+                        video_title: currentVideo?.title,
+                        country_code: currentVideo?.country_code,
+                        country_name: currentVideo?.country_name,
+                      });
+                      window.open(currentVideo?.video_url || `https://youtube.com/watch?v=${currentVideo?.youtube_video_id}`, "_blank", "noreferrer");
+                    }}
                   >
                     <ArrowSquareOut size={14} />
                     Ver video
@@ -314,10 +323,10 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
 
 function countryCodeToFlag(countryCode?: string | null) {
   const code = String(countryCode || "").toUpperCase();
-  if (code.length !== 2) return "🌍";
+  if (code.length !== 2) return "TM";
   const first = code.charCodeAt(0) - 65;
   const second = code.charCodeAt(1) - 65;
-  if (first < 0 || first > 25 || second < 0 || second > 25) return "🌍";
+  if (first < 0 || first > 25 || second < 0 || second > 25) return "TM";
   return String.fromCodePoint(0x1f1e6 + first, 0x1f1e6 + second);
 }
 

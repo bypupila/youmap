@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/auth-password";
 import { setSessionCookie } from "@/lib/auth-session";
 import { isValidUsername, normalizeEmail, normalizeUsername, toPublicMapPath } from "@/lib/auth-identifiers";
 import { sql } from "@/lib/neon";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -236,6 +237,28 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    const posthog = getPostHogClient();
+    posthog.identify({
+      distinctId: userId,
+      properties: {
+        email,
+        username,
+        display_name: displayName,
+        selected_plan: selectedPlan,
+      },
+    });
+    posthog.capture({
+      distinctId: userId,
+      event: "user_registered",
+      properties: {
+        username,
+        email,
+        selected_plan: selectedPlan,
+        activation_mode: payload.activateWithoutPayment ? "test_no_payment" : "payment_required",
+        has_youtube_channel: Boolean(channelInput),
+      },
+    });
 
     const response = NextResponse.json({
       ok: true,

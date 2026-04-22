@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle, Copy, GearSix, MapPin, RocketLaunch, XCircle } from "@phosphor-icons/react";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -91,6 +92,15 @@ export function FanVoteCard({ channelId, viewer, poll, availableOptions, onPollC
         throw new Error(payload.error || "No se pudo guardar la votacion.");
       }
       onPollChange?.(payload.poll);
+      if (status === "live") {
+        posthog.capture("poll_published", {
+          poll_id: payload.poll.id,
+          poll_title: form.title,
+          channel_id: channelId,
+          country_count: form.countryOptions.length,
+          show_popup: form.showPopup,
+        });
+      }
       setEditorOpen(false);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "No se pudo guardar la votacion.");
@@ -147,6 +157,13 @@ export function FanVoteCard({ channelId, viewer, poll, availableOptions, onPollC
         throw new Error(payload.error || "No se pudo registrar tu voto.");
       }
       onPollChange?.(payload.poll);
+      posthog.capture("poll_vote_submitted", {
+        poll_id: poll.id,
+        poll_title: poll.title,
+        channel_id: channelId,
+        country_code: selectedCountry,
+        city: selectedCity,
+      });
       setVoteOpen(false);
     } catch (submitError) {
       setVoteError(submitError instanceof Error ? submitError.message : "No se pudo registrar tu voto.");
