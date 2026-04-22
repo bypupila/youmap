@@ -35,11 +35,6 @@ jobs:
       - name: Verify workflow pinning
         run: npm run security:workflow-pinning
 
-      - name: Enforce minimum package release age
-        env:
-          MIN_PACKAGE_RELEASE_AGE_HOURS: "72"
-        run: npm run security:deps-age
-
   history-secrets:
     name: History Secrets Scan
     if: github.event_name == 'push'

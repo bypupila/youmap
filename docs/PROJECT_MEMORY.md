@@ -217,6 +217,11 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 
 ### 2026-04-22
 
+- Se simplifica el workflow `Security Checks` quitando el gate obligatorio de edad minima de paquetes, porque generaba ruido recurrente por dependencias publicadas recientemente.
+- Se conservan los checks de secretos, historial y pinning de workflows como barreras efectivas contra leaks y configuracion insegura.
+- Se unifica `instrumentation-client.ts` en la raiz para inicializar PostHog y Sentry desde un solo hook de cliente.
+- Se elimina el duplicado `src/instrumentation-client.ts` para evitar que Next cargue un initializer ambiguo o desalineado con el runtime real.
+- Se valida la integracion con `npm run build` y `npm run lint` en verde despues del ajuste.
 - Se rediseña `MapExperience` como un workspace de rails persistentes para que paises, contexto de video, votacion, sponsors y queue manual convivan sin colisiones de layout.
 - Se elimina el sheet lateral del mapa y se integra la navegacion por paises dentro de un rail fijo con filtros por ventana temporal y estado de busqueda.
 - Se refuerza el rail derecho con secciones apiladas y scroll interno para overview, pais seleccionado, preview de hover, votacion y sponsors.

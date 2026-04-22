@@ -3,7 +3,7 @@
 
 The wizard has completed a deep integration of PostHog analytics into this Next.js 16 App Router project. The following changes were made:
 
-- **`instrumentation-client.ts`** (new) — Client-side PostHog initialization using the `instrumentation-client.ts` pattern for Next.js 15.3+, with a reverse proxy configured at `/ingest`.
+- **`instrumentation-client.ts`** (new) — Client-side observability hook that initializes PostHog and Sentry before hydration, using the `instrumentation-client.ts` pattern for Next.js 15.3+ and the reverse proxy configured at `/ingest`.
 - **`src/lib/posthog-server.ts`** (new) — Server-side PostHog client using `posthog-node`, with lazy singleton initialization.
 - **`next.config.mjs`** — Added `/ingest` reverse proxy rewrites for PostHog (static, array, and event ingestion paths) and `skipTrailingSlashRedirect: true`.
 - **`.env.local`** — Added `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and `NEXT_PUBLIC_POSTHOG_HOST` environment variables.
