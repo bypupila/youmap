@@ -215,6 +215,20 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 
 ## Registro de memoria
 
+### 2026-04-24
+
+- Se implementa un layout unificado de mapas para `/map`, `/u/[username]`, demos y dashboard, basado en un shell comun con sidebar publica adaptada, topbar de busqueda, overview rail, globo central y rail derecho.
+- El mapa conserva una sola fuente de datos (`PublicMapPayload`, `MapSummary`, `videoLocations`, `manualQueue`, `activePoll`, `sponsors`, `viewer`) y deriva en cliente ciudades, destinos sugeridos, recientes y rankings sin cambiar contratos server.
+- Las acciones visibles quedan diferenciadas por permisos: visitantes pueden navegar, buscar, votar, ver canal y copiar enlace; owners mantienen admin, refresh, videos faltantes y queue manual.
+- Se reemplazan banderas emoji en el nuevo shell por codigos de pais tipograficos para mantener consistencia visual y evitar simbolos no controlados.
+- Se agregan vistas mobile dedicadas para mapas con tabs inferiores: Overview, Mapa, Videos, Comunidad y Mas; el tab `Mapa` deja el globo interactivo como capa principal y expone controles propios.
+
+### 2026-04-23
+
+- Se audita el estado MVP de la plataforma completa con build, lint, validacion de entorno y smoke visual responsive en rutas principales.
+- Se crea `docs/MVP_ROADMAP.md` como roadmap vivo de lanzamiento con bloqueadores P0, deuda UX/SEO y fases semanales.
+- Hallazgos principales: ocultar QA interno por defecto, proteger rutas Sentry example, corregir `Demo fallback` en `/map`, compactar onboarding mobile, fortalecer Explore y agregar metadata dinamica en `/u/[username]`.
+
 ### 2026-04-22
 
 - Se simplifica el workflow `Security Checks` quitando el gate obligatorio de edad minima de paquetes, porque generaba ruido recurrente por dependencias publicadas recientemente.

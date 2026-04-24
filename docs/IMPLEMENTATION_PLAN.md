@@ -2,6 +2,8 @@
 
 Este documento resume la ruta técnica para llevar el repo a un producto funcional.
 
+Para la planificación actual de lanzamiento MVP, ver `docs/MVP_ROADMAP.md`.
+
 ## Fase 1. Base de datos
 
 Objetivo: dejar el contrato de datos listo para auth, canales, videos, ubicaciones, sponsors y billing.
