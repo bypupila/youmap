@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { GlobeHemisphereWest, MagnifyingGlass } from "@phosphor-icons/react";
+import { GlobeHemisphereWest } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -11,10 +11,23 @@ interface FloatingTopBarProps {
   title: string;
   actions?: ReactNode;
   className?: string;
-  searchPlaceholder?: string;
+  /**
+   * Optional real, interactive content to render in the center slot
+   * (e.g. a working search input or a stepper). When omitted, the center
+   * slot collapses — we no longer render a decorative non-functional input.
+   */
   searchInput?: ReactNode;
   centerContent?: ReactNode;
   logoBadgeContent?: ReactNode;
+  /**
+   * @deprecated The fake search has been removed. This prop is kept for
+   * backwards compatibility with existing call sites and is now a no-op.
+   */
+  searchPlaceholder?: string;
+  /**
+   * @deprecated The center slot only renders when real content is provided.
+   * This prop is kept for backwards compatibility and is now a no-op.
+   */
   hideSearch?: boolean;
 }
 
@@ -23,21 +36,27 @@ export function FloatingTopBar({
   title,
   actions,
   className,
-  searchPlaceholder = "Search across videos, countries, or creators",
   searchInput,
   centerContent,
   logoBadgeContent,
-  hideSearch = false,
 }: FloatingTopBarProps) {
+  const center = searchInput ?? centerContent ?? null;
+
   return (
-    <div className={cn("mx-auto grid w-full grid-cols-1 gap-3 yt-navbar tm-refraction pointer-events-auto md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center", className)}>
+    <div
+      className={cn(
+        "mx-auto grid w-full grid-cols-1 gap-3 yt-navbar tm-refraction pointer-events-auto md:items-center",
+        center ? "md:grid-cols-[auto_minmax(0,1fr)_auto]" : "md:grid-cols-[auto_minmax(0,1fr)]",
+        className,
+      )}
+    >
       <div className="yt-logo-lockup min-w-0 shrink-0">
         <Link
           href="/"
-          aria-label="Go to homepage"
+          aria-label="Ir al inicio de YouMap"
           className="yt-logo-badge cursor-pointer transition-transform duration-200 hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          {logoBadgeContent || <GlobeHemisphereWest size={20} weight="duotone" />}
+          {logoBadgeContent || <GlobeHemisphereWest size={20} weight="duotone" aria-hidden="true" />}
         </Link>
         <div className="min-w-0">
           <p className="yt-overline">{eyebrow}</p>
@@ -45,27 +64,15 @@ export function FloatingTopBar({
         </div>
       </div>
 
-      {centerContent || searchInput || !hideSearch ? (
-        <div className="w-full md:justify-self-center md:px-4">
-          {searchInput || centerContent || (
-            <div className="yt-search platform-shimmer" aria-hidden="true">
-              <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
-                <MagnifyingGlass size={16} />
-              </div>
-              <div className="flex h-full min-w-0 flex-1 items-center px-3 text-[13px] text-muted-foreground">
-                {searchPlaceholder}
-              </div>
-              <div className="flex h-full min-w-16 items-center justify-center border-l border-white/10 bg-white/[0.02] text-muted-foreground">
-                <span className="platform-country-code">live</span>
-              </div>
-            </div>
-          )}
-        </div>
+      {center ? (
+        <div className="w-full md:justify-self-center md:px-4">{center}</div>
       ) : null}
 
-      <div className="flex shrink-0 items-center gap-2 md:ml-auto md:justify-self-end">
-        {actions}
-      </div>
+      {actions ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 md:ml-auto md:justify-self-end">
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }

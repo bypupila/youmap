@@ -23,21 +23,25 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "TravelMap for YouTube Creators",
+  title: {
+    default: "YouMap — Tu canal de YouTube en un mapa interactivo",
+    template: "%s · YouMap",
+  },
   description:
-    "Mapea tus videos de YouTube en un globo 3D con una interfaz nativa tipo YouTube Studio, analytics por país, sponsors y páginas públicas.",
+    "Conecta tu canal de YouTube y conviértelo en un mapa interactivo: globo 3D, analítica por país, sponsors y página pública lista para discovery.",
+  applicationName: "YouMap",
   openGraph: {
-    title: "TravelMap for YouTube Creators",
+    title: "YouMap — Tu canal de YouTube en un mapa interactivo",
     description:
-      "Conecta tu canal, importa tus videos y conviértelos en un mapa 3D con UI nativa de YouTube, analytics y monetización.",
+      "Importa tu canal, detecta países y publica una experiencia geográfica con videos, sponsors y analítica por destino.",
     type: "website",
     url: siteUrl,
-    siteName: "TravelMap - BY PUPILA",
+    siteName: "YouMap",
   },
   twitter: {
     card: "summary_large_image",
-    title: "TravelMap for YouTube Creators",
-    description: "Una capa geográfica para YouTube con UI nativa, analytics por destino y sponsor hub.",
+    title: "YouMap — Tu canal de YouTube en un mapa interactivo",
+    description: "Una capa geográfica para YouTube: globo 3D, analítica por destino y sponsor hub.",
   },
   robots: {
     index: true,

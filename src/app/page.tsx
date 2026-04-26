@@ -5,22 +5,22 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "TravelMap - BY PUPILA",
+  title: "YouMap — Tu canal de YouTube en un mapa interactivo",
   description:
-    "Mapa interactivo para creadores de viajes: globo 3D, videos geolocalizados, onboarding visual, analytics por país y página pública SEO.",
+    "Mapa interactivo para creadores: globo 3D, videos geolocalizados, onboarding visual, analítica por país y página pública optimizada para SEO.",
   openGraph: {
-    title: "TravelMap - BY PUPILA",
+    title: "YouMap — Tu canal de YouTube en un mapa interactivo",
     description:
-      "Arranca con un mapa vivo, conecta tu canal de YouTube y publica una experiencia geográfica con videos, sponsors y analytics.",
+      "Conecta tu canal de YouTube y publica una experiencia geográfica con videos, sponsors y analítica por destino.",
     type: "website",
     url: siteUrl,
-    siteName: "TravelMap - BY PUPILA",
+    siteName: "YouMap",
   },
   twitter: {
     card: "summary_large_image",
-    title: "TravelMap - BY PUPILA",
+    title: "YouMap — Tu canal de YouTube en un mapa interactivo",
     description:
-      "Convierte tu canal de viajes en una experiencia visual con un globo interactivo, fans votando destinos y exploración SEO.",
+      "Convierte tu canal en una experiencia visual con un globo interactivo, fans votando destinos y exploración SEO.",
   },
   robots: {
     index: true,

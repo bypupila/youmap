@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { MapExperience } from "@/components/map/map-experience";
+import { FullscreenMap } from "@/components/map/fullscreen-map";
+import { MapUnavailable } from "@/components/map/map-unavailable";
 import { buildPublicShareUrl, loadPublicMapPayload, loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 import { DEMO_CHANNEL_SLUG, DEMO_USER, DEMO_USERNAME } from "@/lib/demo-data";
 import type { MapDataPayload } from "@/lib/map-data";
@@ -52,42 +54,39 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   if (!payload || (!channelId && !previewSession && !isDemoMode)) {
     return (
-      <main className="flex min-h-[100dvh] items-center justify-center text-foreground">
-        <div className="tm-surface-strong rounded-[2rem] p-6 text-sm">
-          No se pudo cargar el dashboard del mapa.
-        </div>
-      </main>
+      <MapUnavailable
+        eyebrow="Tu dashboard"
+        title="No se pudo cargar tu dashboard."
+        description="Aún no encontramos un canal asociado a tu cuenta. Intentá conectar tu canal desde el onboarding o abrir el mapa demo para ver el resultado."
+        homeHref="/onboarding"
+      />
     );
   }
 
   const canRefresh = Boolean(!isDemoMode && !previewSession && channelId && isUuid(channelId));
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
-      <div className="absolute inset-0">
-        <MapExperience
-          channel={payload.channel}
-          videoLocations={payload.videoLocations}
-          manualQueue={payload.manualQueue}
-          summary={payload.summary}
-          channelId={previewSession ? null : payload.channel.id}
-          allowRefresh={canRefresh}
-          viewer={
-            experiencePayload?.viewer || {
-              isOwner: true,
-              shareUrl: buildPublicShareUrl(payload.channel.channel_handle || payload.channel.canonicalHandle),
-              adminUrl: "/dashboard",
-            }
+    <FullscreenMap>
+      <MapExperience
+        channel={payload.channel}
+        videoLocations={payload.videoLocations}
+        manualQueue={payload.manualQueue}
+        summary={payload.summary}
+        channelId={previewSession ? null : payload.channel.id}
+        allowRefresh={canRefresh}
+        viewer={
+          experiencePayload?.viewer || {
+            isOwner: true,
+            shareUrl: buildPublicShareUrl(payload.channel.channel_handle || payload.channel.canonicalHandle),
+            adminUrl: "/dashboard",
           }
-          sponsors={experiencePayload?.sponsors || []}
-          activePoll={experiencePayload?.activePoll || null}
-          availablePollOptions={experiencePayload?.availablePollOptions || []}
-          headerEyebrow={previewSession ? "Preview local" : isDemoMode ? "Demo map" : "Owner view"}
-        />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
-    </main>
+        }
+        sponsors={experiencePayload?.sponsors || []}
+        activePoll={experiencePayload?.activePoll || null}
+        availablePollOptions={experiencePayload?.availablePollOptions || []}
+        headerEyebrow={previewSession ? "Vista previa" : isDemoMode ? "Demo" : "Tu canal"}
+      />
+    </FullscreenMap>
   );
 }
 

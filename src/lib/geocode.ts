@@ -23,7 +23,7 @@ export async function geocodeLocation(query: string): Promise<GeocodeMatch | nul
 
   const contactEmail = sanitizeEnvValue(process.env.NOMINATIM_EMAIL);
   const fallbackContact = sanitizeEnvValue(process.env.NEXT_PUBLIC_APP_URL || "travelmap.local");
-  const userAgentName = sanitizeEnvValue(process.env.NOMINATIM_USER_AGENT || "TravelMap");
+  const userAgentName = sanitizeEnvValue(process.env.NOMINATIM_USER_AGENT || "YouMap");
   const contactForHeaders = contactEmail || fallbackContact;
   if (contactEmail) {
     url.searchParams.set("email", contactEmail);
@@ -88,7 +88,7 @@ export async function geocodeCoordinates(lat: number, lng: number): Promise<Geoc
 
   const contactEmail = sanitizeEnvValue(process.env.NOMINATIM_EMAIL);
   const fallbackContact = sanitizeEnvValue(process.env.NEXT_PUBLIC_APP_URL || "travelmap.local");
-  const userAgentName = sanitizeEnvValue(process.env.NOMINATIM_USER_AGENT || "TravelMap");
+  const userAgentName = sanitizeEnvValue(process.env.NOMINATIM_USER_AGENT || "YouMap");
   const contactForHeaders = contactEmail || fallbackContact;
   if (contactEmail) {
     url.searchParams.set("email", contactEmail);
