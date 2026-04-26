@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { MapExperience } from "@/components/map/map-experience";
+import { FullscreenMap } from "@/components/map/fullscreen-map";
 import { getSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { MAP_VOTER_COOKIE, hashValue } from "@/lib/map-polls";
 import { loadPublicMapPayload } from "@/lib/map-public";
@@ -26,23 +27,19 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
   }
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
-      <div className="absolute inset-0">
-        <MapExperience
-          channel={payload.channel}
-          videoLocations={payload.videoLocations}
-          manualQueue={payload.manualQueue}
-          summary={payload.summary}
-          channelId={payload.channel.id}
-          allowRefresh={payload.viewer.isOwner}
-          viewer={payload.viewer}
-          sponsors={payload.sponsors}
-          activePoll={payload.activePoll}
-          availablePollOptions={payload.availablePollOptions}
-        />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
-    </main>
+    <FullscreenMap>
+      <MapExperience
+        channel={payload.channel}
+        videoLocations={payload.videoLocations}
+        manualQueue={payload.manualQueue}
+        summary={payload.summary}
+        channelId={payload.channel.id}
+        allowRefresh={payload.viewer.isOwner}
+        viewer={payload.viewer}
+        sponsors={payload.sponsors}
+        activePoll={payload.activePoll}
+        availablePollOptions={payload.availablePollOptions}
+      />
+    </FullscreenMap>
   );
 }

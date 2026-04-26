@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { MapExperience } from "@/components/map/map-experience";
-import { Button } from "@/components/ui/button";
+import { FullscreenMap } from "@/components/map/fullscreen-map";
+import { MapUnavailable } from "@/components/map/map-unavailable";
 import { DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
 import { loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 
@@ -34,46 +34,29 @@ export default async function MapPage({ searchParams }: MapPageProps) {
   const payload = (await loadPublicMapPayloadByChannelId({ channelId: requestedChannelId })) || (requestedChannelId === DEMO_CHANNEL_SLUG ? null : await loadPublicMapPayloadByChannelId({ channelId: DEMO_CHANNEL_SLUG }));
   if (!payload) {
     return (
-      <main className="flex min-h-[100dvh] items-center justify-center px-4 text-foreground">
-        <div className="tm-surface-strong w-full max-w-[560px] rounded-[2rem] p-6">
-          <p className="text-[12px] uppercase tracking-[0.16em] text-[#aaaaaa]">Mapa no disponible</p>
-          <h1 className="mt-2 text-[24px] font-medium tracking-tight text-[#f1f1f1]">No se pudo mostrar el mapa.</h1>
-          <p className="mt-3 text-[14px] leading-6 text-[#c9c2b8]">
-            No encontramos datos para ese canal. Probá abrir el mapa demo o volver al inicio para navegar otro perfil.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Button asChild>
-              <Link href={`/map?channelId=${encodeURIComponent(DEMO_CHANNEL_SLUG)}`}>Abrir demo</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/">Volver al inicio</Link>
-            </Button>
-          </div>
-        </div>
-      </main>
+      <MapUnavailable
+        title="No se pudo mostrar el mapa."
+        description="No encontramos datos para ese canal. Probá abrir el mapa demo o volver al inicio para navegar otro perfil."
+      />
     );
   }
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
-      <div className="absolute inset-0">
-        <MapExperience
-          channel={payload.channel}
-          videoLocations={payload.videoLocations}
-          manualQueue={payload.manualQueue}
-          summary={payload.summary}
-          channelId={payload.channel.id}
-          allowRefresh={isUuid(requestedChannelId)}
-          viewer={payload.viewer}
-          sponsors={payload.sponsors}
-          activePoll={payload.activePoll}
-          availablePollOptions={payload.availablePollOptions}
-          headerEyebrow={requestedChannelId === payload.channel.id ? "Public map" : "Demo fallback"}
-        />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
-    </main>
+    <FullscreenMap>
+      <MapExperience
+        channel={payload.channel}
+        videoLocations={payload.videoLocations}
+        manualQueue={payload.manualQueue}
+        summary={payload.summary}
+        channelId={payload.channel.id}
+        allowRefresh={isUuid(requestedChannelId)}
+        viewer={payload.viewer}
+        sponsors={payload.sponsors}
+        activePoll={payload.activePoll}
+        availablePollOptions={payload.availablePollOptions}
+        headerEyebrow={requestedChannelId === payload.channel.id ? "Mapa público" : "Demo"}
+      />
+    </FullscreenMap>
   );
 }
 
