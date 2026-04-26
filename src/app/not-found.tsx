@@ -1,15 +1,10 @@
 import Link from "next/link";
 import { GlobeHemisphereWest } from "@phosphor-icons/react/dist/ssr";
+import { MarketingShell } from "@/components/site/marketing-shell";
 
 export default function NotFoundPage() {
   return (
-    <main className="relative isolate flex min-h-[100dvh] items-center justify-center overflow-hidden px-4 text-foreground">
-      <div className="platform-grid-glow pointer-events-none absolute inset-0" aria-hidden="true" />
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,0,0,0.18),transparent_24%),radial-gradient(circle_at_84%_14%,rgba(255,0,0,0.10),transparent_28%),linear-gradient(180deg,rgba(17,20,22,0.96),rgba(17,20,22,0.86))]"
-        aria-hidden="true"
-      />
-
+    <MarketingShell contentClassName="flex items-center justify-center px-4 py-12">
       <section className="tm-surface-strong relative z-10 mx-auto w-full max-w-xl rounded-[2rem] p-8 text-center sm:p-10">
         <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-[linear-gradient(180deg,rgba(255,0,0,0.24),rgba(255,0,0,0.08))] text-primary shadow-[inset_0_1px_0_rgba(255,244,238,0.14)]">
           <GlobeHemisphereWest size={26} weight="duotone" aria-hidden="true" />
@@ -31,6 +26,6 @@ export default function NotFoundPage() {
           </Link>
         </div>
       </section>
-    </main>
+    </MarketingShell>
   );
 }

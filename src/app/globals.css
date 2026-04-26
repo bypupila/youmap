@@ -36,7 +36,59 @@
   --border: var(--travel-border);
   --input: var(--travel-border);
   --ring: rgba(255, 0, 0, 0.28);
+
+  /* ---- Radius scale ---------------------------------------------------- */
+  /* Use these tokens for new code. Existing arbitrary values like         */
+  /* `rounded-[2rem]` will be migrated incrementally.                     */
+  --radius-sm: 0.75rem;
+  --radius-md: 1.25rem;
+  --radius-lg: 2rem;
   --radius: 1.5rem;
+}
+
+/* ------------------------------------------------------------------------ */
+/* App background                                                            */
+/* ------------------------------------------------------------------------ */
+/*
+ * `.ym-bg` is the canonical YouMap marketing/auth background. It pairs the
+ * grid glow + cinematic accent-tinted radial gradients in a single class so
+ * pages no longer duplicate this 2-layer setup inline.
+ */
+.ym-bg {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--travel-base-bg);
+}
+
+.ym-bg::before,
+.ym-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ym-bg::before {
+  opacity: 0.32;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 120px 120px;
+  -webkit-mask-image: radial-gradient(circle at center, black, transparent 78%);
+  mask-image: radial-gradient(circle at center, black, transparent 78%);
+}
+
+.ym-bg::after {
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(255, 0, 0, 0.16), transparent 26%),
+    radial-gradient(circle at 84% 14%, rgba(255, 0, 0, 0.10), transparent 28%),
+    linear-gradient(180deg, rgba(17, 20, 22, 0.92), rgba(17, 20, 22, 0.78));
+}
+
+.ym-bg > * {
+  position: relative;
+  z-index: 1;
 }
 
 * {

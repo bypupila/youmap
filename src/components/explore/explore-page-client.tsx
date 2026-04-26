@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { FloatingTopBar, MetricPill } from "@/components/design-system/chrome";
-import { SiteFooter } from "@/components/site/site-footer";
+import { MetricPill } from "@/components/design-system/chrome";
+import { MarketingShell } from "@/components/site/marketing-shell";
 import { Button } from "@/components/ui/button";
 import { DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
@@ -152,25 +152,22 @@ export function ExplorePageClient() {
   const totalCount = filteredVideos.length;
 
   return (
-    <main className="relative min-h-[100dvh] text-foreground">
-      <div className="platform-grid-glow pointer-events-none absolute inset-0" aria-hidden="true" />
-
-      <header className="sticky top-0 z-40 px-4 py-3 backdrop-blur">
-        <FloatingTopBar
-          eyebrow="Explora"
-          title="Creadores por destino"
-          actions={
-            <>
-              <MetricPill text={`${totalCount} ${totalCount === 1 ? "video" : "videos"}`} />
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/onboarding">Empieza gratis</Link>
-              </Button>
-            </>
-          }
-        />
-      </header>
-
-      <div className="relative z-10 mx-auto max-w-[1400px] px-4 pb-10 pt-6">
+    <MarketingShell
+      topbar={{
+        eyebrow: "Explora",
+        title: "Creadores por destino",
+        sticky: true,
+        actions: (
+          <>
+            <MetricPill text={`${totalCount} ${totalCount === 1 ? "video" : "videos"}`} />
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/onboarding">Empieza gratis</Link>
+            </Button>
+          </>
+        ),
+      }}
+    >
+      <div className="mx-auto max-w-[1400px] px-4 pb-10 pt-6">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
           <div>
             <p className="yt-overline mb-4">Discovery editorial</p>
@@ -285,9 +282,7 @@ export function ExplorePageClient() {
           </section>
         )}
       </div>
-
-      <SiteFooter />
-    </main>
+    </MarketingShell>
   );
 }
 

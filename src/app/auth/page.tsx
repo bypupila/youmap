@@ -4,8 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, MapPin, Plug, Sparkle } from "@phosphor-icons/react";
-import { FloatingTopBar } from "@/components/design-system/chrome";
-import { SiteFooter } from "@/components/site/site-footer";
+import { MarketingShell } from "@/components/site/marketing-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,26 +75,18 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
-      <div className="platform-grid-glow pointer-events-none absolute inset-0" aria-hidden="true" />
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,0,0,0.18),transparent_24%),radial-gradient(circle_at_84%_14%,rgba(255,0,0,0.12),transparent_26%),linear-gradient(180deg,rgba(17,20,22,0.92),rgba(17,20,22,0.76))]"
-        aria-hidden="true"
-      />
-
-      <header className="relative z-30 px-4 py-3">
-        <FloatingTopBar
-          eyebrow="Cuenta"
-          title="Acceso a YouMap"
-          actions={
-            <Link href="/" className="yt-btn-secondary">
-              Inicio
-            </Link>
-          }
-        />
-      </header>
-
-      <div className="relative z-10 mx-auto grid w-full max-w-[1400px] items-start gap-8 px-4 py-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:gap-10 lg:px-6 lg:py-12">
+    <MarketingShell
+      topbar={{
+        eyebrow: "Cuenta",
+        title: "Acceso a YouMap",
+        actions: (
+          <Link href="/" className="yt-btn-secondary">
+            Inicio
+          </Link>
+        ),
+      }}
+    >
+      <div className="mx-auto grid w-full max-w-[1400px] items-start gap-8 px-4 py-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:gap-10 lg:px-6 lg:py-12">
         <section className="order-2 lg:order-1">
           <div className="max-w-[38rem]">
             <Badge variant="outline">Acceso de creadores</Badge>
@@ -271,8 +262,6 @@ export default function AuthPage() {
           </div>
         </section>
       </div>
-
-      <SiteFooter />
-    </main>
+    </MarketingShell>
   );
 }

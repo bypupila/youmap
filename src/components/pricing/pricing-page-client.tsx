@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Check } from "@phosphor-icons/react";
-import { FloatingTopBar } from "@/components/design-system/chrome";
-import { SiteFooter } from "@/components/site/site-footer";
+import { MarketingShell } from "@/components/site/marketing-shell";
 import { Badge } from "@/components/ui/badge";
 import { PLAN_DEFINITIONS, type PlanDefinition } from "@/lib/plans";
 import { cn } from "@/lib/utils";
@@ -132,31 +131,23 @@ export function PricingPageClient({ lang }: PricingPageClientProps) {
   }
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
-      <div className="platform-grid-glow pointer-events-none absolute inset-0" aria-hidden="true" />
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,0,0,0.16),transparent_28%),radial-gradient(circle_at_84%_14%,rgba(255,0,0,0.10),transparent_28%),linear-gradient(180deg,rgba(17,20,22,0.92),rgba(17,20,22,0.78))]"
-        aria-hidden="true"
-      />
-
-      <header className="relative z-30 px-4 py-3">
-        <FloatingTopBar
-          eyebrow={copy.eyebrow}
-          title={copy.headline}
-          actions={
-            <>
-              <Link href="/" className="yt-btn-secondary" aria-label={copy.backToHome}>
-                {copy.backToHome}
-              </Link>
-              <Link href="/explore" className="yt-btn-secondary hidden sm:inline-flex">
-                {copy.explore}
-              </Link>
-            </>
-          }
-        />
-      </header>
-
-      <section className="relative z-10 mx-auto max-w-[1400px] px-4 pb-12 pt-8 md:pt-12">
+    <MarketingShell
+      topbar={{
+        eyebrow: copy.eyebrow,
+        title: copy.headline,
+        actions: (
+          <>
+            <Link href="/" className="yt-btn-secondary" aria-label={copy.backToHome}>
+              {copy.backToHome}
+            </Link>
+            <Link href="/explore" className="yt-btn-secondary hidden sm:inline-flex">
+              {copy.explore}
+            </Link>
+          </>
+        ),
+      }}
+    >
+      <section className="mx-auto max-w-[1400px] px-4 pb-12 pt-8 md:pt-12">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
@@ -279,8 +270,6 @@ export function PricingPageClient({ lang }: PricingPageClientProps) {
           </section>
         ) : null}
       </section>
-
-      <SiteFooter />
-    </main>
+    </MarketingShell>
   );
 }
