@@ -412,9 +412,14 @@ const sponsorCards = [
   { brand: "IATI Seguros", image: "/brands/iati.svg" },
 ] as const;
 
-const visiblePlans = PLAN_DEFINITIONS.filter((plan) => plan.slug !== "free");
+// Agency is sold via "talk to sales" on /pricing for now — keep it out of
+// the self-service onboarding grid until checkout is wired up.
+const HIDDEN_PLAN_SLUGS = new Set<PlanDefinition["slug"]>(["free", "agency"]);
+const visiblePlans = PLAN_DEFINITIONS.filter((plan) => !HIDDEN_PLAN_SLUGS.has(plan.slug));
 const unavailablePlanSlugs = new Set<PlanDefinition["slug"]>(["agency"]);
-const showTestNoPaymentPlan = process.env.NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT !== "0";
+// The "TEST · Sin pago" path is for internal QA only. Default to hidden in
+// production; opt in with NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT=1.
+const showTestNoPaymentPlan = process.env.NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT === "1";
 
 export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; locale: OnboardingLocale }) {
   const router = useRouter();

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FloatingTopBar, SignalPill } from "@/components/design-system/chrome";
 import { MapExperience } from "@/components/map/map-experience";
 import { MiniMapModel } from "@/components/landing/mini-map-model";
+import { SiteFooter } from "@/components/site/site-footer";
 import { DEMO_CHANNEL, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
@@ -13,17 +14,19 @@ type Locale = "es" | "en";
 
 type LandingCopy = {
   topTitle: string;
-  searchPlaceholder: string;
   signalPills: string[];
   headline: string;
   body: string;
   ctaPrimary: string;
+  ctaSecondary: string;
   cardTitle: string;
   ctaDemo: string;
   videosLabel: string;
   countriesLabel: string;
   platformVideosLabel: string;
   platformCountriesLabel: string;
+  overlineCopy: string;
+  loginLabel: string;
 };
 
 const creatorByLocale = {
@@ -113,9 +116,11 @@ export function CinematicLanding() {
     }
 
     void loadPlatformStats();
+    // Stats are aggregate counts that change slowly. A 5-minute cadence
+    // keeps the hero fresh without thrashing the API for every visitor.
     const interval = window.setInterval(() => {
       void loadPlatformStats();
-    }, 30000);
+    }, 300000);
 
     return () => {
       isCurrent = false;
@@ -128,32 +133,36 @@ export function CinematicLanding() {
     () =>
       locale === "es"
         ? {
-            topTitle: "Tu Mapa de Contenido",
-            searchPlaceholder: "Busca videos, países o creadores",
+            topTitle: "Tu mapa de contenido",
             signalPills: ["Mapa interactivo", "Analítica por país", "Sponsor hub"],
-            headline: "Tu canal convertido en una pagina web interactiva.",
+            headline: "Tu canal convertido en una página web interactiva.",
             body: "Importa tu canal, detecta países y lee el rendimiento por destino con una capa visual limpia.",
-            ctaPrimary: "Empezar",
+            ctaPrimary: "Empezar gratis",
+            ctaSecondary: "Ver demo",
             cardTitle: activeCreator.name,
-            ctaDemo: "Ver Demo",
+            ctaDemo: "Ver demo",
             videosLabel: "videos",
             countriesLabel: "países",
             platformVideosLabel: "videos procesados en toda la plataforma",
             platformCountriesLabel: "países con videos en toda la plataforma",
+            overlineCopy: "Cartografía editorial para creadores",
+            loginLabel: "Iniciar sesión",
           }
         : {
-            topTitle: "Your Content Map",
-            searchPlaceholder: "Search across videos, countries, or creators",
+            topTitle: "Your content map",
             signalPills: ["Interactive map", "Country analytics", "Sponsor hub"],
             headline: "Your channel turned into an interactive web page.",
             body: "Import your channel, detect countries, and read destination performance in one visual layer.",
             ctaPrimary: "Get started",
+            ctaSecondary: "View demo",
             cardTitle: activeCreator.name,
-            ctaDemo: "View Demo",
+            ctaDemo: "View demo",
             videosLabel: "videos",
             countriesLabel: "countries",
             platformVideosLabel: "processed videos across the platform",
             platformCountriesLabel: "countries with videos across the platform",
+            overlineCopy: "Editorial cartography for creators",
+            loginLabel: "Log in",
           },
     [activeCreator.name, locale]
   );
@@ -185,27 +194,43 @@ export function CinematicLanding() {
 
       <header className="absolute inset-x-0 top-0 z-[320] px-4 py-3 pointer-events-auto">
         <FloatingTopBar
-          eyebrow="YOUMAP - BY PUPILA"
+          eyebrow="YOUMAP"
           title={copy.topTitle}
-          searchPlaceholder={copy.searchPlaceholder}
           className="pointer-events-auto relative z-[321]"
           actions={
             <>
-              <div className="hidden items-center gap-2 md:flex">
+              <div
+                className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1 md:flex"
+                role="group"
+                aria-label={locale === "es" ? "Cambiar idioma" : "Switch language"}
+              >
                 <button
                   type="button"
                   className="yt-nav-pill relative z-[322] pointer-events-auto"
                   data-active={locale === "en"}
+                  aria-pressed={locale === "en"}
+                  aria-label="English"
                   onClick={() => setLocale("en")}
                 >
                   EN
                 </button>
-                <button type="button" className="yt-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "es"} onClick={() => setLocale("es")}>
+                <button
+                  type="button"
+                  className="yt-nav-pill relative z-[322] pointer-events-auto"
+                  data-active={locale === "es"}
+                  aria-pressed={locale === "es"}
+                  aria-label="Español"
+                  onClick={() => setLocale("es")}
+                >
                   ES
                 </button>
               </div>
-              <Link href="/auth" className="yt-btn-primary relative z-[322] pointer-events-auto">
-                Acceder
+              <Link
+                href="/auth"
+                className="yt-btn-secondary relative z-[322] pointer-events-auto"
+                aria-label={copy.loginLabel}
+              >
+                {copy.loginLabel}
               </Link>
             </>
           }
@@ -226,15 +251,18 @@ export function CinematicLanding() {
               ))}
             </div>
 
-            <p className="yt-overline mb-4">Cartografia editorial para creadores de viaje</p>
-            <h1 className="yt-display max-w-[10ch]">
+            <p className="yt-overline mb-4">{copy.overlineCopy}</p>
+            <h1 className="yt-display max-w-[12ch] text-balance">
               {copy.headline}
             </h1>
-            <p className="mt-5 max-w-[58ch] text-base leading-7 text-muted-foreground">{copy.body}</p>
+            <p className="mt-5 max-w-[58ch] text-base leading-7 text-muted-foreground text-pretty">{copy.body}</p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href={onboardingPath} className="yt-btn-primary relative z-[322] pointer-events-auto">
                 {copy.ctaPrimary}
+              </Link>
+              <Link href={mapPath} className="yt-btn-secondary relative z-[322] pointer-events-auto">
+                {copy.ctaSecondary}
               </Link>
             </div>
 
@@ -284,6 +312,10 @@ export function CinematicLanding() {
           </motion.div>
         </div>
       </section>
+
+      <div className="relative z-[315] pointer-events-auto">
+        <SiteFooter transparent />
+      </div>
     </main>
   );
 }

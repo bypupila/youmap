@@ -9,14 +9,14 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Mapa global de videos | TravelMap",
-  description: "Mapa fullscreen con un punto por video extraido del canal seleccionado.",
+  title: "Mapa global de videos",
+  description: "Mapa fullscreen con un punto por video extraído del canal seleccionado.",
   openGraph: {
-    title: "Mapa global de videos | TravelMap",
-    description: "Visualiza todos los videos extraidos como puntos sobre el globo.",
+    title: "Mapa global de videos · YouMap",
+    description: "Visualiza todos los videos extraídos como puntos sobre el globo.",
     type: "website",
     url: `${siteUrl}/map`,
-    siteName: "TravelMap - BY PUPILA",
+    siteName: "YouMap",
   },
 };
 
