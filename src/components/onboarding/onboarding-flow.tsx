@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { AirplaneTilt, Handshake, MapPin } from "@phosphor-icons/react";
 import posthog from "posthog-js";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FloatingTopBar } from "@/components/design-system/chrome";
-import { MapExperience } from "@/components/map/map-experience";
+import { MiniMapModel } from "@/components/landing/mini-map-model";
 import { YoutubeImportStep, type ChannelDraft } from "@/components/onboarding/youtube-import-step";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,10 @@ import { cn } from "@/lib/utils";
 
 import type { ChannelAnalytics } from "@/lib/analytics";
 
-type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+// Step 0 ("Overview / Resumen") was removed because it duplicated the
+// landing page's value props and added a click before the user could do
+// anything useful. Onboarding now starts at the channel-connect step.
+type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6;
 type OnboardingLocale = "es" | "en";
 type ActivationState = "idle" | "registering" | "checkout";
 type StepState = "upcoming" | "active" | "done";
@@ -55,7 +57,6 @@ type OnboardingCopy = {
   footerContinue: string;
   footerReviewAccount: string;
   footerOpenDashboard: string;
-  overviewFeatures: Array<{ title: string; copy: string }>;
   importStatusEyebrow: string;
   importStatusTitle: string;
   importStatusBody: string;
@@ -68,7 +69,6 @@ type OnboardingCopy = {
   metricViews: string;
   sponsorsEyebrow: string;
   sponsorsDescription: string;
-  sponsorsConnect: string;
   fanVoteEyebrow: string;
   fanVoteTitle: string;
   fanVoteDescription: string;
@@ -180,7 +180,6 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     workflowPill: "Flujo del creador",
     demoMapLabel: "Mapa demo",
     stepLabels: [
-      { step: 0, label: "Resumen" },
       { step: 1, label: "Canal" },
       { step: 2, label: "Importar" },
       { step: 3, label: "Analítica" },
@@ -189,15 +188,10 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
       { step: 6, label: "Planes" },
     ],
     stepMeta: {
-      0: {
-        eyebrow: "Flujo del canal",
-        title: "Convierte tu canal en una experiencia viva.",
-        description: "Setup, importación, analítica, sponsors y pago en un recorrido corto y claro.",
-      },
       1: {
         eyebrow: "Tu canal",
         title: "Conecta el canal que vas a publicar.",
-        description: "en 5 minutos, tienes tu mapa interactivo.",
+        description: "Pega la URL de tu canal de YouTube. La verificamos al instante y en 5 minutos tendrás tu mapa.",
       },
       2: {
         eyebrow: "Importación",
@@ -231,11 +225,6 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     footerContinue: "Continuar",
     footerReviewAccount: "Revisar cuenta",
     footerOpenDashboard: "Abrir dashboard",
-    overviewFeatures: [
-      { title: "Importa videos", copy: "Lee el catálogo del canal y conserva solo contenido long-form." },
-      { title: "Mapea países", copy: "Asocia cada video válido a un país real y explorable." },
-      { title: "Monetiza destinos", copy: "Activa sponsors y votación sin romper el flujo." },
-    ],
     importStatusEyebrow: "Analítica en progreso",
     importStatusTitle: "Tu rendimiento ya se está preparando.",
     importStatusBody: "Filtramos, ubicamos y ordenamos tus videos para resaltar qué destinos empujan mejor tu canal.",
@@ -248,7 +237,6 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     metricViews: "Views",
     sponsorsEyebrow: "Sponsors",
     sponsorsDescription: "Placements por destino y cards patrocinadas por país.",
-    sponsorsConnect: "Conectar",
     fanVoteEyebrow: "Voto fan",
     fanVoteTitle: "Tu audiencia decide el próximo país.",
     fanVoteDescription: "Convierte interés en señal y la señal en calendario de viaje.",
@@ -295,7 +283,6 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     workflowPill: "Creator flow",
     demoMapLabel: "Demo map",
     stepLabels: [
-      { step: 0, label: "Overview" },
       { step: 1, label: "Channel" },
       { step: 2, label: "Import" },
       { step: 3, label: "Analytics" },
@@ -304,15 +291,10 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
       { step: 6, label: "Plans" },
     ],
     stepMeta: {
-      0: {
-        eyebrow: "Channel workflow",
-        title: "Turn your channel into a living experience.",
-        description: "Setup, import, analytics, sponsors, and payment in one short flow.",
-      },
       1: {
         eyebrow: "Your channel",
         title: "Connect the channel you want to publish.",
-        description: "Name, email, and a real channel URL are enough to continue.",
+        description: "Paste your YouTube channel URL. We verify it instantly and your map is ready in five minutes.",
       },
       2: {
         eyebrow: "Import",
@@ -346,11 +328,6 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     footerContinue: "Continue",
     footerReviewAccount: "Review account",
     footerOpenDashboard: "Open dashboard",
-    overviewFeatures: [
-      { title: "Import videos", copy: "Read the channel catalog and keep only long-form travel content." },
-      { title: "Map countries", copy: "Attach each valid video to a real, explorable country." },
-      { title: "Monetize destinations", copy: "Unlock sponsors and audience voting without breaking flow." },
-    ],
     importStatusEyebrow: "Analytics in progress",
     importStatusTitle: "Your performance is being prepared.",
     importStatusBody: "We filter, map, and sort your videos so the best-performing destinations are easier to see.",
@@ -363,7 +340,6 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     metricViews: "Views",
     sponsorsEyebrow: "Sponsors",
     sponsorsDescription: "Destination placements and sponsored country cards.",
-    sponsorsConnect: "Connect",
     fanVoteEyebrow: "Fan vote",
     fanVoteTitle: "Your audience picks the next country.",
     fanVoteDescription: "Turn interest into signal and signal into your travel calendar.",
@@ -424,7 +400,7 @@ const showTestNoPaymentPlan = process.env.NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT ===
 export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; locale: OnboardingLocale }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState<OnboardingStep>(0);
+  const [step, setStep] = useState<OnboardingStep>(1);
   const [selectedPlan, setSelectedPlan] = useState<string>("creator_pro");
   const [channelDraft, setChannelDraft] = useState<ChannelDraft>(() => ({
     displayName: isDemoMode ? DEMO_USER.displayName : "",
@@ -439,7 +415,6 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   const didHydrateQueryState = useRef(false);
 
   const copy = onboardingCopy[locale];
-  const previewChannel = DEMO_CHANNEL;
   const previewLocations = DEMO_VIDEO_LOCATIONS;
   const analytics = DEMO_ANALYTICS as ChannelAnalytics;
   const demoMapPath = locale === "en" ? "/map?channelId=drew-global-map" : "/map?channelId=luisito-global-map";
@@ -735,7 +710,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
 
   function handleBack() {
     setStepError(null);
-    setStep((current) => (current > 0 ? ((current - 1) as OnboardingStep) : 0));
+    setStep((current) => (current > 1 ? ((current - 1) as OnboardingStep) : 1));
   }
 
   function stepStateFor(stepIndex: OnboardingStep): StepState {
@@ -745,21 +720,30 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   }
 
   const stepper = (
-    <div className="mx-auto flex w-fit max-w-[620px] gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-[#181818]/95 p-1.5 backdrop-blur">
-      {copy.stepLabels.map((item) => {
+    <div
+      className="mx-auto flex w-fit max-w-[620px] gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-[#181818]/95 p-1.5 backdrop-blur"
+      role="list"
+      aria-label={locale === "es" ? "Pasos del onboarding" : "Onboarding steps"}
+    >
+      {copy.stepLabels.map((item, index) => {
         const state = stepStateFor(item.step);
+        const reachable = item.step <= step;
         return (
           <button
             key={item.step}
             type="button"
+            role="listitem"
+            aria-current={state === "active" ? "step" : undefined}
+            aria-label={`${copy.footerStep} ${index + 1} ${copy.footerOf} ${copy.stepLabels.length}: ${item.label}`}
             className={cn(
-              "inline-flex h-9 items-center justify-center rounded-full px-3 text-[12px] font-medium transition-colors whitespace-nowrap",
-              state === "active" && "bg-white/[0.08] text-[#f3eee7]",
-              state === "done" && "bg-transparent text-[#8b8b8b] hover:text-[#b5b5b5]",
-              state === "upcoming" && "bg-transparent text-[#ff4040] hover:text-[#ff6a6a]"
+              "inline-flex h-9 items-center justify-center rounded-full px-3 text-[12px] font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+              state === "active" && "bg-[rgba(255,0,0,0.16)] text-[#ffd5d5] shadow-[inset_0_0_0_1px_rgba(255,0,0,0.32)]",
+              state === "done" && "bg-transparent text-[#cfcfcf] hover:text-[#f1f1f1]",
+              state === "upcoming" && "bg-transparent text-[#7a7a7a]",
+              reachable ? "cursor-pointer" : "cursor-default",
             )}
             onClick={() => {
-              if (item.step <= step) setStep(item.step);
+              if (reachable) setStep(item.step);
             }}
           >
             {item.label}
@@ -771,17 +755,19 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-[#f1f1f1]">
-      <div className="pointer-events-none absolute inset-0 [&_*]:pointer-events-none">
-        <MapExperience
-          channel={previewChannel}
-          videoLocations={previewLocations}
-          interactive={false}
-          allowRefresh={false}
-          showLegend={false}
-          showOperationsPanel={false}
-          showActiveVideoCard={false}
-          showHeader={false}
-        />
+      <div
+        className="pointer-events-none absolute inset-0 [&_*]:pointer-events-none"
+        aria-hidden="true"
+      >
+        {/*
+          Onboarding doesn't need the full MapExperience as a backdrop —
+          it shipped 1.8K lines of overlay UI that the gradient mask
+          immediately covered. MiniMapModel keeps the rotating globe at a
+          fraction of the cost and reuses the demo data we already have.
+        */}
+        <div className="absolute inset-0 scale-[1.4] opacity-80">
+          <MiniMapModel videoLocations={previewLocations} />
+        </div>
       </div>
 
       <div className="platform-grid-glow pointer-events-none absolute inset-0" />
@@ -851,7 +837,10 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
         </div>
       </section>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-40 px-4">
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-4 z-40 px-4"
+        style={{ paddingBottom: "max(0px, env(safe-area-inset-bottom, 0px))" }}
+      >
         <div className="mx-auto flex max-w-[1040px] items-center justify-between rounded-full border border-white/10 bg-[#181818]/96 px-4 py-3 pointer-events-auto backdrop-blur">
           <Button
             type="button"
@@ -862,12 +851,12 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
               event.stopPropagation();
               handleBack();
             }}
-            disabled={step === 0 || activationState !== "idle"}
+            disabled={step === 1 || activationState !== "idle"}
           >
             {copy.footerBack}
           </Button>
           <p className="hidden text-[12px] text-[#aaaaaa] sm:block">
-            {copy.footerStep} {step + 1} {copy.footerOf} {copy.stepLabels.length}
+            {copy.footerStep} {step} {copy.footerOf} {copy.stepLabels.length}
           </p>
           <Button
             type="button"
@@ -909,31 +898,6 @@ function renderStepBody(
     onActivateWithoutPaymentForTest: () => Promise<void>;
   }
 ) {
-  if (step === 0) {
-    const featureCards = [
-      { ...ctx.copy.overviewFeatures[0], icon: AirplaneTilt },
-      { ...ctx.copy.overviewFeatures[1], icon: MapPin },
-      { ...ctx.copy.overviewFeatures[2], icon: Handshake },
-    ] as const;
-
-    return (
-      <div className="grid gap-4 md:grid-cols-3">
-        {featureCards.map((feature) => {
-          const Icon = feature.icon;
-          return (
-            <div key={feature.title} className="flex flex-col items-center rounded-[28px] border border-white/10 bg-[#212121] p-6 text-center">
-              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(255,0,0,0.14)] text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                <Icon size={30} weight="regular" />
-              </div>
-              <p className="text-[16px] leading-[22px] font-medium text-[#f1f1f1]">{feature.title}</p>
-              <p className="onboarding-description mt-2 text-[14px] leading-6">{feature.copy}</p>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   if (step === 1) {
     return (
       <div className="space-y-4">
@@ -1019,9 +983,16 @@ function renderStepBody(
             </div>
             <p className="text-[16px] font-medium text-[#f1f1f1]">{sponsor.brand}</p>
             <p className="onboarding-description mt-2 text-[13px] leading-5">{ctx.copy.sponsorsDescription}</p>
-            <button type="button" className="yt-btn-secondary mt-5 w-full border border-black/10 bg-white text-black hover:bg-white hover:text-black">
-              {ctx.copy.sponsorsConnect}
-            </button>
+            {/*
+              These cards are decorative previews of the sponsor hub feature.
+              The real connect flow happens after the channel is published, so
+              we show a static preview badge instead of a button that does
+              nothing — users now understand what they're looking at.
+            */}
+            <span className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[#aaaaaa]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#aaaaaa]" aria-hidden="true" />
+              {ctx.locale === "es" ? "Vista previa" : "Preview"}
+            </span>
           </div>
         ))}
       </div>
@@ -1108,8 +1079,11 @@ function renderStepBody(
           );
         })}
       </div>
-      <div className="rounded-2xl border border-[rgba(255,0,0,0.16)] bg-[rgba(255,0,0,0.08)] px-4 py-3 text-[13px] text-[#f1f1f1]">
-        {ctx.copy.trialBadge} · {ctx.copy.trialNote}
+      <div className="flex items-center gap-2 rounded-2xl border border-[rgba(255,0,0,0.18)] bg-[rgba(255,0,0,0.08)] px-4 py-3 text-[13px] text-[#f1f1f1]">
+        <Badge variant="secondary" className="bg-white/[0.06] text-[#ffd5d5]">
+          {ctx.copy.trialBadge}
+        </Badge>
+        <span className="text-[#e7e1d8]">{ctx.copy.trialNote}</span>
       </div>
       {showTestNoPaymentPlan ? (
         <div className="rounded-xl border border-[#ffd27a]/25 bg-[rgba(255,210,122,0.08)] px-3 py-2">
