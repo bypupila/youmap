@@ -4,11 +4,10 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { FloatingTopBar, SignalPill } from "@/components/design-system/chrome";
-import { MapExperience } from "@/components/map/map-experience";
 import { MiniMapModel } from "@/components/landing/mini-map-model";
 import { SiteFooter } from "@/components/site/site-footer";
-import { DEMO_CHANNEL, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
-import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
+import { DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
+import type { TravelVideoLocation } from "@/lib/types";
 
 type Locale = "es" | "en";
 
@@ -43,7 +42,6 @@ const creatorByLocale = {
 } as const;
 
 interface MapPayload {
-  channel: TravelChannel;
   videoLocations: TravelVideoLocation[];
 }
 
@@ -61,7 +59,6 @@ const DEFAULT_PLATFORM_DEMO_COUNTRIES = 165;
 
 export function CinematicLanding() {
   const [locale, setLocale] = useState<Locale>("es");
-  const [mapChannel, setMapChannel] = useState<TravelChannel>(DEMO_CHANNEL);
   const [mapVideos, setMapVideos] = useState<TravelVideoLocation[]>(DEMO_VIDEO_LOCATIONS);
   const [platformTotalVideos, setPlatformTotalVideos] = useState(DEFAULT_PLATFORM_DEMO_VIDEOS);
   const [platformTotalCountries, setPlatformTotalCountries] = useState(DEFAULT_PLATFORM_DEMO_COUNTRIES);
@@ -76,11 +73,9 @@ export function CinematicLanding() {
         if (!response.ok) return;
         const payload = (await response.json()) as MapPayload;
         if (!isCurrent) return;
-        setMapChannel(payload.channel || DEMO_CHANNEL);
         setMapVideos(Array.isArray(payload.videoLocations) ? payload.videoLocations : DEMO_VIDEO_LOCATIONS);
       } catch {
         if (!isCurrent) return;
-        setMapChannel(DEMO_CHANNEL);
         setMapVideos(DEMO_VIDEO_LOCATIONS);
       }
     }
@@ -177,20 +172,24 @@ export function CinematicLanding() {
     <main className="relative isolate min-h-[100dvh] overflow-hidden text-foreground">
       <div className="platform-grid-glow pointer-events-none absolute inset-0 z-0" />
 
-      <div className="pointer-events-none absolute inset-0 z-[1] [&_*]:pointer-events-none">
-        <MapExperience
-          channel={mapChannel}
-          videoLocations={mapVideos}
-          interactive={false}
-          allowRefresh={false}
-          showLegend={false}
-          showOperationsPanel={false}
-          showActiveVideoCard={false}
-          showHeader={false}
-        />
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] [&_*]:pointer-events-none"
+        aria-hidden="true"
+      >
+        {/*
+          Landing uses the lightweight MiniMapModel as a decorative backdrop
+          instead of the full MapExperience. MapExperience is reserved for
+          real map surfaces (/map, /dashboard, /u/[username], onboarding) — on
+          the landing it shipped 1.8K lines of overlay UI that the gradient
+          mask immediately covered up. MiniMapModel reuses the same demo data
+          and gives us the rotating globe at a fraction of the cost.
+        */}
+        <div className="absolute inset-0 scale-[1.35] opacity-90 md:scale-110">
+          <MiniMapModel videoLocations={mapVideos} />
+        </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(17,20,22,0.94),rgba(17,20,22,0.46)_22%,rgba(17,20,22,0.18)_48%,rgba(17,20,22,0.92))]" />
+      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(17,20,22,0.92),rgba(17,20,22,0.42)_22%,rgba(17,20,22,0.18)_48%,rgba(17,20,22,0.92))]" />
 
       <header className="absolute inset-x-0 top-0 z-[320] px-4 py-3 pointer-events-auto">
         <FloatingTopBar
