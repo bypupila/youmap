@@ -170,9 +170,17 @@ async function runSqlFile(sql, filePath) {
 
 async function main() {
   loadDotEnvLocal();
-  const databaseUrl = String(process.env.DATABASE_URL || "").trim();
+  const databaseUrl = String(
+    process.env.DATABASE_URL ||
+      process.env.NEON_DATABASE_URL ||
+      process.env.POSTGRES_URL ||
+      process.env.NEON_POSTGRES_URL ||
+      ""
+  ).trim();
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required in .env.local");
+    throw new Error(
+      "DATABASE_URL (or NEON_DATABASE_URL / POSTGRES_URL / NEON_POSTGRES_URL) is required."
+    );
   }
 
   const sql = neon(databaseUrl);

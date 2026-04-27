@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CaretLeft, CaretRight, X, ArrowSquareOut } from "@phosphor-icons/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CaretLeft, CaretRight, X, ArrowSquareOut, Play } from "@phosphor-icons/react";
 import posthog from "posthog-js";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,25 @@ import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { cn } from "@/lib/utils";
 
 const SEEN_STORAGE_KEY = "travelmap_seen_videos_v1";
+
+/**
+ * Build the canonical YouTube embed URL for a given videoId. We pass
+ * `autoplay=1` so the iframe starts playing the moment we mount it (which
+ * is what users expect after clicking the play overlay), `rel=0` to
+ * suppress related-video chrome at the end, and `playsinline=1` so iOS
+ * Safari plays inside the dialog instead of forcing fullscreen. Without
+ * `playsinline=1` the embed opens its own native fullscreen player and
+ * obscures the rest of the carousel UI.
+ */
+function buildYouTubeEmbedUrl(videoId: string) {
+  const params = new URLSearchParams({
+    autoplay: "1",
+    rel: "0",
+    modestbranding: "1",
+    playsinline: "1",
+  });
+  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
+}
 
 interface VideoCarouselDialogProps {
   open: boolean;
@@ -29,7 +48,17 @@ type CountryBucket = {
 
 export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onChangeVideo }: VideoCarouselDialogProps) {
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  /**
+   * `playingVideoId` is null when we're showing the static thumbnail with a
+   * play overlay, and equal to the current video's YouTube id once the user
+   * has clicked play (or pressed Space / Enter on the focused thumbnail).
+   * We tear the iframe down whenever the user changes videos or closes the
+   * dialog so audio doesn't keep playing in the background.
+   */
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const flagsRowRef = useRef<HTMLDivElement | null>(null);
+
+  const stopPlayback = useCallback(() => setPlayingVideoId(null), []);
 
   const buckets = useMemo(() => {
     const map = new Map<string, CountryBucket>();
@@ -89,6 +118,34 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
         // no-op
       }
       return next;
+    });
+  }, [currentVideo]);
+
+  // Stop playback whenever the user navigates to a different video so the
+  // hidden iframe doesn't keep playing audio in the background, and reset
+  // when the dialog closes for the same reason.
+  useEffect(() => {
+    if (!currentVideo) {
+      stopPlayback();
+      return;
+    }
+    if (playingVideoId && playingVideoId !== currentVideo.youtube_video_id) {
+      stopPlayback();
+    }
+  }, [currentVideo, playingVideoId, stopPlayback]);
+
+  useEffect(() => {
+    if (!open) stopPlayback();
+  }, [open, stopPlayback]);
+
+  const startPlayback = useCallback(() => {
+    if (!currentVideo) return;
+    setPlayingVideoId(currentVideo.youtube_video_id);
+    posthog.capture("video_inline_play", {
+      video_id: currentVideo.youtube_video_id,
+      video_title: currentVideo.title,
+      country_code: currentVideo.country_code,
+      country_name: currentVideo.country_name,
     });
   }, [currentVideo]);
 
@@ -183,16 +240,42 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
               <div className="flex min-h-0 flex-1 items-center justify-center p-4 sm:p-6">
                 <div className="relative w-full max-w-[700px]">
                   <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/30 shadow-[0_24px_70px_-36px_rgba(0,0,0,0.9)]">
-                    <div className="aspect-video">
-                      {currentVideo?.thumbnail_url ? (
-                        <Image
-                          src={toCompactYouTubeThumbnail(currentVideo.thumbnail_url) || currentVideo.thumbnail_url}
-                          alt={currentVideo.title}
-                          width={1280}
-                          height={720}
-                          className="h-full w-full object-cover"
-                          priority
+                    <div className="relative aspect-video">
+                      {currentVideo && playingVideoId === currentVideo.youtube_video_id ? (
+                        <iframe
+                          key={currentVideo.youtube_video_id}
+                          src={buildYouTubeEmbedUrl(currentVideo.youtube_video_id)}
+                          title={currentVideo.title || "YouTube video player"}
+                          className="absolute inset-0 h-full w-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          loading="eager"
                         />
+                      ) : currentVideo?.thumbnail_url ? (
+                        <button
+                          type="button"
+                          onClick={startPlayback}
+                          aria-label={`Reproducir ${currentVideo.title}`}
+                          className="group relative block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(255,0,0,0.7)]"
+                        >
+                          <Image
+                            src={toCompactYouTubeThumbnail(currentVideo.thumbnail_url) || currentVideo.thumbnail_url}
+                            alt={currentVideo.title}
+                            width={1280}
+                            height={720}
+                            className="h-full w-full object-cover"
+                            priority
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.05),rgba(0,0,0,0.55))] transition-colors group-hover:bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.1),rgba(0,0,0,0.65))]"
+                          >
+                            <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-[rgba(255,0,0,0.92)] text-white shadow-[0_18px_48px_-18px_rgba(0,0,0,0.8)] transition-transform group-hover:scale-105">
+                              <Play size={28} weight="fill" />
+                            </span>
+                          </span>
+                        </button>
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-white/5 text-[#717171]">No thumbnail</div>
                       )}
@@ -305,7 +388,7 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
                     }}
                   >
                     <ArrowSquareOut size={14} />
-                    Ver video
+                    Abrir en YouTube
                   </Button>
 
                   <Button type="button" variant="outline" className="h-11 rounded-full border-white/10 bg-white/[0.03] px-4 text-[12px]" onClick={onClose}>

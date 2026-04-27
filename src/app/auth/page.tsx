@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowRight, MapPin, Plug, Sparkle } from "@phosphor-icons/react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, MapPin, Plug, Sparkle, Warning } from "@phosphor-icons/react";
 import { MarketingShell } from "@/components/site/marketing-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,19 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type AuthTab = "login" | "signup";
+
+/**
+ * Maps the limited set of `?error=` codes we redirect users to /auth with
+ * (e.g. from /api/auth/callback/google when Google sign-in is disabled) into
+ * human copy. Keeping this server-side-friendly and explicit avoids leaking
+ * raw codes in the UI when an unrelated route hits the page.
+ */
+const AUTH_ERROR_COPY: Record<string, string> = {
+  google_auth_disabled:
+    "El acceso con Google no está disponible por ahora. Iniciá sesión con tu email y contraseña.",
+  session_expired: "Tu sesión expiró. Volvé a iniciar sesión para continuar.",
+  unauthorized: "Necesitás iniciar sesión para acceder a esa sección.",
+};
 
 const signupHighlights = [
   {
@@ -32,12 +45,21 @@ const signupHighlights = [
 
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<AuthTab>("login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirectNotice, setRedirectNotice] = useState<string | null>(null);
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+
+  const initialErrorCode = useMemo(() => searchParams?.get("error") ?? null, [searchParams]);
+
+  useEffect(() => {
+    if (!initialErrorCode) return;
+    setRedirectNotice(AUTH_ERROR_COPY[initialErrorCode] ?? null);
+  }, [initialErrorCode]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -142,6 +164,17 @@ export default function AuthPage() {
               </button>
             ))}
           </div>
+
+          {redirectNotice ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-6 flex items-start gap-3 rounded-2xl border border-[rgba(255,176,167,0.32)] bg-[rgba(255,176,167,0.08)] px-4 py-3 text-sm leading-6 text-[#ffd6cf]"
+            >
+              <Warning size={18} weight="duotone" aria-hidden="true" className="mt-0.5 shrink-0" />
+              <p>{redirectNotice}</p>
+            </div>
+          ) : null}
 
           <div
             id="auth-panel-login"
