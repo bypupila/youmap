@@ -91,6 +91,50 @@
   z-index: 1;
 }
 
+/* ------------------------------------------------------------------------ */
+/* Accessibility: reduced motion                                             */
+/* ------------------------------------------------------------------------ */
+/*
+ * When the user has requested reduced motion (Windows / macOS / iOS /
+ * Android settings), we collapse all animations and CSS transitions to a
+ * near-instant pass instead of the long Framer-Motion-style choreography
+ * the marketing pages and onboarding rely on. We deliberately do NOT set
+ * `animation: none` because some components (e.g. spinners) rely on the
+ * animated state to express "loading"; we keep them moving but very fast.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Performance: mobile backdrop-blur                                         */
+/* ------------------------------------------------------------------------ */
+/*
+ * Several surfaces (`.yt-search`, `.yt-navbar`, `.tm-surface*`, the bottom
+ * onboarding bar) layer heavy `backdrop-filter: blur(...) saturate(...)`
+ * effects. On low-end Android devices and Safari mobile this causes
+ * scroll jank and battery drain. Below 640px we soften the blur so the
+ * frame-rate stays smooth without losing the glass aesthetic entirely.
+ */
+@media (max-width: 640px) {
+  .yt-search,
+  .yt-navbar,
+  .tm-surface,
+  .tm-surface-strong,
+  .platform-grid-glow,
+  [class*="backdrop-blur"] {
+    backdrop-filter: blur(8px) saturate(1) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1) !important;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
