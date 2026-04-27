@@ -12,7 +12,10 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "connect-src 'self' https: wss:",
-  "frame-src 'self'"
+  // Allow embedded YouTube players inside the map's video carousel. Without
+  // these origins, `frame-src 'self'` blocks the iframe and the user just
+  // sees a blank player.
+  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com"
 ].join("; ");
 
 /** @type {import('next').NextConfig} */
