@@ -21,6 +21,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
 import {
   DestinationCard,

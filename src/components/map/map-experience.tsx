@@ -439,11 +439,17 @@ export function MapExperience({
           }
         : null,
     ];
+    /*
+     * `react-hooks/refs` flags this `.filter` because the array we are
+     * filtering contains closures that capture rail refs (e.g.
+     * `() => scrollToRail(videosRailRef)`). Those closures defer the
+     * `.current` read until click, never during render, so the warning is
+     * a false positive here. The dep list is also intentionally narrow:
+     * `scrollToRail` is recreated each render and reads only stable ref
+     * objects, so excluding it does not cause stale closures.
+     */
+    // eslint-disable-next-line react-hooks/refs
     return items.filter((item): item is SidebarNavItem => Boolean(item));
-    // `scrollToRail` is recreated each render but its body just reads stable
-    // ref objects, so excluding it is intentional. The other deps cover all
-    // values consulted while building the list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     viewer,
     resolvedSummary,
