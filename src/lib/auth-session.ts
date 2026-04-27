@@ -24,7 +24,17 @@ function getSessionSecret() {
   const explicit = sanitizeEnvValue(process.env.AUTH_SESSION_SECRET || process.env.SESSION_SECRET || "");
   if (explicit) return explicit;
 
-  const fallback = sanitizeEnvValue(process.env.DATABASE_URL || "");
+  // Last-resort fallback: derive a stable HMAC key from whichever Neon
+  // connection string is present. Marketplace-provisioned projects only
+  // expose the NEON_* aliases, so checking DATABASE_URL alone would leave
+  // the secret empty and throw on every authenticated request.
+  const fallback = sanitizeEnvValue(
+    process.env.DATABASE_URL ||
+      process.env.NEON_DATABASE_URL ||
+      process.env.POSTGRES_URL ||
+      process.env.NEON_POSTGRES_URL ||
+      ""
+  );
   if (!fallback) {
     throw new Error("AUTH_SESSION_SECRET or SESSION_SECRET is required.");
   }
