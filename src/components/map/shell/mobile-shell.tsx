@@ -19,7 +19,6 @@ import {
   X,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import type { Icon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
@@ -33,7 +32,7 @@ import {
 } from "@/components/map/shell/rail-cards";
 import { ChannelAvatar, OverviewMetric, VideoThumb } from "@/components/map/shell/map-pieces";
 import { formatNumber, formatPlace } from "@/components/map/lib/format";
-import type { MapShellProps } from "@/components/map/shell/shell-types";
+import type { MapShellProps, SidebarNavItem } from "@/components/map/shell/shell-types";
 import type { TravelChannel } from "@/lib/types";
 import type { MapSummary } from "@/lib/map-data";
 import { Input } from "@/components/ui/input";
@@ -107,9 +106,11 @@ export function MobileMapShell({
 
 function MobileBrandHeader({
   channel,
+  eyebrow,
   onMenu,
 }: {
   channel: TravelChannel;
+  eyebrow?: string;
   onMenu: () => void;
 }) {
   return (
@@ -127,7 +128,7 @@ function MobileBrandHeader({
         <ChannelAvatar channel={channel} size="sm" />
         <div className="min-w-0">
           <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c8d0d8]">
-            World by
+            {eyebrow ?? "World by"}
           </p>
           <p className="max-w-[180px] truncate text-[15px] font-semibold leading-5 text-[#f7f8fa]">
             {channel.channel_name}
@@ -180,6 +181,7 @@ function MobileStatsGrid({
 
 function MobileOverviewView({
   channel,
+  headerEyebrow,
   resolvedSummary,
   cityCount,
   visibleRecentVideos,
@@ -189,7 +191,11 @@ function MobileOverviewView({
 }: MapShellProps & { setMobileTab: Dispatch<SetStateAction<MobileMapTab>> }) {
   return (
     <div className="flex min-h-full w-full flex-col">
-      <MobileBrandHeader channel={channel} onMenu={() => setMobileMenuOpen(true)} />
+      <MobileBrandHeader
+        channel={channel}
+        eyebrow={headerEyebrow}
+        onMenu={() => setMobileMenuOpen(true)}
+      />
 
       <section className="rounded-2xl border border-white/10 bg-[#07101a]/88 p-4 shadow-[0_26px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
         <h1 className="text-[20px] font-semibold leading-6 text-[#f5f7fb]">
@@ -643,13 +649,7 @@ export function MobileSidePanel({
   channel: TravelChannel;
   open: boolean;
   onClose: () => void;
-  navItems: Array<{
-    label: string;
-    icon: Icon;
-    href?: string;
-    onClick?: () => void;
-    count?: number;
-  }>;
+  navItems: SidebarNavItem[];
   copyShareUrl: () => void;
   copyState: "idle" | "copied" | "error";
 }) {

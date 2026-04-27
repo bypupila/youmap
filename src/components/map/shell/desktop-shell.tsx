@@ -22,7 +22,6 @@ import {
   X,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import type { Icon } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,15 +49,11 @@ import {
   formatNumber,
   formatPlace,
 } from "@/components/map/lib/format";
-import type { FilterWindow, MapShellProps } from "@/components/map/shell/shell-types";
-
-type SidebarNavItem = {
-  label: string;
-  icon: Icon;
-  href?: string;
-  onClick?: () => void;
-  count?: number;
-};
+import type {
+  FilterWindow,
+  MapShellProps,
+  SidebarNavItem,
+} from "@/components/map/shell/shell-types";
 
 const SIDEBAR_WIDTH = 200;
 const SIDEBAR_WIDTH_PX = `${SIDEBAR_WIDTH}px`;
@@ -113,6 +108,7 @@ export function DesktopMapShell(props: MapShellProps) {
 
 function DesktopSidebar({
   channel,
+  headerEyebrow,
   viewer,
   youtubeUrl,
   mapUrl,
@@ -205,7 +201,7 @@ function DesktopSidebar({
               </span>
               <span className="min-w-0">
                 <span className="block text-[10px] font-semibold uppercase leading-3 tracking-[0.16em] text-[#c8d0d8]">
-                  World by
+                  {headerEyebrow ?? "World by"}
                 </span>
                 <span className="block truncate text-[15px] font-semibold leading-5 text-[#f6f7f8]">
                   {channel.channel_name}
@@ -634,69 +630,4 @@ function SidebarItem({ item }: { item: SidebarNavItem }) {
   );
 }
 
-/*
- * Build the same nav item list the desktop sidebar uses, so the mobile
- * side panel can feed off the same data without re-implementing the
- * logic. Exported so `<MapExperience>` can pass it to `<MobileSidePanel>`.
- */
-export function buildMobileNavItems(
-  props: Pick<
-    MapShellProps,
-    | "viewer"
-    | "resolvedSummary"
-    | "pollState"
-    | "sponsors"
-    | "pendingManual"
-    | "selectCountry"
-    | "scrollToRail"
-    | "setMissingVideosOpen"
-    | "videosRailRef"
-    | "votesRailRef"
-    | "sponsorsRailRef"
-  >
-): SidebarNavItem[] {
-  const items: Array<SidebarNavItem | null> = [
-    { label: "Inicio", icon: House, href: "/" },
-    {
-      label: "Mapa",
-      icon: MapPin,
-      onClick: () => props.selectCountry(null),
-      count: props.resolvedSummary.total_countries,
-    },
-    {
-      label: "Videos",
-      icon: Video,
-      onClick: () => props.scrollToRail(props.videosRailRef),
-      count: props.resolvedSummary.total_videos,
-    },
-    props.pollState || props.viewer.isOwner
-      ? {
-          label: "Votaciones",
-          icon: Trophy,
-          onClick: () => props.scrollToRail(props.votesRailRef),
-          count: props.pollState?.total_votes || undefined,
-        }
-      : null,
-    props.sponsors.length > 0
-      ? {
-          label: "Sponsors",
-          icon: UsersThree,
-          onClick: () => props.scrollToRail(props.sponsorsRailRef),
-          count: props.sponsors.length,
-        }
-      : null,
-    props.viewer.isOwner && props.viewer.adminUrl
-      ? { label: "Analytics", icon: ChartBar, href: props.viewer.adminUrl }
-      : null,
-    props.viewer.isOwner && props.pendingManual.length > 0
-      ? {
-          label: "Ajustes",
-          icon: GearSix,
-          onClick: () => props.setMissingVideosOpen(true),
-          count: props.pendingManual.length,
-        }
-      : null,
-  ];
-  return items.filter((item): item is SidebarNavItem => Boolean(item));
-}
 

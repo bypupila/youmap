@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import posthog from "posthog-js";
+import {
+  ChartBar,
+  GearSix,
+  House,
+  MapPin,
+  Trophy,
+  UsersThree,
+  Video,
+} from "@phosphor-icons/react";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
 import { MissingVideosDialog } from "@/components/map/missing-videos-dialog";
 import { VideoCarouselDialog } from "@/components/map/video-carousel-dialog";
@@ -14,13 +23,14 @@ import {
   buildChannelUrl,
   sortRecentVideos,
 } from "@/components/map/lib/format";
-import { DesktopMapShell, buildMobileNavItems } from "@/components/map/shell/desktop-shell";
+import { DesktopMapShell } from "@/components/map/shell/desktop-shell";
 import { MobileMapShell, MobileSidePanel } from "@/components/map/shell/mobile-shell";
 import type { MobileMapTab } from "@/components/map/shell/mobile-shell";
 import type {
   FilterWindow,
   MapShellProps,
   PollOptionInput,
+  SidebarNavItem,
   SyncState,
   SyncSummary,
 } from "@/components/map/shell/shell-types";
@@ -84,6 +94,7 @@ export function MapExperience({
   sponsors = [],
   activePoll = null,
   availablePollOptions = [],
+  headerEyebrow,
 }: MapExperienceProps) {
   const incomingManualQueue = manualQueue ?? EMPTY_MANUAL_QUEUE;
   const [items, setItems] = useState<TravelVideoLocation[]>(videoLocations);
@@ -325,18 +336,24 @@ export function MapExperience({
     selectCountry(String(first.country_code).toUpperCase());
   }
 
-  function selectCountry(countryCode: string | null) {
-    const normalized = countryCode ? String(countryCode).toUpperCase() : null;
-    setSelectedCountryCode(normalized);
-    setFocusCountryCode(normalized);
-    if (normalized) {
-      posthog.capture("map_country_selected", {
-        country_code: normalized,
-        channel_id: channelId,
-        channel_name: channel.channel_name,
-      });
-    }
-  }
+  // Memoize so the `mobileNavItems` useMemo below has a stable dep entry.
+  // Re-creating `selectCountry` on every render was invalidating the memo
+  // every frame, defeating its purpose.
+  const selectCountry = useCallback(
+    (countryCode: string | null) => {
+      const normalized = countryCode ? String(countryCode).toUpperCase() : null;
+      setSelectedCountryCode(normalized);
+      setFocusCountryCode(normalized);
+      if (normalized) {
+        posthog.capture("map_country_selected", {
+          country_code: normalized,
+          channel_id: channelId,
+          channel_name: channel.channel_name,
+        });
+      }
+    },
+    [channelId, channel.channel_name],
+  );
 
   function openVideo(video: TravelVideoLocation) {
     setPinnedVideo(video);
@@ -371,9 +388,76 @@ export function MapExperience({
     setMobileMenuOpen(false);
   }
 
+  /*
+   * Build the mobile side-panel nav items inline. We previously delegated to
+   * a `buildMobileNavItems` helper, but the `react-hooks/refs` rule kept
+   * flagging the call site whenever the rail refs flowed through (even via
+   * pre-bound `useCallback`s). Since the desktop sidebar already builds its
+   * own list inline and the two lists never had a perfect overlap anyway,
+   * inlining here is simpler and avoids tripping the lint rule.
+   */
+  const mobileNavItems = useMemo<SidebarNavItem[]>(() => {
+    const items: Array<SidebarNavItem | null> = [
+      { label: "Inicio", icon: House, href: "/" },
+      {
+        label: "Mapa",
+        icon: MapPin,
+        onClick: () => selectCountry(null),
+        count: resolvedSummary.total_countries,
+      },
+      {
+        label: "Videos",
+        icon: Video,
+        onClick: () => scrollToRail(videosRailRef),
+        count: resolvedSummary.total_videos,
+      },
+      pollState || viewer.isOwner
+        ? {
+            label: "Votaciones",
+            icon: Trophy,
+            onClick: () => scrollToRail(votesRailRef),
+            count: pollState?.total_votes || undefined,
+          }
+        : null,
+      sponsors.length > 0
+        ? {
+            label: "Sponsors",
+            icon: UsersThree,
+            onClick: () => scrollToRail(sponsorsRailRef),
+            count: sponsors.length,
+          }
+        : null,
+      viewer.isOwner && viewer.adminUrl
+        ? { label: "Analytics", icon: ChartBar, href: viewer.adminUrl }
+        : null,
+      viewer.isOwner && pendingManual.length > 0
+        ? {
+            label: "Ajustes",
+            icon: GearSix,
+            onClick: () => setMissingVideosOpen(true),
+            count: pendingManual.length,
+          }
+        : null,
+    ];
+    return items.filter((item): item is SidebarNavItem => Boolean(item));
+    // `scrollToRail` is recreated each render but its body just reads stable
+    // ref objects, so excluding it is intentional. The other deps cover all
+    // values consulted while building the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    viewer,
+    resolvedSummary,
+    pollState,
+    sponsors,
+    pendingManual,
+    selectCountry,
+    setMissingVideosOpen,
+  ]);
+
   const shellProps: MapShellProps = {
     channel,
     channelId,
+    headerEyebrow,
     viewer,
     youtubeUrl,
     mapUrl,
@@ -449,8 +533,6 @@ export function MapExperience({
       </div>
     );
   }
-
-  const mobileNavItems = buildMobileNavItems(shellProps);
 
   return (
     <div

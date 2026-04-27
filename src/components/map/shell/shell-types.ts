@@ -1,9 +1,23 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import type { ManualVerificationItem, MapSummary } from "@/lib/map-data";
 import type { MapPollRecord } from "@/lib/map-polls";
 import type { MapRailSponsor, MapViewerContext } from "@/lib/map-public";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import type { CountryBucket, DestinationCandidate } from "@/components/map/lib/aggregations";
+
+/**
+ * Shape of a single entry in the desktop sidebar / mobile side panel.
+ * Either provides an `href` (renders as a `<Link>`) or an `onClick` (renders
+ * as a `<button>`); a few entries surface a numeric badge via `count`.
+ */
+export type SidebarNavItem = {
+  label: string;
+  icon: Icon;
+  href?: string;
+  onClick?: () => void;
+  count?: number;
+};
 
 export type FilterWindow = "30" | "90" | "365" | "all";
 export type SyncState = "idle" | "running" | "success" | "error";
@@ -33,6 +47,12 @@ export type PollOptionInput = {
 export type MapShellProps = {
   channel: TravelChannel;
   channelId: string | null;
+  /**
+   * Optional short label rendered above the channel name in the topbar
+   * (e.g. "Mapa público", "Vista previa"). Surfaces context like preview
+   * vs published vs demo without us having to change the channel name.
+   */
+  headerEyebrow?: string;
   viewer: MapViewerContext;
   youtubeUrl: string | null;
   mapUrl: string;
