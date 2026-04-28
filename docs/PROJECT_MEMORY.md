@@ -226,6 +226,7 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 - Se agrega cache temporal de `loadChannelPlaylistSignals` para reducir recarga de playlists en imports/sync consecutivos del mismo canal.
 - Se agregan metadata dinamica en `/u/[username]`, `sitemap.ts` y `robots.ts` para baseline SEO de lanzamiento.
 - Se agrega endpoint de metricas operativas de import por usuario (`GET /api/youtube/import/metrics`) y documentacion de release/incidentes en `docs/GO_NO_GO_CHECKLIST.md` y `docs/IMPORT_RUNBOOK.md`.
+- Se cambia Agentation a opt-in con `NEXT_PUBLIC_ENABLE_AGENTATION=1`; por defecto no se monta en desarrollo para evitar overlays/FocusScope que interfieran con `/dashboard` y reportes de hidratacion.
 
 ### 2026-04-24
 

@@ -20,6 +20,7 @@ const requiredOneOf = [
 ];
 
 const optional = [
+  "NEXT_PUBLIC_ENABLE_AGENTATION",
   "GEMINI_MODEL",
   "NEON_PROJECT_ID",
   "YOUTUBE_IMPORT_WORKER_TOKEN",
