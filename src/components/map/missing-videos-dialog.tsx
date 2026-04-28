@@ -274,6 +274,12 @@ export function MissingVideosDialog({
             </DialogTitle>
             <DialogDescription className="mt-1 max-w-[640px] text-[12px] leading-5 text-[#9aa0a6] sm:text-[13px]">
               Assign a country and city to videos we could not auto-locate. You can pick any country and city in the world.
+      <DialogContent className="inset-0 left-0 top-0 z-[420] h-[100dvh] w-[100dvw] max-h-[100dvh] max-w-none translate-x-0 translate-y-0 overflow-hidden rounded-none border-0 bg-[linear-gradient(180deg,rgba(18,21,23,0.98),rgba(12,15,17,0.96))] p-0 text-[#f1f1f1] shadow-none sm:max-w-none">
+        <div className="border-b border-white/10 px-5 py-4 sm:px-6">
+          <DialogHeader className="gap-1">
+            <DialogTitle className="text-[18px] font-medium text-[#f1f1f1]">Missing videos</DialogTitle>
+            <DialogDescription className="text-[13px] leading-6 text-[#aaaaaa]">
+              Bulk review the queue, assign the same country or city to multiple videos, and confirm one by one only when needed.
             </DialogDescription>
           </div>
           <button

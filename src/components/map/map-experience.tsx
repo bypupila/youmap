@@ -54,6 +54,7 @@ type SyncState = "idle" | "running" | "success" | "error";
 type MobileMapTab = "overview" | "map" | "videos" | "community" | "more";
 type MapViewMode = "viewer" | "creator" | "demo";
 type DesktopMapTab = "all" | "watched" | "saved" | "featured";
+type GlobeCommandAction = "reset_view" | "zoom_out" | "toggle_rotation";
 
 const EMPTY_MANUAL_QUEUE: ManualVerificationItem[] = [];
 const DEFAULT_VIEWER: MapViewerContext = { isOwner: false, shareUrl: "", adminUrl: null };
@@ -165,6 +166,7 @@ type MapShellProps = {
   setDesktopMenuHidden: Dispatch<SetStateAction<boolean>>;
   setPollState: Dispatch<SetStateAction<MapPollRecord | null>>;
   setDesktopMapTab: Dispatch<SetStateAction<DesktopMapTab>>;
+  issueGlobeCommand: (action: GlobeCommandAction) => void;
   locateFirstSearchResult: () => void;
   selectCountry: (countryCode: string | null) => void;
   openVideo: (video: TravelVideoLocation) => void;
@@ -210,6 +212,7 @@ export function MapExperience({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopMenuHidden, setDesktopMenuHidden] = useState(false);
   const [desktopMapTab, setDesktopMapTab] = useState<DesktopMapTab>("all");
+  const [globeCommand, setGlobeCommand] = useState<{ id: number; action: GlobeCommandAction } | null>(null);
   const [pollState, setPollState] = useState<MapPollRecord | null>(activePoll);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const videosRailRef = useRef<HTMLDivElement | null>(null);
@@ -462,34 +465,45 @@ export function MapExperience({
     const shareUrl = viewer.shareUrl || (typeof window !== "undefined" ? window.location.href : "");
     if (!shareUrl) return;
 
+    const copyWithTextarea = () => {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = shareUrl;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return copied;
+      } catch {
+        return false;
+      }
+    };
+
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      if (!copyWithTextarea() && typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
+      }
       setCopyState("copied");
       posthog.capture("map_share_url_copied", {
         channel_id: channelId,
         channel_name: channel.channel_name,
       });
     } catch {
-      try {
-        const textarea = document.createElement("textarea");
-        textarea.value = shareUrl;
-        textarea.setAttribute("readonly", "");
-        textarea.style.position = "absolute";
-        textarea.style.left = "-9999px";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-        setCopyState("copied");
-      } catch {
-        setCopyState("error");
-      }
+      setCopyState("error");
     }
   }
 
   function scrollToRail(ref: React.RefObject<HTMLDivElement | null>) {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setMobileMenuOpen(false);
+  }
+
+  function issueGlobeCommand(action: GlobeCommandAction) {
+    setGlobeCommand({ id: Date.now(), action });
   }
 
   const shellProps: MapShellProps = {
@@ -537,6 +551,7 @@ export function MapExperience({
     setDesktopMenuHidden,
     setPollState,
     locateFirstSearchResult,
+    issueGlobeCommand,
     selectCountry,
     openVideo,
     copyShareUrl,
@@ -562,6 +577,7 @@ export function MapExperience({
           onCountrySelect={selectCountry}
           focusCountryCode={focusCountryCode}
           selectedCountryCode={selectedCountryCode}
+          command={globeCommand}
         />
       </div>
     );
@@ -583,6 +599,7 @@ export function MapExperience({
         onCountrySelect={selectCountry}
         focusCountryCode={focusCountryCode}
         selectedCountryCode={selectedCountryCode}
+        command={globeCommand}
       />
 
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(5,8,13,0.98),rgba(5,8,13,0.64)_24%,rgba(5,8,13,0.14)_48%,rgba(5,8,13,0.7)_78%,rgba(5,8,13,0.96))]" />
@@ -632,7 +649,7 @@ function MapAppShell(props: MapShellProps) {
 
           <div
             data-map-scroll="true"
-            className="pointer-events-auto flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-4 pt-36 sm:px-4 md:pt-28 xl:grid xl:grid-cols-[minmax(270px,300px)_minmax(0,1fr)_minmax(310px,340px)] xl:gap-4 xl:overflow-hidden xl:pb-5 xl:pl-4 xl:pr-5 xl:pt-[88px]"
+            className="pointer-events-auto flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-4 pt-36 sm:px-4 md:pt-28 xl:pointer-events-none xl:grid xl:grid-cols-[minmax(270px,300px)_minmax(0,1fr)_minmax(310px,340px)] xl:gap-4 xl:overflow-hidden xl:pb-5 xl:pl-4 xl:pr-5 xl:pt-[88px]"
           >
             <MapOverviewRail {...props} />
             <MapCenterStage {...props} />
@@ -1205,9 +1222,6 @@ function MapSidebar({
   mobileMenuOpen,
   desktopMenuHidden,
   setMobileMenuOpen,
-  setDesktopMenuHidden,
-  copyShareUrl,
-  copyState,
   selectCountry,
   setMissingVideosOpen,
   scrollToRail,
@@ -1215,6 +1229,28 @@ function MapSidebar({
   votesRailRef,
   sponsorsRailRef,
 }: MapShellProps) {
+  const [fallbackChannelThumb, setFallbackChannelThumb] = useState<string | null>(null);
+  const channelThumb = channel.thumbnail_url || fallbackChannelThumb;
+
+  useEffect(() => {
+    if (channel.thumbnail_url || !youtubeUrl) return;
+    let active = true;
+    fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!active) return;
+        const thumb = String(payload?.thumbnail_url || "").trim();
+        setFallbackChannelThumb(thumb || null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setFallbackChannelThumb(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [channel.thumbnail_url, youtubeUrl]);
+
   const rawNavItems: Array<SidebarNavItem | null> = [
     { label: "Inicio", icon: House, href: "/" },
     { label: "Mapa", icon: MapPin, onClick: () => selectCountry(null), count: resolvedSummary.total_countries },
@@ -1230,15 +1266,7 @@ function MapSidebar({
     <>
       {!desktopMenuHidden ? (
         <aside className="pointer-events-auto hidden w-[184px] shrink-0 border-r border-white/10 bg-[#060a11]/95 px-3 py-4 backdrop-blur-2xl lg:flex lg:flex-col">
-          <button
-            type="button"
-            className="mb-3 inline-flex h-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-medium text-[#cfd6df] transition hover:bg-white/[0.08]"
-            onClick={() => setDesktopMenuHidden(true)}
-            aria-label="Ocultar menu lateral"
-          >
-            Ocultar menu
-          </button>
-        <Link href={mapUrl} className="mb-5 flex items-center gap-3 rounded-2xl px-2 py-1.5 transition-colors hover:bg-white/[0.04]">
+          <Link href={mapUrl} className="mb-5 flex items-center gap-3 rounded-2xl px-2 py-1.5 transition-colors hover:bg-white/[0.04]">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[rgba(255,0,0,0.55)] bg-[rgba(255,0,0,0.12)] text-[#ff3b3b]">
             <YoutubeLogo size={22} weight="fill" />
           </span>
@@ -1261,12 +1289,17 @@ function MapSidebar({
         <div className="mt-auto space-y-3">
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
             <div className="flex items-center gap-3">
-              <ChannelAvatar channel={channel} size="sm" />
+              <ChannelAvatar channel={channel} size="sm" thumbnailUrlOverride={channelThumb} />
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-medium text-[#f4f4f4]">Tu Canal</p>
                 <p className="text-[11px] text-[#9da5ae]">{formatNumber(Number(channel.subscriber_count || 0))} suscriptores</p>
               </div>
             </div>
+            {channelThumb ? (
+              <a href={channelThumb} target="_blank" rel="noreferrer" className="mt-2 block text-[11px] text-[#9da5ae] hover:text-[#dbe1e7]">
+                Ver imagen del canal
+              </a>
+            ) : null}
             {youtubeUrl ? (
               <a href={youtubeUrl} target="_blank" rel="noreferrer" className="mt-3 flex h-9 items-center justify-center gap-2 rounded-lg bg-[#c91f18] text-[12px] font-semibold text-white transition hover:bg-[#e03128]">
                 <YoutubeLogo size={14} weight="fill" />
@@ -1274,29 +1307,11 @@ function MapSidebar({
               </a>
             ) : null}
           </div>
-
-          <button type="button" className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-medium text-[#dbe1e7] transition hover:bg-white/[0.08]" onClick={copyShareUrl}>
-            {copyState === "copied" ? <Check size={14} /> : <Copy size={14} />}
-            {copyState === "copied" ? "Canal copiado" : "Copiar canal"}
-          </button>
         </div>
         </aside>
       ) : (
         <div className="pointer-events-none hidden w-0 shrink-0 lg:block" />
       )}
-
-      {desktopMenuHidden ? (
-        <div className="pointer-events-auto fixed left-3 top-3 z-[360] hidden lg:block">
-          <button
-            type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-[#07101a]/90 text-[12px] font-medium text-[#f4f7fb] backdrop-blur transition hover:bg-[#0b1421]"
-            aria-label="Mostrar menu lateral"
-            onClick={() => setDesktopMenuHidden(false)}
-          >
-            <List size={16} />
-          </button>
-        </div>
-      ) : null}
 
       <div className="pointer-events-auto fixed left-3 top-3 z-[360] lg:hidden">
         <button
@@ -1354,40 +1369,43 @@ function MapTopBar({
   copyShareUrl,
   copyState,
   setMissingVideosOpen,
-  pendingManual,
-  youtubeUrl,
   channel,
   desktopMenuHidden,
+  setDesktopMenuHidden,
   canUseAdminPanels,
 }: MapShellProps) {
   return (
     <header className={cn("pointer-events-auto absolute inset-x-0 top-0 z-[370] px-16 py-3 sm:px-20 lg:px-4 xl:px-5", desktopMenuHidden ? "lg:left-0" : "lg:left-[184px]")}>
       <div className="mx-auto grid min-h-[52px] w-full max-w-[1180px] grid-cols-1 gap-3 rounded-2xl border border-white/10 bg-[#07101a]/82 p-2 shadow-[0_28px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="yt-search h-10 min-h-10 w-full max-w-none rounded-xl border-white/10 bg-white/[0.04]">
-          <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
-            <MagnifyingGlass size={16} />
+        <div className="flex min-w-0 items-center gap-2">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="outline"
+            className="hidden shrink-0 lg:inline-flex"
+            aria-label={desktopMenuHidden ? "Mostrar menu lateral" : "Ocultar menu lateral"}
+            onClick={() => setDesktopMenuHidden((current) => !current)}
+          >
+            <List size={15} />
+          </Button>
+          <div className="yt-search h-10 min-h-10 w-full max-w-none rounded-xl border-white/10 bg-white/[0.04]">
+            <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
+              <MagnifyingGlass size={16} />
+            </div>
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") locateFirstSearchResult();
+              }}
+              placeholder="Buscar destinos o videos"
+              className="h-full border-0 bg-transparent px-3 text-[13px] text-foreground shadow-none focus-visible:ring-0"
+            />
           </div>
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") locateFirstSearchResult();
-            }}
-            placeholder="Buscar destinos o videos"
-            className="h-full border-0 bg-transparent px-3 text-[13px] text-foreground shadow-none focus-visible:ring-0"
-          />
         </div>
 
         <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
-          {youtubeUrl ? (
-            <Button asChild size="sm" variant="outline" className="shrink-0">
-              <a href={youtubeUrl} target="_blank" rel="noreferrer">
-                <ArrowSquareOut size={14} />
-                Canal
-              </a>
-            </Button>
-          ) : null}
-          {canUseAdminPanels && pendingManual.length > 0 ? (
+          {canUseAdminPanels ? (
             <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => setMissingVideosOpen(true)}>
               <WarningCircle size={14} />
               Videos faltantes
@@ -1494,6 +1512,7 @@ function MapCenterStage({
   channelId,
   pollState,
   sponsors,
+  issueGlobeCommand,
 }: MapShellProps) {
   return (
     <section className="pointer-events-none relative order-1 min-h-[520px] xl:order-none xl:min-h-0">
@@ -1530,14 +1549,17 @@ function MapCenterStage({
       </div>
 
       <div className="pointer-events-auto absolute right-3 top-1/2 z-[330] hidden -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#07101a]/82 backdrop-blur-2xl md:flex">
-        <button type="button" className="flex h-10 w-10 items-center justify-center text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => selectCountry(null)} aria-label="Mostrar mapa completo">
+        <button type="button" className="flex h-10 w-10 items-center justify-center text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => { selectCountry(null); issueGlobeCommand("reset_view"); }} aria-label="Mostrar mapa completo">
           <House size={16} />
         </button>
         <button type="button" className="flex h-10 w-10 items-center justify-center border-t border-white/10 text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => selectCountry(countryBuckets[0]?.country_code || null)} aria-label="Enfocar destino principal">
           <Plus size={16} />
         </button>
-        <button type="button" className="flex h-10 w-10 items-center justify-center border-t border-white/10 text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => selectCountry(selectedCountryCode ? null : countryBuckets[0]?.country_code || null)} aria-label="Alternar foco">
-          <MapPin size={16} />
+        <button type="button" className="flex h-10 w-10 items-center justify-center border-t border-white/10 text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => issueGlobeCommand("zoom_out")} aria-label="Alejar mapa">
+          <MagnifyingGlass size={16} />
+        </button>
+        <button type="button" className="flex h-10 w-10 items-center justify-center border-t border-white/10 text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => issueGlobeCommand("toggle_rotation")} aria-label="Rotar mapa">
+          <Play size={16} weight="fill" />
         </button>
       </div>
 
@@ -1935,12 +1957,13 @@ function SidebarItem({ item, mobile = false }: { item: SidebarNavItem; mobile?: 
   );
 }
 
-function ChannelAvatar({ channel, size }: { channel: TravelChannel; size: "sm" | "md" }) {
+function ChannelAvatar({ channel, size, thumbnailUrlOverride = null }: { channel: TravelChannel; size: "sm" | "md"; thumbnailUrlOverride?: string | null }) {
   const className = size === "sm" ? "h-9 w-9" : "h-12 w-12";
+  const thumbUrl = thumbnailUrlOverride || channel.thumbnail_url || null;
   return (
     <span className={cn("relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.08] text-[12px] font-semibold text-white", className)}>
-      {channel.thumbnail_url ? (
-        <Image src={channel.thumbnail_url} alt={channel.channel_name} fill sizes={size === "sm" ? "36px" : "48px"} className="object-cover" />
+      {thumbUrl ? (
+        <Image src={thumbUrl} alt={channel.channel_name} fill sizes={size === "sm" ? "36px" : "48px"} className="object-cover" />
       ) : (
         getInitials(channel.channel_name)
       )}

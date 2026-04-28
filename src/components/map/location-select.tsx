@@ -23,6 +23,7 @@ interface LocationSelectProps {
   onValueChange: (value: string) => void;
   className?: string;
   triggerClassName?: string;
+  contentClassName?: string;
   disabled?: boolean;
   maxVisibleResults?: number;
   emptyHint?: string;
@@ -36,6 +37,7 @@ export function LocationSelect({
   onValueChange,
   className,
   triggerClassName,
+  contentClassName,
   disabled = false,
   maxVisibleResults = 250,
   emptyHint,
@@ -113,6 +115,22 @@ export function LocationSelect({
             <div className="space-y-0.5 px-1 pb-1">
               {visibleOptions.length === 0 ? (
                 <p className="px-3 py-4 text-[12px] text-[#aaaaaa]">{emptyHint || "No results."}</p>
+        className={cn(
+          "w-[min(100vw-2rem,360px)] border border-white/10 bg-[#121518] p-3 text-[#f1f1f1] shadow-[0_28px_80px_-40px_rgba(0,0,0,0.92)]",
+          contentClassName
+        )}
+      >
+        <div className="space-y-3">
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={searchPlaceholder}
+            className="h-10 rounded-xl border-white/10 bg-white/[0.03] text-sm text-[#f1f1f1]"
+          />
+          <ScrollArea className="max-h-[260px] pr-1" data-map-scroll="true">
+            <div className="space-y-1">
+              {filteredOptions.length === 0 ? (
+                <p className="px-3 py-4 text-[12px] text-[#aaaaaa]">No results.</p>
               ) : (
                 <>
                   {visibleOptions.map((option) => {
