@@ -217,7 +217,7 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 
 ### 2026-04-28
 
-- Se instala Agentation como herramienta local de feedback visual (`agentation` dev dependency) y se monta mediante `src/components/dev/agentation-toolbar.tsx`; solo se renderiza en `NODE_ENV=development`.
+- Se instala Agentation como herramienta local de feedback visual (`agentation` dev dependency), pero no se monta en el layout raiz; cualquier uso debe ser opt-in y client-only para no interferir con hidratacion ni overlays de desarrollo.
 - Se corrige la CSP de produccion para permitir workers `blob:` requeridos por Sentry Replay sin relajar `script-src`.
 - Se reserva `/monitoring` en `src/proxy.ts` para que el dominio vanity no reescriba el tunel de Sentry a `/u/monitoring`.
 - Se agrega descripcion accesible al dialog de carrusel de videos y se evita preload innecesario de thumbnails dentro del modal.
@@ -226,7 +226,7 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 - Se agrega cache temporal de `loadChannelPlaylistSignals` para reducir recarga de playlists en imports/sync consecutivos del mismo canal.
 - Se agregan metadata dinamica en `/u/[username]`, `sitemap.ts` y `robots.ts` para baseline SEO de lanzamiento.
 - Se agrega endpoint de metricas operativas de import por usuario (`GET /api/youtube/import/metrics`) y documentacion de release/incidentes en `docs/GO_NO_GO_CHECKLIST.md` y `docs/IMPORT_RUNBOOK.md`.
-- Se cambia Agentation a opt-in con `NEXT_PUBLIC_ENABLE_AGENTATION=1`; por defecto no se monta en desarrollo para evitar overlays/FocusScope que interfieran con `/dashboard` y reportes de hidratacion.
+- Se agrega un guard dev-only antes de hidratacion para retirar nodos externos `heurio-*` inyectados por extensiones/herramientas de feedback, que rompian el boundary de metadata de Next con hydration mismatch.
 
 ### 2026-04-24
 

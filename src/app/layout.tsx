@@ -3,7 +3,6 @@ import { JetBrains_Mono, Outfit } from "next/font/google";
 import Script from "next/script";
 import "@/app/globals.css";
 import { cn } from "@/lib/utils";
-import { AgentationToolbar } from "@/components/dev/agentation-toolbar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const outfit = Outfit({
@@ -57,6 +56,31 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={cn(outfit.variable, jetbrainsMono.variable, "font-sans dark")} suppressHydrationWarning>
       <body className="travel-shell" suppressHydrationWarning>
+        {process.env.NODE_ENV === "development" ? (
+          <Script id="dev-extension-hydration-guard" strategy="beforeInteractive">
+            {`
+              (function () {
+                var selectors = ["#heurio-app", ".heurio-overlay", "[class*='heurio-']", "[id*='heurio-']"];
+                var removeInjectedNodes = function () {
+                  selectors.forEach(function (selector) {
+                    document.querySelectorAll(selector).forEach(function (node) {
+                      node.parentNode && node.parentNode.removeChild(node);
+                    });
+                  });
+                };
+                removeInjectedNodes();
+                var observer = new MutationObserver(removeInjectedNodes);
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+                window.addEventListener("load", function () {
+                  window.setTimeout(function () {
+                    removeInjectedNodes();
+                    observer.disconnect();
+                  }, 2500);
+                });
+              })();
+            `}
+          </Script>
+        ) : null}
         <Script id="microsoft-clarity" strategy="afterInteractive">
           {`
             (function(c,l,a,r,i,t,y){
@@ -67,7 +91,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           `}
         </Script>
         <TooltipProvider>{children}</TooltipProvider>
-        <AgentationToolbar />
       </body>
     </html>
   );
