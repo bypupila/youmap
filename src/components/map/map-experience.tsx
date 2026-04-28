@@ -644,15 +644,15 @@ function MapAppShell(props: MapShellProps) {
     <>
       <MobileMapShell {...props} mobileTab={mobileTab} setMobileTab={setMobileTab} />
 
-      <div className="pointer-events-none absolute inset-0 z-[320] hidden min-h-0 lg:flex">
+      <div className="pointer-events-none absolute inset-0 z-[320] hidden min-h-0 lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
         <MapSidebar {...props} />
 
-        <main className="pointer-events-none flex min-w-0 flex-1 flex-col">
+        <main className="pointer-events-none relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]">
           <MapTopBar {...props} />
 
           <div
             data-map-scroll="true"
-            className="pointer-events-auto flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-4 pt-36 sm:px-4 md:pt-28 xl:pointer-events-none xl:grid xl:grid-cols-[minmax(270px,300px)_minmax(0,1fr)_minmax(310px,340px)] xl:gap-4 xl:overflow-hidden xl:pb-5 xl:pl-4 xl:pr-5 xl:pt-[88px]"
+            className="pointer-events-auto grid min-h-0 grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 xl:pointer-events-none xl:grid-cols-[minmax(238px,270px)_minmax(440px,1fr)_minmax(282px,318px)] xl:gap-3 xl:overflow-hidden xl:px-5 xl:pb-5"
           >
             <MapOverviewRail {...props} />
             <MapCenterStage {...props} />
@@ -1379,8 +1379,8 @@ function MapTopBar({
   headerEyebrow,
 }: MapShellProps) {
   return (
-    <header className={cn("pointer-events-auto absolute inset-x-0 top-0 z-[370] px-16 py-3 sm:px-20 lg:px-4 xl:px-5", desktopMenuHidden ? "lg:left-0" : "lg:left-[184px]")}>
-      <div className="mx-auto grid min-h-[52px] w-full max-w-[1180px] grid-cols-1 gap-3 rounded-2xl border border-white/10 bg-[#07101a]/82 p-2 shadow-[0_28px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:grid-cols-[minmax(0,1fr)_auto]">
+    <header className="pointer-events-auto z-[370] px-4 py-3 xl:px-5">
+      <div className="mx-auto grid min-h-[52px] w-full grid-cols-1 gap-3 rounded-xl border border-white/10 bg-[#07101a]/86 p-2 shadow-[0_28px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-center gap-2">
           <Button
             type="button"
@@ -1446,23 +1446,28 @@ function MapOverviewRail({
 }: MapShellProps) {
   return (
     <aside ref={videosRailRef} className="pointer-events-auto order-2 min-h-0 xl:order-none xl:overflow-hidden">
-      <Card className="tm-surface-strong flex min-h-[480px] flex-col rounded-2xl xl:h-full">
-        <CardHeader className="px-4 pb-3 pt-4">
-          <CardTitle className="text-[18px] font-semibold text-[#f5f7fb]">Tus viajes en el mapa</CardTitle>
-          <p className="text-[12px] leading-5 text-[#aab2bc]">
-            {selectedCountryCode ? `Explorando ${selectedCountryName || selectedCountryCode}.` : "Explora los lugares que has visitado a traves de tus videos."}
-          </p>
+      <Card className="tm-surface-strong flex min-h-[420px] flex-col rounded-xl border-white/10 xl:h-full">
+        <CardHeader className="border-b border-white/10 px-3 pb-3 pt-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Mapa del canal</CardTitle>
+              <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[#aab2bc]">
+                {selectedCountryCode ? `Foco activo: ${selectedCountryName || selectedCountryCode}.` : "Resumen operativo de videos, paises y ciudades detectadas."}
+              </p>
+            </div>
+            <ChannelAvatar channel={channel} size="sm" />
+          </div>
         </CardHeader>
 
-        <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-4">
-          <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
+        <CardContent className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-3">
+          <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
             <OverviewMetric label="Paises" value={resolvedSummary.total_countries} tone="white" />
             <OverviewMetric label="Ciudades" value={cityCount} tone="white" />
             <OverviewMetric label="Videos" value={resolvedSummary.total_videos} tone="red" />
           </div>
 
-          <div className="mt-5 flex items-center justify-between gap-3">
-            <h2 className="text-[15px] font-semibold text-[#f5f7fb]">Videos recientes</h2>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <h2 className="text-[13px] font-semibold text-[#f5f7fb]">Videos recientes</h2>
             <Badge variant="outline" className="bg-white/[0.04] text-[11px] text-[#c6cdd5]">{visibleRecentVideos.length}</Badge>
           </div>
 
@@ -1474,9 +1479,9 @@ function MapOverviewRail({
                     key={`${video.youtube_video_id}-${video.published_at || "no-date"}`}
                     type="button"
                     onClick={() => openVideo(video)}
-                    className="group flex w-full gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-2 text-left transition hover:bg-white/[0.07]"
+                    className="group flex w-full gap-2 rounded-lg border border-white/10 bg-white/[0.035] p-2 text-left transition hover:bg-white/[0.07]"
                   >
-                    <VideoThumb video={video} className="h-[64px] w-[92px] rounded-lg" />
+                    <VideoThumb video={video} className="h-[56px] w-[78px] rounded-md" />
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-2 text-[12px] font-medium leading-4 text-[#f4f7fb]">{video.title}</p>
                       <p className="mt-1 truncate text-[11px] text-[#9da5ae]">{formatPlace(video)}</p>
@@ -1493,7 +1498,7 @@ function MapOverviewRail({
             </div>
           </ScrollArea>
 
-          <Button asChild variant="outline" className="mt-4 w-full">
+          <Button asChild variant="outline" className="mt-3 w-full">
             <Link href={buildMapHref(channel)}>Ver todos los videos</Link>
           </Button>
         </CardContent>
@@ -1519,8 +1524,8 @@ function MapCenterStage({
   issueGlobeCommand,
 }: MapShellProps) {
   return (
-    <section className="pointer-events-none relative order-1 min-h-[520px] xl:order-none xl:min-h-0">
-      <div className="pointer-events-auto absolute left-1/2 top-0 z-[340] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-[#07101a]/84 p-1.5 backdrop-blur-2xl">
+    <section className="pointer-events-none relative order-1 min-h-[520px] overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] xl:order-none xl:min-h-0">
+      <div className="pointer-events-auto absolute left-1/2 top-3 z-[340] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-xl border border-white/10 bg-[#07101a]/88 p-1.5 backdrop-blur-2xl">
         {(["all", "365", "90", "30"] as FilterWindow[]).map((option) => (
           <button
             key={option}
@@ -1552,7 +1557,7 @@ function MapCenterStage({
         </button>
       </div>
 
-      <div className="pointer-events-auto absolute right-3 top-1/2 z-[330] hidden -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#07101a]/82 backdrop-blur-2xl md:flex">
+      <div className="pointer-events-auto absolute right-3 top-1/2 z-[330] hidden -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/86 backdrop-blur-2xl md:flex">
         <button type="button" className="flex h-10 w-10 items-center justify-center text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => { selectCountry(null); issueGlobeCommand("reset_view"); }} aria-label="Mostrar mapa completo">
           <House size={16} />
         </button>
@@ -1573,7 +1578,7 @@ function MapCenterStage({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            className="pointer-events-auto absolute left-1/2 top-14 z-[335] -translate-x-1/2"
+            className="pointer-events-auto absolute left-1/2 top-16 z-[335] -translate-x-1/2"
           >
             <button type="button" onClick={() => selectCountry(null)} className="yt-btn-secondary min-h-9 rounded-xl bg-[#07101a]/90 px-3 text-[12px] backdrop-blur">
               Salir de {selectedCountryName || selectedCountryCode}
@@ -1582,7 +1587,7 @@ function MapCenterStage({
         ) : null}
       </AnimatePresence>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[330] px-0 pb-0 md:px-4 md:pb-2">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[330] px-0 pb-0 md:px-3 md:pb-3">
         <SuggestedDestinations candidates={destinationCandidates} onSelect={selectCountry} viewer={viewer} channelId={channelId} pollState={pollState} sponsors={sponsors} setDesktopMapTab={setDesktopMapTab} />
       </div>
     </section>
@@ -1641,7 +1646,7 @@ function MapRightRail({
 
       {viewer.isOwner && channelId ? (
         <div ref={votesRailRef}>
-          <Button type="button" variant="outline" className="w-full justify-center" onClick={() => setDesktopMapTab("saved")}>
+          <Button type="button" variant="outline" className="w-full justify-center rounded-lg" onClick={() => setDesktopMapTab("saved")}>
             <Trophy size={14} />
             Crear votacion
           </Button>
@@ -1672,10 +1677,10 @@ function DestinationCard({
 }) {
   const percent = destination?.percent || 0;
   return (
-    <Card className="tm-surface-strong rounded-2xl">
-      <CardHeader className="px-4 pb-3 pt-4">
+    <Card className="tm-surface-strong rounded-xl border-white/10">
+      <CardHeader className="border-b border-white/10 px-3 pb-3 pt-3">
         <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-[16px] font-semibold text-[#f5f7fb]">Proximo destino</CardTitle>
+          <CardTitle className="text-[14px] font-semibold text-[#f5f7fb]">Proximo destino</CardTitle>
           {allowRefresh ? (
             <Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={syncState === "running"}>
               <ArrowsClockwise size={14} />
@@ -1684,14 +1689,14 @@ function DestinationCard({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="px-4 pb-4">
+      <CardContent className="px-3 pb-3 pt-3">
         {destination ? (
-          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
                 <CountryCodeMark code={destination.country_code} />
                 <div className="min-w-0">
-                  <p className="truncate text-[18px] font-semibold uppercase tracking-wide text-[#f5f7fb]">{destination.country_name}</p>
+                  <p className="truncate text-[16px] font-semibold uppercase tracking-wide text-[#f5f7fb]">{destination.country_name}</p>
                   <p className="mt-1 text-[12px] text-[#aab2bc]">{destination.cities.slice(0, 3).join(", ") || "Destino abierto"}</p>
                   <p className="mt-2 text-[12px] font-semibold text-[#ff4b42]">
                     {destination.votes > 0 ? `${formatExactNumber(destination.votes)} votos` : `${formatExactNumber(fallbackCandidates.length)} sugerencias`}
@@ -1763,10 +1768,10 @@ function OperationsCard({
   onMissing: () => void;
 }) {
   return (
-    <Card className="tm-surface-strong rounded-2xl">
-      <CardHeader className="px-4 pb-2 pt-4">
+    <Card className="tm-surface-strong rounded-xl border-white/10">
+      <CardHeader className="border-b border-white/10 px-3 pb-3 pt-3">
         <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Operacion del mapa</CardTitle>
+          <CardTitle className="text-[14px] font-semibold text-[#f5f7fb]">Operacion del mapa</CardTitle>
           {allowRefresh ? (
             <Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={syncState === "running"}>
               <ArrowsClockwise size={14} />
@@ -1775,9 +1780,9 @@ function OperationsCard({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 px-4 pb-4">
+      <CardContent className="space-y-3 px-3 pb-3 pt-3">
         {pendingManual.length > 0 ? (
-          <button type="button" onClick={onMissing} className="w-full rounded-xl border border-[rgba(255,0,0,0.24)] bg-[rgba(255,0,0,0.09)] px-3 py-3 text-left">
+          <button type="button" onClick={onMissing} className="w-full rounded-lg border border-[rgba(255,0,0,0.24)] bg-[rgba(255,0,0,0.09)] px-3 py-3 text-left">
             <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#ffaaa5]">
               <WarningCircle size={15} />
               Videos faltantes
@@ -1796,7 +1801,7 @@ function OperationsCard({
         ) : null}
         {syncError ? <p className="text-[12px] leading-5 text-[#ff8b8b]">{syncError}</p> : null}
         {!pendingManual.length && !lastSyncSummary && !syncError && syncState !== "running" ? (
-          <div className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-3">
+          <div className="rounded-lg border border-white/10 bg-white/[0.035] px-3 py-3">
             <p className="text-[13px] font-medium text-[#f5f7fb]">Mapa al dia</p>
             <p className="mt-1 text-[12px] leading-5 text-[#9da5ae]">No hay videos pendientes de revision manual en este momento.</p>
           </div>
@@ -1828,7 +1833,7 @@ function SuggestedDestinations({
   if (!shouldShowSponsors && candidates.length === 0) return null;
 
   return (
-    <div className="pointer-events-auto mx-auto hidden max-w-[760px] rounded-2xl border border-white/10 bg-[#07101a]/82 p-3 backdrop-blur-2xl md:block">
+    <div className="pointer-events-auto mx-auto hidden max-w-[700px] rounded-xl border border-white/10 bg-[#07101a]/86 p-3 backdrop-blur-2xl md:block">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-semibold text-[#f5f7fb]">{shouldShowSponsors ? "Sponsors destacados" : "Proximos destinos sugeridos por la comunidad"}</h2>
         {viewer.isOwner && channelId ? (
@@ -1841,19 +1846,19 @@ function SuggestedDestinations({
         )}
       </div>
       {shouldShowSponsors ? (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {sponsors.slice(0, 4).map((sponsor) => (
-            <a key={sponsor.id} href={sponsor.affiliate_url || "#"} target={sponsor.affiliate_url ? "_blank" : undefined} rel={sponsor.affiliate_url ? "noreferrer" : undefined} className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left transition hover:bg-white/[0.08]">
+            <a key={sponsor.id} href={sponsor.affiliate_url || "#"} target={sponsor.affiliate_url ? "_blank" : undefined} rel={sponsor.affiliate_url ? "noreferrer" : undefined} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-3 text-left transition hover:bg-white/[0.08]">
               <p className="truncate text-[12px] font-semibold text-[#f5f7fb]">{sponsor.brand_name}</p>
               <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{sponsor.description || "Sponsor activo"}</p>
             </a>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {candidates.slice(0, 4).map((candidate) => (
-            <button key={candidate.country_code} type="button" onClick={() => onSelect(candidate.country_code)} className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]">
-              <div className="h-16 bg-[linear-gradient(135deg,rgba(255,0,0,0.42),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover" />
+            <button key={candidate.country_code} type="button" onClick={() => onSelect(candidate.country_code)} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]">
+              <div className="h-12 bg-[linear-gradient(135deg,rgba(255,0,0,0.42),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover" />
               <div className="p-2">
                 <p className="truncate text-[11px] font-semibold text-[#f5f7fb]">{candidate.country_name}</p>
                 <p className="truncate text-[10px] text-[#9da5ae]">{candidate.cities[0] || candidate.country_code}</p>
@@ -1872,13 +1877,13 @@ function SuggestedDestinations({
 
 function SponsorsRail({ sponsors }: { sponsors: MapRailSponsor[] }) {
   return (
-    <Card className="tm-surface-strong rounded-2xl">
-      <CardHeader className="flex-row items-center justify-between px-4 pb-2 pt-4">
-        <CardTitle className="text-[16px] font-semibold text-[#f5f7fb]">Sponsors</CardTitle>
+    <Card className="tm-surface-strong rounded-xl border-white/10">
+      <CardHeader className="flex-row items-center justify-between border-b border-white/10 px-3 pb-3 pt-3">
+        <CardTitle className="text-[14px] font-semibold text-[#f5f7fb]">Sponsors</CardTitle>
         <Badge variant="outline" className="bg-white/[0.04] text-[11px]">Ver todos</Badge>
       </CardHeader>
-      <CardContent className="px-4 pb-4">
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-5">
+      <CardContent className="px-3 pb-3 pt-3">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-4">
           {sponsors.slice(0, 5).map((sponsor) => (
             <a
               key={sponsor.id}
@@ -1912,8 +1917,8 @@ function SponsorsRail({ sponsors }: { sponsors: MapRailSponsor[] }) {
 
 function SponsorEmptyState() {
   return (
-    <Card className="tm-surface-strong rounded-2xl">
-      <CardContent className="px-4 py-4">
+    <Card className="tm-surface-strong rounded-xl border-white/10">
+      <CardContent className="px-3 py-3">
         <p className="text-[14px] font-semibold text-[#f5f7fb]">Sponsors</p>
         <p className="mt-1 text-[12px] leading-5 text-[#9da5ae]">Este mapa todavia no tiene sponsors activos.</p>
       </CardContent>
