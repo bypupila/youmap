@@ -22,6 +22,7 @@ interface LocationSelectProps {
   onValueChange: (value: string) => void;
   className?: string;
   triggerClassName?: string;
+  contentClassName?: string;
   disabled?: boolean;
 }
 
@@ -33,6 +34,7 @@ export function LocationSelect({
   onValueChange,
   className,
   triggerClassName,
+  contentClassName,
   disabled = false,
 }: LocationSelectProps) {
   const [open, setOpen] = useState(false);
@@ -76,7 +78,14 @@ export function LocationSelect({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" sideOffset={8} className="w-[min(100vw-2rem,360px)] border border-white/10 bg-[#121518] p-3 text-[#f1f1f1] shadow-[0_28px_80px_-40px_rgba(0,0,0,0.92)]">
+      <PopoverContent
+        align="start"
+        sideOffset={8}
+        className={cn(
+          "w-[min(100vw-2rem,360px)] border border-white/10 bg-[#121518] p-3 text-[#f1f1f1] shadow-[0_28px_80px_-40px_rgba(0,0,0,0.92)]",
+          contentClassName
+        )}
+      >
         <div className="space-y-3">
           <Input
             value={query}

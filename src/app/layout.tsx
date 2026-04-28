@@ -3,6 +3,7 @@ import { JetBrains_Mono, Outfit } from "next/font/google";
 import Script from "next/script";
 import "@/app/globals.css";
 import { cn } from "@/lib/utils";
+import { AgentationToolbar } from "@/components/dev/agentation-toolbar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const outfit = Outfit({
@@ -66,6 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           `}
         </Script>
         <TooltipProvider>{children}</TooltipProvider>
+        <AgentationToolbar />
       </body>
     </html>
   );

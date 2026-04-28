@@ -253,6 +253,7 @@ export function MissingVideosDialog({
                                 options={rowCountryOptions}
                                 placeholder="Country"
                                 searchPlaceholder="Search countries"
+                                contentClassName="z-[430]"
                                 onValueChange={(value) => {
                                   const nextCountry = countryMap.get(value);
                                   const firstCity = nextCountry?.cities[0]?.city || "";
@@ -272,6 +273,7 @@ export function MissingVideosDialog({
                                 placeholder={rowCountry ? "City (optional)" : "Select a country first"}
                                 searchPlaceholder="Search cities"
                                 disabled={!rowCountry}
+                                contentClassName="z-[430]"
                                 onValueChange={(value) =>
                                   setManualDrafts((current) => ({
                                     ...current,
@@ -301,6 +303,7 @@ export function MissingVideosDialog({
                   options={countryOptions}
                   placeholder="Country"
                   searchPlaceholder="Search countries"
+                  contentClassName="z-[430]"
                   onValueChange={(value) => {
                     const nextCountry = countryMap.get(value);
                     const firstCity = nextCountry?.cities[0]?.city || "";
@@ -315,6 +318,7 @@ export function MissingVideosDialog({
                   placeholder={bulkCountry ? "City (optional)" : "Select a country first"}
                   searchPlaceholder="Search cities"
                   disabled={!bulkCountry}
+                  contentClassName="z-[430]"
                   onValueChange={(value) => setBulkCity(value)}
                 />
 
