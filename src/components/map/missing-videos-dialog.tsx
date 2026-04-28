@@ -171,7 +171,7 @@ export function MissingVideosDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[min(1180px,calc(100%-1.5rem))] overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(18,21,23,0.98),rgba(12,15,17,0.96))] p-0 text-[#f1f1f1] shadow-[0_34px_100px_-42px_rgba(0,0,0,0.94)]">
+      <DialogContent className="inset-0 left-0 top-0 z-[420] h-[100dvh] w-[100dvw] max-h-[100dvh] max-w-none translate-x-0 translate-y-0 overflow-hidden rounded-none border-0 bg-[linear-gradient(180deg,rgba(18,21,23,0.98),rgba(12,15,17,0.96))] p-0 text-[#f1f1f1] shadow-none sm:max-w-none">
         <div className="border-b border-white/10 px-5 py-4 sm:px-6">
           <DialogHeader className="gap-1">
             <DialogTitle className="text-[18px] font-medium text-[#f1f1f1]">Missing videos</DialogTitle>
@@ -181,7 +181,7 @@ export function MissingVideosDialog({
           </DialogHeader>
         </div>
 
-        <div className="grid min-h-[min(78dvh,760px)] gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid h-[calc(100dvh-88px)] min-h-0 gap-0 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="flex min-h-0 flex-col border-r border-white/10">
             <div className="grid gap-3 border-b border-white/10 px-5 py-4 sm:grid-cols-3 sm:px-6">
               <MiniStat label="Queued" value={pendingManual.length} />
@@ -290,7 +290,7 @@ export function MissingVideosDialog({
             </ScrollArea>
           </div>
 
-          <div className="flex min-h-0 flex-col gap-4 bg-black/[0.12] p-5 sm:p-6">
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto bg-black/[0.12] p-5 sm:p-6">
             <Card className="border border-white/10 bg-white/[0.03]">
               <CardHeader className="border-b border-white/10">
                 <CardTitle className="text-[15px] font-medium text-[#f1f1f1]">Bulk edit</CardTitle>

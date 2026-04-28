@@ -41,6 +41,7 @@ interface TravelGlobeProps {
   onActiveVideoChange?: (video: TravelVideoLocation | null) => void;
   onPinnedVideoChange?: (video: TravelVideoLocation | null) => void;
   onCountrySelect?: (countryCode: string | null) => void;
+  command?: { id: number; action: "reset_view" | "zoom_out" | "toggle_rotation" } | null;
 }
 
 export function TravelGlobe({
@@ -61,6 +62,7 @@ export function TravelGlobe({
   onActiveVideoChange,
   onPinnedVideoChange,
   onCountrySelect,
+  command = null,
 }: TravelGlobeProps) {
   const [GlobeComponent, setGlobeComponent] = useState<null | typeof import("react-globe.gl").default>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
@@ -166,6 +168,34 @@ export function TravelGlobe({
     if (!globeRef.current) return;
     globeRef.current.pointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 0);
   }, [GlobeComponent]);
+
+  useEffect(() => {
+    if (!command || !globeRef.current) return;
+    const current = globeRef.current.pointOfView?.() as { lat?: number; lng?: number; altitude?: number } | undefined;
+
+    if (command.action === "reset_view") {
+      setRotationEnabled(false);
+      globeRef.current.pointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 700);
+      return;
+    }
+
+    if (command.action === "zoom_out") {
+      setRotationEnabled(false);
+      globeRef.current.pointOfView(
+        {
+          lat: Number(current?.lat ?? 20),
+          lng: Number(current?.lng ?? -10),
+          altitude: Math.min(4.2, Math.max(0.6, Number(current?.altitude ?? 2.3) * 1.22)),
+        },
+        450
+      );
+      return;
+    }
+
+    if (command.action === "toggle_rotation") {
+      setRotationEnabled((previous) => !previous);
+    }
+  }, [command]);
 
   const focusCountryOnGlobe = useCallback((countrySelection: GlobePoint) => {
     const { lat, lng, altitude } = getCountryPointOfView(countrySelection.videos, pointMode);
