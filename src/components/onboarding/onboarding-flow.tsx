@@ -414,7 +414,7 @@ const sponsorCards = [
 
 const visiblePlans = PLAN_DEFINITIONS.filter((plan) => plan.slug !== "free");
 const unavailablePlanSlugs = new Set<PlanDefinition["slug"]>(["agency"]);
-const showTestNoPaymentPlan = process.env.NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT !== "0";
+const showTestNoPaymentPlan = process.env.NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT === "1";
 
 export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; locale: OnboardingLocale }) {
   const router = useRouter();

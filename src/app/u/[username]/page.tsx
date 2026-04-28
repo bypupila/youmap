@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { MapExperience } from "@/components/map/map-experience";
@@ -6,10 +7,56 @@ import { MAP_VOTER_COOKIE, hashValue } from "@/lib/map-polls";
 import { loadPublicMapPayload } from "@/lib/map-public";
 import { DEMO_CHANNEL_ID, isDemoUsername } from "@/lib/demo-data";
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
 interface PublicMapPageProps {
   params: Promise<{
     username: string;
   }>;
+}
+
+export async function generateMetadata({ params }: PublicMapPageProps): Promise<Metadata> {
+  const resolvedParams = await params;
+  const payload = await loadPublicMapPayload({
+    identifier: resolvedParams.username,
+    viewerUserId: null,
+    voterFingerprint: null,
+  });
+
+  if (!payload) {
+    return {
+      title: "Mapa público | TravelMap",
+      description: "Mapa interactivo con videos geolocalizados de creadores de viaje.",
+      alternates: {
+        canonical: `${siteUrl}/u/${encodeURIComponent(resolvedParams.username)}`,
+      },
+    };
+  }
+
+  const canonicalHandle = payload.channel.canonicalHandle || resolvedParams.username;
+  const title = `${payload.channel.channel_name} | Mapa de viajes en TravelMap`;
+  const description = `Explora ${payload.summary.total_videos} videos de ${payload.channel.channel_name} en ${payload.summary.total_countries} países con mapa interactivo.`;
+  const canonicalUrl = `${siteUrl}/u/${encodeURIComponent(canonicalHandle)}`;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      url: canonicalUrl,
+      siteName: "TravelMap - BY PUPILA",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
+  };
 }
 
 export default async function PublicMapPage({ params }: PublicMapPageProps) {

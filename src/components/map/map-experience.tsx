@@ -133,6 +133,7 @@ type MapShellProps = {
   pendingManual: ManualVerificationItem[];
   pollState: MapPollRecord | null;
   sponsors: MapRailSponsor[];
+  headerEyebrow?: string;
   countryBuckets: CountryBucket[];
   selectedCountryCode: string | null;
   selectedCountryName: string | null;
@@ -192,6 +193,7 @@ export function MapExperience({
   sponsors = [],
   activePoll = null,
   availablePollOptions = [],
+  headerEyebrow,
   viewMode,
 }: MapExperienceProps) {
   const incomingManualQueue = manualQueue ?? EMPTY_MANUAL_QUEUE;
@@ -517,6 +519,7 @@ export function MapExperience({
     pendingManual,
     pollState,
     sponsors,
+    headerEyebrow,
     countryBuckets,
     selectedCountryCode,
     selectedCountryName,
@@ -1105,7 +1108,7 @@ function MobileActionBar({
       {youtubeUrl ? (
         <a href={youtubeUrl} target="_blank" rel="noreferrer" className="flex h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.055] text-[12px] font-medium text-[#f5f7fb]">
           <ArrowSquareOut size={14} />
-          Channel
+          Canal
         </a>
       ) : (
         <span />
@@ -1118,12 +1121,12 @@ function MobileActionBar({
           disabled={!viewer.isOwner && pendingManual.length === 0}
         >
           <MagnifyingGlass size={14} />
-          Missing videos
+          Videos faltantes
         </button>
       ) : (
         <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.055] text-[12px] font-medium text-[#f5f7fb]" onClick={copyShareUrl}>
           <LinkSimple size={14} />
-          Share
+          Compartir
         </button>
       )}
       <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg bg-[#c91f18] text-[12px] font-semibold text-white" onClick={copyShareUrl}>
@@ -1373,6 +1376,7 @@ function MapTopBar({
   desktopMenuHidden,
   setDesktopMenuHidden,
   canUseAdminPanels,
+  headerEyebrow,
 }: MapShellProps) {
   return (
     <header className={cn("pointer-events-auto absolute inset-x-0 top-0 z-[370] px-16 py-3 sm:px-20 lg:px-4 xl:px-5", desktopMenuHidden ? "lg:left-0" : "lg:left-[184px]")}>
@@ -1423,7 +1427,7 @@ function MapTopBar({
             {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
             {copyState === "copied" ? "Copiado" : "Copiar canal"}
           </Button>
-          <span className="hidden max-w-[150px] truncate text-[11px] text-[#9da5ae] 2xl:block">{channel.canonicalHandle ? `@${channel.canonicalHandle}` : "Mapa publico"}</span>
+          <span className="hidden max-w-[150px] truncate text-[11px] text-[#9da5ae] 2xl:block">{channel.canonicalHandle ? `@${channel.canonicalHandle}` : headerEyebrow || "Mapa público"}</span>
         </div>
       </div>
     </header>
@@ -1766,7 +1770,7 @@ function OperationsCard({
           {allowRefresh ? (
             <Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={syncState === "running"}>
               <ArrowsClockwise size={14} />
-              Refresh
+              Actualizar
             </Button>
           ) : null}
         </div>
@@ -1784,7 +1788,7 @@ function OperationsCard({
         {syncState === "running" ? <p className="rounded-xl bg-white/[0.04] px-3 py-2 text-[12px] text-[#aab2bc]">Sincronizando videos y ubicaciones.</p> : null}
         {lastSyncSummary ? (
           <div className="grid grid-cols-2 gap-2">
-            <MiniSummary label="Scanned" value={lastSyncSummary.videos_scanned} />
+            <MiniSummary label="Escaneados" value={lastSyncSummary.videos_scanned} />
             <MiniSummary label="Auto" value={lastSyncSummary.videos_verified_auto} />
             <MiniSummary label="Manual" value={lastSyncSummary.videos_verified_manual} />
             <MiniSummary label="Shorts" value={lastSyncSummary.excluded_shorts} />

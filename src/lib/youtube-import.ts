@@ -27,6 +27,85 @@ export interface ImportYoutubeChannelResult {
   };
 }
 
+type ProviderName = "youtube" | "nominatim" | "gemini" | "database" | "unknown";
+type ProviderErrorCounter = Record<ProviderName, number>;
+
+const DEFAULT_PROVIDER_ERRORS: ProviderErrorCounter = {
+  youtube: 0,
+  nominatim: 0,
+  gemini: 0,
+  database: 0,
+  unknown: 0,
+};
+
+const DEFAULT_IMPORT_CONCURRENCY = 3;
+const DEFAULT_MAX_VIDEOS_PER_RUN = 2500;
+const STALE_RUNNING_RUN_MS = 2 * 60 * 1000;
+
+function parsePositiveInt(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+}
+
+function getImportConcurrency() {
+  return parsePositiveInt(process.env.YOUTUBE_IMPORT_CONCURRENCY, DEFAULT_IMPORT_CONCURRENCY);
+}
+
+function getMaxVideosPerRun() {
+  return parsePositiveInt(process.env.YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN, DEFAULT_MAX_VIDEOS_PER_RUN);
+}
+
+function classifyProviderError(error: unknown): ProviderName {
+  const text = String(error instanceof Error ? error.message : error || "").toLowerCase();
+  if (text.includes("youtube")) return "youtube";
+  if (text.includes("nominatim") || text.includes("geocode")) return "nominatim";
+  if (text.includes("gemini") || text.includes("google genai") || text.includes("llm")) return "gemini";
+  if (text.includes("sql") || text.includes("database") || text.includes("postgres")) return "database";
+  return "unknown";
+}
+
+function mergeProviderErrors(base: ProviderErrorCounter, provider: ProviderName) {
+  return {
+    ...base,
+    [provider]: (base[provider] || 0) + 1,
+  } satisfies ProviderErrorCounter;
+}
+
+function getBackoffMs(attempt: number) {
+  const jitter = Math.floor(Math.random() * 120);
+  return Math.min(1200, attempt * 220 + jitter);
+}
+
+function isRetriableError(error: unknown) {
+  const text = String(error instanceof Error ? error.message : error || "").toLowerCase();
+  return (
+    text.includes("timeout") ||
+    text.includes("temporarily") ||
+    text.includes("rate limit") ||
+    text.includes("too many requests") ||
+    text.includes("503") ||
+    text.includes("502") ||
+    text.includes("network")
+  );
+}
+
+async function withRetry<T>(task: () => Promise<T>, retries = 3): Promise<T> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries || !isRetriableError(error)) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, getBackoffMs(attempt)));
+    }
+  }
+  throw lastError;
+}
+
 function processVideosInBatches<T>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<void>) {
   let index = 0;
   return Promise.all(
@@ -381,9 +460,45 @@ export async function importYoutubeChannel({
   importRunId = randomUUID(),
 }: ImportYoutubeChannelInput): Promise<ImportYoutubeChannelResult> {
   const startedAt = new Date().toISOString();
+  const importConcurrency = getImportConcurrency();
+  const maxVideosPerRun = getMaxVideosPerRun();
+  let providerErrors: ProviderErrorCounter = { ...DEFAULT_PROVIDER_ERRORS };
+  let activeChannelId: string | null = null;
+
+  let totalVideos = 0;
+  let processedVideos = 0;
+  let mappedVideos = 0;
+  let skippedVideos = 0;
+  let mappedViews = 0;
+  const mappedCountryCodes = new Set<string>();
+
+  async function updateProgress(stage: string, channelId: string, sourcePayload: Record<string, unknown>) {
+    await upsertChannelImportRun({
+      importRunId,
+      channelId,
+      status: "running",
+      source: "youtube",
+      inputPayload: { channelUrl },
+      outputPayload: {
+        totalVideos,
+        processedVideos,
+        mappedVideos,
+        skippedVideos,
+        countriesMapped: mappedCountryCodes.size,
+        totalViews: mappedViews,
+        stage,
+        progress: totalVideos > 0 ? Number((processedVideos / totalVideos).toFixed(4)) : 0,
+        providerErrors,
+        importConcurrency,
+        maxVideosPerRun,
+        source: sourcePayload,
+      },
+      startedAt,
+    });
+  }
 
   try {
-    const source = await resolveYouTubeChannel(channelUrl);
+    const source = await withRetry(() => resolveYouTubeChannel(channelUrl), 3);
     const channelRows = await sql<
       Array<{
         id: string;
@@ -434,6 +549,7 @@ export async function importYoutubeChannel({
     `;
     const uploadChannel = channelRows[0];
     if (!uploadChannel) throw new Error("Could not save channel");
+    activeChannelId = uploadChannel.id;
 
     await upsertChannelImportRun({
       importRunId,
@@ -450,103 +566,162 @@ export async function importYoutubeChannel({
         totalViews: 0,
         stage: "starting",
         progress: 0,
+        providerErrors,
+        importConcurrency,
+        maxVideosPerRun,
       },
       startedAt,
     });
 
-    const playlistVideos = await loadUploadsPlaylistVideos(source.uploads_playlist_id);
-    const videoIds = playlistVideos.map((video) => video.contentDetails?.videoId).filter(Boolean) as string[];
-    const videoDetails = videoIds.length ? await loadVideoDetails(videoIds) : new Map();
-    const playlistSignals = source.youtube_channel_id ? await loadChannelPlaylistSignals(source.youtube_channel_id) : new Map();
-    const eligibleVideoIds = filterOutShortVideoIds(videoIds, videoDetails);
-
-    let processedVideos = 0;
-    let mappedVideos = 0;
-    let skippedVideos = 0;
-    let mappedViews = 0;
-    const mappedCountryCodes = new Set<string>();
-
-    async function updateProgress(stage: string) {
-      await upsertChannelImportRun({
-        importRunId,
-        channelId: uploadChannel.id,
-        status: "running",
-        source: "youtube",
-        inputPayload: { channelUrl },
-        outputPayload: {
-          totalVideos: eligibleVideoIds.length,
-          processedVideos,
-          mappedVideos,
-          skippedVideos,
-          countriesMapped: mappedCountryCodes.size,
-          totalViews: mappedViews,
-          stage,
-          progress: eligibleVideoIds.length > 0 ? Number((processedVideos / eligibleVideoIds.length).toFixed(4)) : 1,
-        },
-        startedAt,
-      });
-    }
-
-    await updateProgress("loading");
-
-    await processVideosInBatches(eligibleVideoIds, 3, async (videoId) => {
-      const details = videoDetails.get(videoId);
-      if (!details) return;
-
-      const videoRecordId = await upsertVideoSkeleton({
-        channelId: uploadChannel.id,
-        youtubeVideoId: videoId,
-        details,
-        sourcePayload: {
-          video_details: details.raw || null,
-        },
-      });
-
-      const analysis = await analyzeVideoLocation({
-        channelName: uploadChannel.channel_name,
-        channelDescription: uploadChannel.description,
-        youtubeVideoId: videoId,
-        title: details.title,
-        description: details.description,
-        publishedAt: details.published_at,
-        playlistSignals: playlistSignals.get(videoId) || [],
-        recordingLat: details.recording_lat,
-        recordingLng: details.recording_lng,
-        recordingLocationDescription: details.recording_location_description,
-        mode: "initial",
-      });
-
-      const persistedLocation = await persistVideoAnalysis({
-        channelId: uploadChannel.id,
-        videoRecordId,
-        youtubeVideoId: videoId,
-        title: details.title,
-        description: details.description,
-        thumbnailUrl: details.thumbnail_url,
-        publishedAt: details.published_at,
-        viewCount: details.view_count,
-        likeCount: details.like_count,
-        commentCount: details.comment_count,
-        durationSeconds: details.duration_seconds,
-        recordingLat: details.recording_lat,
-        recordingLng: details.recording_lng,
-        recordingLocationDescription: details.recording_location_description,
-        analysis,
-      });
-
-      processedVideos += 1;
-      if (analysis.locationStatus === "verified_auto" && persistedLocation) {
-        mappedVideos += 1;
-        mappedViews += Number(details.view_count || 0);
-        mappedCountryCodes.add(String(persistedLocation.country_code || "").trim().toUpperCase());
-      } else {
-        skippedVideos += 1;
-      }
-
-      await updateProgress(processedVideos === eligibleVideoIds.length ? "completed" : "mapping");
+    await updateProgress("resolving_channel", uploadChannel.id, {
+      youtube_channel_id: source.youtube_channel_id,
+      channel_name: source.channel_name,
+      channel_handle: source.channel_handle,
+      uploads_playlist_id: source.uploads_playlist_id,
     });
 
-    const normalizedLocations = await loadPrimaryLocations(uploadChannel.id);
+    const playlistVideos = await withRetry(() => loadUploadsPlaylistVideos(source.uploads_playlist_id), 3);
+    const videoIds = playlistVideos.map((video) => video.contentDetails?.videoId).filter(Boolean) as string[];
+    await updateProgress("loading_playlist", uploadChannel.id, {
+      youtube_channel_id: source.youtube_channel_id,
+      channel_name: source.channel_name,
+      channel_handle: source.channel_handle,
+      uploads_playlist_id: source.uploads_playlist_id,
+    });
+
+    const videoDetails = videoIds.length ? await withRetry(() => loadVideoDetails(videoIds), 3) : new Map();
+    await updateProgress("hydrating_details", uploadChannel.id, {
+      youtube_channel_id: source.youtube_channel_id,
+      channel_name: source.channel_name,
+      channel_handle: source.channel_handle,
+      uploads_playlist_id: source.uploads_playlist_id,
+    });
+
+    const playlistSignals = source.youtube_channel_id ? await withRetry(() => loadChannelPlaylistSignals(source.youtube_channel_id), 3) : new Map();
+    const eligibleVideoIds = filterOutShortVideoIds(videoIds, videoDetails).slice(0, maxVideosPerRun);
+    totalVideos = eligibleVideoIds.length;
+
+    await updateProgress("loading_playlist_signals", uploadChannel.id, {
+      youtube_channel_id: source.youtube_channel_id,
+      channel_name: source.channel_name,
+      channel_handle: source.channel_handle,
+      uploads_playlist_id: source.uploads_playlist_id,
+    });
+
+    await processVideosInBatches(eligibleVideoIds, importConcurrency, async (videoId) => {
+      const details = videoDetails.get(videoId);
+      if (!details) {
+        processedVideos += 1;
+        skippedVideos += 1;
+        if (processedVideos % 5 === 0 || processedVideos === totalVideos) {
+          await updateProgress("mapping", uploadChannel.id, {
+            youtube_channel_id: source.youtube_channel_id,
+            channel_name: source.channel_name,
+            channel_handle: source.channel_handle,
+            uploads_playlist_id: source.uploads_playlist_id,
+          });
+        }
+        return;
+      }
+
+      let videoRecordId: string | null = null;
+      try {
+        videoRecordId = await withRetry(
+          () =>
+            upsertVideoSkeleton({
+              channelId: uploadChannel.id,
+              youtubeVideoId: videoId,
+              details,
+              sourcePayload: {
+                video_details: details.raw || null,
+              },
+            }),
+          2
+        );
+
+        const analysis = await withRetry(
+          () =>
+            analyzeVideoLocation({
+              channelName: uploadChannel.channel_name,
+              channelDescription: uploadChannel.description,
+              youtubeVideoId: videoId,
+              title: details.title,
+              description: details.description,
+              publishedAt: details.published_at,
+              playlistSignals: playlistSignals.get(videoId) || [],
+              recordingLat: details.recording_lat,
+              recordingLng: details.recording_lng,
+              recordingLocationDescription: details.recording_location_description,
+              mode: "initial",
+            }),
+          2
+        );
+
+        const persistedLocation = await withRetry(
+          () =>
+            persistVideoAnalysis({
+              channelId: uploadChannel.id,
+              videoRecordId: videoRecordId!,
+              youtubeVideoId: videoId,
+              title: details.title,
+              description: details.description,
+              thumbnailUrl: details.thumbnail_url,
+              publishedAt: details.published_at,
+              viewCount: details.view_count,
+              likeCount: details.like_count,
+              commentCount: details.comment_count,
+              durationSeconds: details.duration_seconds,
+              recordingLat: details.recording_lat,
+              recordingLng: details.recording_lng,
+              recordingLocationDescription: details.recording_location_description,
+              analysis,
+            }),
+          2
+        );
+
+        processedVideos += 1;
+        if (analysis.locationStatus === "verified_auto" && persistedLocation) {
+          mappedVideos += 1;
+          mappedViews += Number(details.view_count || 0);
+          mappedCountryCodes.add(String(persistedLocation.country_code || "").trim().toUpperCase());
+        } else {
+          skippedVideos += 1;
+        }
+      } catch (error) {
+        const provider = classifyProviderError(error);
+        providerErrors = mergeProviderErrors(providerErrors, provider);
+        processedVideos += 1;
+        skippedVideos += 1;
+        if (videoRecordId) {
+          await sql`
+            update public.videos
+            set
+              location_status = 'failed',
+              needs_manual_reason = ${`Import error (${provider}): ${String(error instanceof Error ? error.message : error || "unknown").slice(0, 220)}`},
+              updated_at = ${new Date().toISOString()}
+            where id = ${videoRecordId}
+          `;
+        }
+      }
+
+      if (processedVideos % 5 === 0 || processedVideos === totalVideos) {
+        await updateProgress("mapping", uploadChannel.id, {
+          youtube_channel_id: source.youtube_channel_id,
+          channel_name: source.channel_name,
+          channel_handle: source.channel_handle,
+          uploads_playlist_id: source.uploads_playlist_id,
+        });
+      }
+    });
+
+    await updateProgress("finalizing", uploadChannel.id, {
+      youtube_channel_id: source.youtube_channel_id,
+      channel_name: source.channel_name,
+      channel_handle: source.channel_handle,
+      uploads_playlist_id: source.uploads_playlist_id,
+    });
+
+    const normalizedLocations = await withRetry(() => loadPrimaryLocations(uploadChannel.id), 2);
 
     const channel: TravelChannel = {
       id: uploadChannel.id,
@@ -571,6 +746,9 @@ export async function importYoutubeChannel({
           channel: source,
           stage: "completed",
           progress: 1,
+          providerErrors,
+          importConcurrency,
+          maxVideosPerRun,
         })}::jsonb,
         finished_at = ${new Date().toISOString()},
         updated_at = ${new Date().toISOString()}
@@ -624,16 +802,193 @@ export async function importYoutubeChannel({
       },
     };
   } catch (error) {
+    const provider = classifyProviderError(error);
+    providerErrors = mergeProviderErrors(providerErrors, provider);
     const errorMessage = error instanceof Error ? error.message : "Unknown import error";
+    if (activeChannelId) {
+      await upsertChannelImportRun({
+        importRunId,
+        channelId: activeChannelId,
+        status: "failed",
+        source: "youtube",
+        inputPayload: { channelUrl },
+        outputPayload: {
+          totalVideos,
+          processedVideos,
+          mappedVideos,
+          skippedVideos,
+          countriesMapped: mappedCountryCodes.size,
+          totalViews: mappedViews,
+          stage: "failed",
+          progress: totalVideos > 0 ? Number((processedVideos / totalVideos).toFixed(4)) : 0,
+          providerErrors,
+          importConcurrency,
+          maxVideosPerRun,
+        },
+        errorMessage,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      });
+    } else {
+      await sql`
+        update public.channel_import_runs
+        set
+          status = 'failed',
+          error_message = ${errorMessage},
+          output = ${JSON.stringify({
+            stage: "failed",
+            providerErrors,
+          })}::jsonb,
+          finished_at = ${new Date().toISOString()},
+          updated_at = ${new Date().toISOString()}
+        where id = ${importRunId}
+      `;
+    }
+    throw error;
+  }
+}
+
+interface QueueRunRow {
+  id: string;
+  status: string;
+  updated_at: string | null;
+  user_id: string;
+  channel_id: string;
+  input: Record<string, unknown> | null;
+}
+
+async function loadImportRunForProcessing(runId: string): Promise<QueueRunRow | null> {
+  const rows = await sql<QueueRunRow[]>`
+    select
+      cir.id,
+      cir.status::text as status,
+      cir.updated_at,
+      c.user_id,
+      c.id as channel_id,
+      cir.input
+    from public.channel_import_runs cir
+    inner join public.channels c on c.id = cir.channel_id
+    where cir.id = ${runId}
+    limit 1
+  `;
+  return rows[0] || null;
+}
+
+export async function processYoutubeImportRunById(input: {
+  runId: string;
+  requestedByUserId?: string | null;
+}) {
+  const run = await loadImportRunForProcessing(input.runId);
+  if (!run) {
+    return { handled: false, reason: "run_not_found" as const };
+  }
+
+  if (input.requestedByUserId && run.user_id !== input.requestedByUserId) {
+    return { handled: false, reason: "forbidden" as const };
+  }
+
+  if (run.status === "completed") {
+    return { handled: false, reason: "already_completed" as const };
+  }
+
+  const staleSeconds = Math.floor(STALE_RUNNING_RUN_MS / 1000);
+  const claims = await sql<Array<{ id: string }>>`
+    update public.channel_import_runs
+    set
+      status = 'running',
+      error_message = null,
+      updated_at = ${new Date().toISOString()}
+    where id = ${run.id}
+      and (
+        status in ('queued', 'failed')
+        or (
+          status = 'running'
+          and updated_at < now() - (${String(staleSeconds)} || ' seconds')::interval
+        )
+      )
+    returning id
+  `;
+  if (!claims[0]?.id) {
+    return { handled: false, reason: "already_processing" as const };
+  }
+
+  const channelUrl = String(run.input?.channelUrl || "").trim();
+  if (!channelUrl) {
     await sql`
       update public.channel_import_runs
       set
         status = 'failed',
-        error_message = ${errorMessage},
+        error_message = 'Missing channelUrl in import input payload.',
         finished_at = ${new Date().toISOString()},
         updated_at = ${new Date().toISOString()}
-      where id = ${importRunId}
+      where id = ${run.id}
     `;
-    throw error;
+    return { handled: false, reason: "missing_channel_url" as const };
   }
+
+  await importYoutubeChannel({
+    userId: run.user_id,
+    channelUrl,
+    importRunId: run.id,
+  });
+
+  return { handled: true, reason: "processed" as const };
+}
+
+export async function processNextQueuedYoutubeImportRun(input?: { requestedByUserId?: string | null }) {
+  const staleSeconds = Math.floor(STALE_RUNNING_RUN_MS / 1000);
+  const rows = input?.requestedByUserId
+    ? await sql<QueueRunRow[]>`
+        select
+          cir.id,
+          cir.status::text as status,
+          cir.updated_at,
+          c.user_id,
+          c.id as channel_id,
+          cir.input
+        from public.channel_import_runs cir
+        inner join public.channels c on c.id = cir.channel_id
+        where c.user_id = ${input.requestedByUserId}
+          and (
+            cir.status = 'queued'
+            or cir.status = 'failed'
+            or (
+              cir.status = 'running'
+              and cir.updated_at < now() - (${String(staleSeconds)} || ' seconds')::interval
+            )
+          )
+        order by cir.created_at asc
+        limit 1
+      `
+    : await sql<QueueRunRow[]>`
+        select
+          cir.id,
+          cir.status::text as status,
+          cir.updated_at,
+          c.user_id,
+          c.id as channel_id,
+          cir.input
+        from public.channel_import_runs cir
+        inner join public.channels c on c.id = cir.channel_id
+        where (
+          cir.status = 'queued'
+          or cir.status = 'failed'
+          or (
+            cir.status = 'running'
+            and cir.updated_at < now() - (${String(staleSeconds)} || ' seconds')::interval
+          )
+        )
+        order by cir.created_at asc
+        limit 1
+      `;
+
+  const selected = rows[0] || null;
+  if (!selected) {
+    return { handled: false, reason: "no_pending_runs" as const };
+  }
+
+  return processYoutubeImportRunById({
+    runId: selected.id,
+    requestedByUserId: input?.requestedByUserId || null,
+  });
 }

@@ -33,6 +33,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
   const requestedChannelId = resolvedSearchParams.channelId || DEMO_CHANNEL_SLUG;
   const payload = (await loadPublicMapPayloadByChannelId({ channelId: requestedChannelId })) || (requestedChannelId === DEMO_CHANNEL_SLUG ? null : await loadPublicMapPayloadByChannelId({ channelId: DEMO_CHANNEL_SLUG }));
   const isDemoMap = requestedChannelId === DEMO_CHANNEL_SLUG || payload?.channel.id === DEMO_CHANNEL_ID;
+  const headerEyebrow = requestedChannelId === payload?.channel.id ? "Mapa público" : isDemoMap ? "Mapa demo" : "Demo de respaldo";
   if (!payload) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center px-4 text-foreground">
@@ -69,7 +70,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           sponsors={payload.sponsors}
           activePoll={payload.activePoll}
           availablePollOptions={payload.availablePollOptions}
-          headerEyebrow={requestedChannelId === payload.channel.id ? "Public map" : "Demo fallback"}
+          headerEyebrow={headerEyebrow}
           viewMode={isDemoMap ? "demo" : payload.viewer.isOwner ? "creator" : "viewer"}
         />
       </div>

@@ -1,7 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getSessionUserIdFromRequest } from "@/lib/current-user";
-import { importYoutubeChannel } from "@/lib/youtube-import";
 import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
@@ -127,44 +126,19 @@ export async function POST(request: Request) {
           totalViews: 0,
           stage: "queued",
           progress: 0,
+          providerErrors: {
+            youtube: 0,
+            nominatim: 0,
+            gemini: 0,
+            database: 0,
+            unknown: 0,
+          },
         })}::jsonb,
         null,
         ${nowIso},
         ${nowIso}
       )
     `;
-
-    void importYoutubeChannel({
-      userId,
-      channelUrl: channelReference,
-      importRunId,
-    }).catch(async (error) => {
-      console.error("[api/youtube/import/start]", error);
-      const errorMessage = error instanceof Error ? error.message : "Could not import YouTube channel";
-      try {
-        await sql`
-          update public.channel_import_runs
-          set
-            status = 'failed',
-            error_message = ${errorMessage},
-            output = ${JSON.stringify({
-              totalVideos: 0,
-              processedVideos: 0,
-              mappedVideos: 0,
-              skippedVideos: 0,
-              countriesMapped: 0,
-              totalViews: 0,
-              stage: "failed",
-              progress: 0,
-            })}::jsonb,
-            finished_at = ${new Date().toISOString()},
-            updated_at = ${new Date().toISOString()}
-          where id = ${importRunId}
-        `;
-      } catch (writeError) {
-        console.error("[api/youtube/import/start] could not persist failed state", writeError);
-      }
-    });
 
     return NextResponse.json({
       import_run_id: importRunId,

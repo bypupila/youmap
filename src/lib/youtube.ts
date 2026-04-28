@@ -5,6 +5,8 @@ import { loadPublicChannelFeedVideos, validateYouTubeChannelWithoutApiKey } from
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 const PUBLIC_FEED_PLAYLIST_PREFIX = "public_feed:";
 const publicFeedVideoCache = new Map<string, Omit<YouTubeVideoRecord, "youtube_video_id">>();
+const playlistSignalCache = new Map<string, { expiresAt: number; signals: Map<string, YouTubePlaylistGeoSignal[]> }>();
+const PLAYLIST_SIGNAL_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export interface YouTubeChannelResolution {
   youtube_channel_id: string;
@@ -610,6 +612,13 @@ export async function loadTravelPlaylistVideoIds(channelId: string) {
 }
 
 export async function loadChannelPlaylistSignals(channelId: string) {
+  const cacheKey = sanitizeEnvValue(channelId);
+  const now = Date.now();
+  const cached = playlistSignalCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.signals;
+  }
+
   const relevantPlaylists: YouTubePlaylistGeoSignal[] = [];
   let playlistToken: string | undefined;
 
@@ -690,6 +699,11 @@ export async function loadChannelPlaylistSignals(channelId: string) {
       itemToken = response.nextPageToken;
     } while (itemToken);
   }
+
+  playlistSignalCache.set(cacheKey, {
+    expiresAt: now + PLAYLIST_SIGNAL_CACHE_TTL_MS,
+    signals: signalMap,
+  });
 
   return signalMap;
 }

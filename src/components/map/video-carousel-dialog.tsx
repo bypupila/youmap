@@ -198,7 +198,7 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-white/5 text-[#717171]">No thumbnail</div>
+                        <div className="flex h-full w-full items-center justify-center bg-white/5 text-[#717171]">Miniatura no disponible</div>
                       )}
                     </div>
 
@@ -206,7 +206,7 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
                       type="button"
                       onClick={() => go(-1)}
                       className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/50 p-2 text-white backdrop-blur-md transition hover:bg-black/70"
-                      aria-label="Previous video"
+                      aria-label="Video anterior"
                     >
                       <CaretLeft size={18} />
                     </button>
@@ -215,7 +215,7 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
                       type="button"
                       onClick={() => go(1)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/50 p-2 text-white backdrop-blur-md transition hover:bg-black/70"
-                      aria-label="Next video"
+                      aria-label="Siguiente video"
                     >
                       <CaretRight size={18} />
                     </button>
@@ -248,12 +248,12 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
 
             <div className="flex min-h-0 flex-col">
               <div className="border-b border-white/10 px-5 py-4 sm:px-6">
-                <p className="text-[12px] uppercase tracking-[0.14em] text-[#8e8e8e]">Details</p>
+                <p className="text-[12px] uppercase tracking-[0.14em] text-[#8e8e8e]">Detalle</p>
                 <h3 className="mt-2 text-center text-[24px] leading-8 font-semibold tracking-tight text-[#f1f1f1] sm:text-[28px]">
                   {currentVideo?.title || "Untitled video"}
                 </h3>
                 <p className="mt-3 text-center text-[15px] leading-6 text-[#d0d0d0]">
-                  {currentVideo ? `${formatNumber(Number(currentVideo.view_count || 0))} views • ${formatNumber(Number(currentVideo.like_count || 0))} likes • ${formatNumber(Number(currentVideo.comment_count || 0))} comments` : ""}
+                  {currentVideo ? `${formatNumber(Number(currentVideo.view_count || 0))} vistas • ${formatNumber(Number(currentVideo.like_count || 0))} likes • ${formatNumber(Number(currentVideo.comment_count || 0))} comentarios` : ""}
                 </p>
                 <p className="mt-2 text-center text-[14px] leading-5 text-[#aaaaaa]">
                   {currentVideo ? `${countryCodeToFlag(currentVideo.country_code)} ${currentVideo.country_name || currentVideo.country_code} · ${formatDate(currentVideo.published_at)}` : ""}

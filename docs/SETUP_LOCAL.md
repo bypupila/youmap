@@ -38,7 +38,9 @@ Use the demo route to inspect the product without external credentials:
 2. Set `AUTH_SESSION_SECRET`.
 3. Apply `neon/migrations/0001_initial.sql` and `neon/seed/demo.sql` via `./scripts/bootstrap-local.sh`.
 4. Set `YOUTUBE_API_KEY`, one Gemini key (`GOOGLE_GENAI_API_KEY` or `GEMINI_API_KEY` or `GOOGLE_API_KEY`), `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET`.
-5. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
+5. (Optional but recommended for cron worker) set `YOUTUBE_IMPORT_WORKER_TOKEN`.
+6. (Optional tuning) set `YOUTUBE_IMPORT_CONCURRENCY` and `YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN`.
+7. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
 
 No external CLI or linked project is required for local bootstrap anymore.
 
@@ -66,6 +68,7 @@ Only `.env.example` can be committed. Keep real credentials only in local `.env.
 4. Public map renders videos.
 5. Sponsor click tracking works.
 6. Polar checkout and webhook persist a subscription.
+7. YouTube import creates a queued run in `/api/youtube/import/start` and is processed by `/api/youtube/import/worker`.
 
 ## Vercel checklist
 
@@ -85,3 +88,7 @@ For stable deploys, configure this in Vercel Project Settings:
    - `POLAR_ACCESS_TOKEN`
    - `POLAR_WEBHOOK_SECRET`
    - `POLAR_TRIAL_DISCOUNT_ID`
+5. Optional import worker envs:
+   - `YOUTUBE_IMPORT_WORKER_TOKEN`
+   - `YOUTUBE_IMPORT_CONCURRENCY`
+   - `YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN`

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 import { DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import { buildAnalyticsFromVideoLocations } from "@/lib/analytics";
 import { createPreviewSession } from "@/lib/preview-session";
-import { importYoutubeChannel, importYoutubeChannelPreview } from "@/lib/youtube-import";
+import { importYoutubeChannelPreview } from "@/lib/youtube-import";
 import { getSessionUserIdFromRequest } from "@/lib/current-user";
 import { hasGeminiApiKey } from "@/lib/gemini";
+import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
@@ -80,10 +82,87 @@ export async function POST(request: Request) {
     }
 
     assertImportProvidersConfigured();
+    const nowIso = new Date().toISOString();
+    const channelRows = await sql<Array<{ id: string }>>`
+      insert into public.channels (
+        user_id,
+        channel_name,
+        channel_handle,
+        thumbnail_url,
+        subscriber_count,
+        description,
+        is_public,
+        published_at,
+        updated_at
+      )
+      values (
+        ${userId},
+        'Import pending',
+        null,
+        null,
+        null,
+        null,
+        true,
+        null,
+        ${nowIso}
+      )
+      on conflict (user_id)
+      do update set
+        updated_at = excluded.updated_at
+      returning id
+    `;
+    const channelId = channelRows[0]?.id || null;
+    if (!channelId) {
+      throw new Error("Could not initialize channel import");
+    }
 
-    const result = await importYoutubeChannel({ userId, channelUrl: payload.channelUrl });
+    const importRunId = randomUUID();
+    await sql`
+      insert into public.channel_import_runs (
+        id,
+        channel_id,
+        status,
+        source,
+        input,
+        output,
+        error_message,
+        started_at,
+        updated_at
+      )
+      values (
+        ${importRunId},
+        ${channelId},
+        'queued',
+        'youtube',
+        ${JSON.stringify({ channelUrl: payload.channelUrl })}::jsonb,
+        ${JSON.stringify({
+          totalVideos: 0,
+          processedVideos: 0,
+          mappedVideos: 0,
+          skippedVideos: 0,
+          countriesMapped: 0,
+          totalViews: 0,
+          stage: "queued",
+          progress: 0,
+          providerErrors: {
+            youtube: 0,
+            nominatim: 0,
+            gemini: 0,
+            database: 0,
+            unknown: 0,
+          },
+        })}::jsonb,
+        null,
+        ${nowIso},
+        ${nowIso}
+      )
+    `;
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      import_run_id: importRunId,
+      status: "queued",
+      channel_id: channelId,
+    });
   } catch (error) {
     console.error("[api/youtube/import]", error);
     return NextResponse.json(

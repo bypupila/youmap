@@ -110,6 +110,38 @@ type ImportRunResponse = {
 
 const STALE_RUN_MS = 5 * 60 * 1000;
 
+function formatStageLabel(stage: string, locale: Locale) {
+  const normalized = String(stage || "").trim().toLowerCase();
+  const labelsEs: Record<string, string> = {
+    queued: "En cola",
+    starting: "Iniciando",
+    resolving_channel: "Resolviendo canal",
+    loading_playlist: "Leyendo playlist",
+    hydrating_details: "Cargando detalles de videos",
+    loading_playlist_signals: "Analizando señales de playlist",
+    mapping: "Mapeando ubicaciones",
+    finalizing: "Finalizando",
+    completed: "Completado",
+    failed: "Falló",
+    running: "Procesando",
+  };
+  const labelsEn: Record<string, string> = {
+    queued: "Queued",
+    starting: "Starting",
+    resolving_channel: "Resolving channel",
+    loading_playlist: "Loading playlist",
+    hydrating_details: "Loading video details",
+    loading_playlist_signals: "Loading playlist signals",
+    mapping: "Mapping locations",
+    finalizing: "Finalizing",
+    completed: "Completed",
+    failed: "Failed",
+    running: "Running",
+  };
+  const dictionary = locale === "es" ? labelsEs : labelsEn;
+  return dictionary[normalized] || normalized || (locale === "es" ? "Procesando" : "Processing");
+}
+
 async function readResponseMessage(response: Response, fallback: string) {
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
@@ -157,6 +189,7 @@ export function OnboardingProcessing({
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [phraseIndex, setPhraseIndex] = useState(0);
   const invalidRunIdsRef = useRef<Set<string>>(new Set());
+  const workerTriggerAtRef = useRef(0);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -240,6 +273,21 @@ export function OnboardingProcessing({
     if (!currentRunId) return;
     let active = true;
 
+    async function triggerWorker(runIdentifier: string) {
+      const now = Date.now();
+      if (now - workerTriggerAtRef.current < 3500) return;
+      workerTriggerAtRef.current = now;
+      try {
+        await fetch("/api/youtube/import/worker", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runId: runIdentifier }),
+        });
+      } catch {
+        // Do not block polling on worker trigger failures.
+      }
+    }
+
     async function pollRun() {
       try {
         const response = await fetch(`/api/youtube/import/${encodeURIComponent(currentRunId)}`, { cache: "no-store" });
@@ -279,6 +327,10 @@ export function OnboardingProcessing({
         setCountriesMapped(Math.max(0, Number(output.countriesMapped || 0)));
         setMappedVideos(Math.max(0, Number(output.mappedVideos || 0)));
         setMappedViews(Math.max(0, Number(output.totalViews || 0)));
+
+        if (status === "queued" || status === "running") {
+          void triggerWorker(currentRunId);
+        }
 
         if (status === "completed") {
           setProgress(1);
@@ -470,7 +522,7 @@ export function OnboardingProcessing({
             )}
 
             {error ? <p className="mt-3 text-[12px] text-[#ff8b8b]">{error}</p> : null}
-            <p className="mt-4 text-[12px] text-[#9a9a9a]">{stage}</p>
+            <p className="mt-4 text-[12px] text-[#9a9a9a]">{formatStageLabel(stage, locale)}</p>
           </div>
         </div>
       </section>

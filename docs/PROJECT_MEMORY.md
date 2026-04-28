@@ -221,6 +221,11 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 - Se corrige la CSP de produccion para permitir workers `blob:` requeridos por Sentry Replay sin relajar `script-src`.
 - Se reserva `/monitoring` en `src/proxy.ts` para que el dominio vanity no reescriba el tunel de Sentry a `/u/monitoring`.
 - Se agrega descripcion accesible al dialog de carrusel de videos y se evita preload innecesario de thumbnails dentro del modal.
+- Se cambia el flujo de import en onboarding para que `/api/youtube/import/start` solo encole runs y el procesamiento lo ejecute un worker dedicado (`POST /api/youtube/import/worker`), evitando trabajo largo en el request de inicio.
+- `channel_import_runs.output` ahora registra etapas operativas (`stage`) y `providerErrors` por proveedor para mejorar trazabilidad de incidentes.
+- Se agrega cache temporal de `loadChannelPlaylistSignals` para reducir recarga de playlists en imports/sync consecutivos del mismo canal.
+- Se agregan metadata dinamica en `/u/[username]`, `sitemap.ts` y `robots.ts` para baseline SEO de lanzamiento.
+- Se agrega endpoint de metricas operativas de import por usuario (`GET /api/youtube/import/metrics`) y documentacion de release/incidentes en `docs/GO_NO_GO_CHECKLIST.md` y `docs/IMPORT_RUNBOOK.md`.
 
 ### 2026-04-24
 
