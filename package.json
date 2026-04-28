@@ -17,7 +17,7 @@
     "polar:bootstrap": "node scripts/polar-bootstrap-travel.mjs"
   },
   "dependencies": {
-    "@google/genai": "^1.13.0",
+    "@google/genai": "^1.50.1",
     "@neondatabase/serverless": "^1.0.1",
     "@phosphor-icons/react": "^2.1.10",
     "@polar-sh/sdk": "^0.6.0",
