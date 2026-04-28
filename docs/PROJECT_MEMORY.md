@@ -215,6 +215,12 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 
 ## Registro de memoria
 
+### 2026-04-28
+
+- Se corrige la CSP de produccion para permitir workers `blob:` requeridos por Sentry Replay sin relajar `script-src`.
+- Se reserva `/monitoring` en `src/proxy.ts` para que el dominio vanity no reescriba el tunel de Sentry a `/u/monitoring`.
+- Se agrega descripcion accesible al dialog de carrusel de videos y se evita preload innecesario de thumbnails dentro del modal.
+
 ### 2026-04-24
 
 - Se implementa un layout unificado de mapas para `/map`, `/u/[username]`, demos y dashboard, basado en un shell comun con sidebar publica adaptada, topbar de busqueda, overview rail, globo central y rail derecho.

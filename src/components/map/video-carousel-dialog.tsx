@@ -5,7 +5,7 @@ import { CaretLeft, CaretRight, X, ArrowSquareOut } from "@phosphor-icons/react"
 import posthog from "posthog-js";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TravelVideoLocation } from "@/lib/types";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
@@ -118,6 +118,9 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
         className="max-w-[min(1100px,calc(100%-1rem))] overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(8,11,14,0.96),rgba(5,7,10,0.94))] p-0 text-white shadow-[0_34px_110px_-44px_rgba(0,0,0,0.96)]"
       >
         <DialogTitle className="sr-only">Carrusel de videos</DialogTitle>
+        <DialogDescription className="sr-only">
+          Navega los videos del canal por pais, revisa sus metricas y abre el video seleccionado en YouTube.
+        </DialogDescription>
         <div className="relative">
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6">
             <div className="min-w-0">
@@ -191,8 +194,8 @@ export function VideoCarouselDialog({ open, videos, currentVideo, onClose, onCha
                           alt={currentVideo.title}
                           width={1280}
                           height={720}
+                          sizes="(min-width: 1024px) 52vw, calc(100vw - 3rem)"
                           className="h-full w-full object-cover"
-                          priority
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-white/5 text-[#717171]">No thumbnail</div>
