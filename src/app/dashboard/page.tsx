@@ -83,6 +83,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           activePoll={experiencePayload?.activePoll || null}
           availablePollOptions={experiencePayload?.availablePollOptions || []}
           headerEyebrow={previewSession ? "Preview local" : isDemoMode ? "Demo map" : "Owner view"}
+          viewMode={isDemoMode ? "demo" : "creator"}
         />
       </div>
 

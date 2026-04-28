@@ -4,6 +4,7 @@ import { MapExperience } from "@/components/map/map-experience";
 import { getSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { MAP_VOTER_COOKIE, hashValue } from "@/lib/map-polls";
 import { loadPublicMapPayload } from "@/lib/map-public";
+import { DEMO_CHANNEL_ID, isDemoUsername } from "@/lib/demo-data";
 
 interface PublicMapPageProps {
   params: Promise<{
@@ -39,6 +40,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
           sponsors={payload.sponsors}
           activePoll={payload.activePoll}
           availablePollOptions={payload.availablePollOptions}
+          viewMode={isDemoUsername(resolvedParams.username) || payload.channel.id === DEMO_CHANNEL_ID ? "demo" : payload.viewer.isOwner ? "creator" : "viewer"}
         />
       </div>
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MapExperience } from "@/components/map/map-experience";
 import { Button } from "@/components/ui/button";
-import { DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
+import { DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
 import { loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -32,6 +32,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
   const resolvedSearchParams = await searchParams;
   const requestedChannelId = resolvedSearchParams.channelId || DEMO_CHANNEL_SLUG;
   const payload = (await loadPublicMapPayloadByChannelId({ channelId: requestedChannelId })) || (requestedChannelId === DEMO_CHANNEL_SLUG ? null : await loadPublicMapPayloadByChannelId({ channelId: DEMO_CHANNEL_SLUG }));
+  const isDemoMap = requestedChannelId === DEMO_CHANNEL_SLUG || payload?.channel.id === DEMO_CHANNEL_ID;
   if (!payload) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center px-4 text-foreground">
@@ -69,6 +70,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           activePoll={payload.activePoll}
           availablePollOptions={payload.availablePollOptions}
           headerEyebrow={requestedChannelId === payload.channel.id ? "Public map" : "Demo fallback"}
+          viewMode={isDemoMap ? "demo" : payload.viewer.isOwner ? "creator" : "viewer"}
         />
       </div>
 

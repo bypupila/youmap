@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   ArrowSquareOut,
   ArrowsClockwise,
-  Bell,
   CaretRight,
   ChartBar,
   Check,
@@ -53,6 +52,8 @@ import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 type FilterWindow = "30" | "90" | "365" | "all";
 type SyncState = "idle" | "running" | "success" | "error";
 type MobileMapTab = "overview" | "map" | "videos" | "community" | "more";
+type MapViewMode = "viewer" | "creator" | "demo";
+type DesktopMapTab = "all" | "watched" | "saved" | "featured";
 
 const EMPTY_MANUAL_QUEUE: ManualVerificationItem[] = [];
 const DEFAULT_VIEWER: MapViewerContext = { isOwner: false, shareUrl: "", adminUrl: null };
@@ -81,6 +82,7 @@ interface MapExperienceProps {
   activePoll?: MapPollRecord | null;
   availablePollOptions?: PollOptionInput[];
   headerEyebrow?: string;
+  viewMode?: MapViewMode;
   layoutVariant?: "full";
 }
 
@@ -148,6 +150,9 @@ type MapShellProps = {
   copyState: "idle" | "copied" | "error";
   allowRefresh: boolean;
   interactive: boolean;
+  viewMode: MapViewMode;
+  canUseAdminPanels: boolean;
+  desktopMapTab: DesktopMapTab;
   mobileMenuOpen: boolean;
   desktopMenuHidden: boolean;
   availablePollOptions: PollOptionInput[];
@@ -159,6 +164,7 @@ type MapShellProps = {
   setMobileMenuOpen: Dispatch<SetStateAction<boolean>>;
   setDesktopMenuHidden: Dispatch<SetStateAction<boolean>>;
   setPollState: Dispatch<SetStateAction<MapPollRecord | null>>;
+  setDesktopMapTab: Dispatch<SetStateAction<DesktopMapTab>>;
   locateFirstSearchResult: () => void;
   selectCountry: (countryCode: string | null) => void;
   openVideo: (video: TravelVideoLocation) => void;
@@ -184,6 +190,7 @@ export function MapExperience({
   sponsors = [],
   activePoll = null,
   availablePollOptions = [],
+  viewMode,
 }: MapExperienceProps) {
   const incomingManualQueue = manualQueue ?? EMPTY_MANUAL_QUEUE;
   const [items, setItems] = useState<TravelVideoLocation[]>(videoLocations);
@@ -202,6 +209,7 @@ export function MapExperience({
   const [missingVideosOpen, setMissingVideosOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopMenuHidden, setDesktopMenuHidden] = useState(false);
+  const [desktopMapTab, setDesktopMapTab] = useState<DesktopMapTab>("all");
   const [pollState, setPollState] = useState<MapPollRecord | null>(activePoll);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const videosRailRef = useRef<HTMLDivElement | null>(null);
@@ -281,10 +289,29 @@ export function MapExperience({
       .sort(sortRecentVideos);
   }, [searchFilteredVideos, selectedCountryCode]);
 
+  const watchedVideos = useMemo(() => {
+    return searchFilteredVideos.filter((video) => {
+      if (!video.youtube_video_id || typeof window === "undefined") return false;
+      try {
+        const raw = window.localStorage.getItem("travelmap_seen_videos_v1");
+        if (!raw) return false;
+        const parsed = JSON.parse(raw) as string[];
+        return parsed.includes(video.youtube_video_id);
+      } catch {
+        return false;
+      }
+    });
+  }, [searchFilteredVideos]);
+
+  const featuredVideos = useMemo(() => searchFilteredVideos.slice(0, 5), [searchFilteredVideos]);
+
   const filteredVideos = useMemo(() => {
+    if (desktopMapTab === "watched") return watchedVideos;
+    if (desktopMapTab === "saved") return searchFilteredVideos;
+    if (desktopMapTab === "featured") return featuredVideos;
     if (!selectedCountryCode) return searchFilteredVideos;
     return selectedCountryVideos;
-  }, [searchFilteredVideos, selectedCountryCode, selectedCountryVideos]);
+  }, [desktopMapTab, watchedVideos, searchFilteredVideos, featuredVideos, selectedCountryCode, selectedCountryVideos]);
 
   const recentVideos = useMemo(() => items.slice().sort(sortRecentVideos).slice(0, 6), [items]);
   const visibleRecentVideos = selectedCountryCode ? selectedCountryVideos.slice(0, 6) : recentVideos;
@@ -316,9 +343,22 @@ export function MapExperience({
     () => buildDestinationCandidates(pollState, countryBuckets),
     [countryBuckets, pollState]
   );
+  const resolvedViewMode: MapViewMode = viewMode || (viewer.isOwner ? "creator" : "viewer");
+  const canUseAdminPanels = resolvedViewMode === "creator" || resolvedViewMode === "demo" || viewer.isOwner;
+  const shellViewer: MapViewerContext = canUseAdminPanels
+    ? {
+        ...viewer,
+        isOwner: true,
+        adminUrl: viewer.adminUrl || (channelId ? `/dashboard?channelId=${encodeURIComponent(channelId)}` : "/dashboard?demo=1"),
+      }
+    : {
+        ...viewer,
+        isOwner: false,
+        adminUrl: null,
+      };
   const nextDestination = destinationCandidates[0] || null;
   const youtubeUrl = buildChannelUrl(channel);
-  const mapUrl = viewer.shareUrl || (channelId ? `/map?channelId=${encodeURIComponent(channelId)}` : "/map");
+  const mapUrl = shellViewer.shareUrl || (channelId ? `/map?channelId=${encodeURIComponent(channelId)}` : "/map");
   const shouldShowChrome = showHeader || showLegend || showOperationsPanel || showActiveVideoCard;
 
   async function reloadMapData() {
@@ -430,7 +470,20 @@ export function MapExperience({
         channel_name: channel.channel_name,
       });
     } catch {
-      setCopyState("error");
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = shareUrl;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopyState("copied");
+      } catch {
+        setCopyState("error");
+      }
     }
   }
 
@@ -442,7 +495,7 @@ export function MapExperience({
   const shellProps: MapShellProps = {
     channel,
     channelId,
-    viewer,
+    viewer: shellViewer,
     youtubeUrl,
     mapUrl,
     resolvedSummary,
@@ -468,6 +521,10 @@ export function MapExperience({
     copyState,
     allowRefresh,
     interactive,
+    viewMode: resolvedViewMode,
+    canUseAdminPanels,
+    desktopMapTab,
+    setDesktopMapTab,
     mobileMenuOpen,
     desktopMenuHidden,
     availablePollOptions,
@@ -612,7 +669,133 @@ function MobileMapShell({
       </div>
 
       <MobileBottomNav activeTab={mobileTab} setActiveTab={setMobileTab} voteCount={props.pollState?.total_votes || props.destinationCandidates.length} />
+      <MobileMapMenu {...props} setMobileTab={setMobileTab} />
     </div>
+  );
+}
+
+function MobileMapMenu({
+  channel,
+  viewer,
+  mapUrl,
+  youtubeUrl,
+  resolvedSummary,
+  pendingManual,
+  pollState,
+  sponsors,
+  mobileMenuOpen,
+  setMobileMenuOpen,
+  setMissingVideosOpen,
+  copyShareUrl,
+  copyState,
+  selectCountry,
+  setMobileTab,
+}: MapShellProps & { setMobileTab: Dispatch<SetStateAction<MobileMapTab>> }) {
+  const closeMenu = () => setMobileMenuOpen(false);
+  const goToTab = (tab: MobileMapTab) => {
+    setMobileTab(tab);
+    closeMenu();
+  };
+
+  return (
+    <AnimatePresence>
+      {mobileMenuOpen ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="pointer-events-auto fixed inset-0 z-[390] bg-[#05080d]/80 backdrop-blur lg:hidden"
+          onClick={closeMenu}
+        >
+          <motion.aside
+            initial={{ x: -280 }}
+            animate={{ x: 0 }}
+            exit={{ x: -280 }}
+            transition={{ type: "spring", stiffness: 180, damping: 24 }}
+            className="flex h-full w-[288px] flex-col border-r border-white/10 bg-[#060a11] px-4 pb-4 pt-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <ChannelAvatar channel={channel} size="md" />
+                <div className="min-w-0">
+                  <p className="truncate text-[15px] font-semibold text-white">{channel.channel_name}</p>
+                  <p className="text-[12px] text-[#9da5ae]">{formatNumber(Number(channel.subscriber_count || 0))} suscriptores</p>
+                </div>
+              </div>
+              <button type="button" className="flex h-9 w-9 items-center justify-center rounded-lg text-white" aria-label="Cerrar menu" onClick={closeMenu}>
+                <X size={19} />
+              </button>
+            </div>
+
+            <nav className="space-y-1">
+              <MobileMenuButton icon={House} label="Inicio" href="/" />
+              <MobileMenuButton icon={MapPin} label="Mapa" count={resolvedSummary.total_countries} onClick={() => { selectCountry(null); goToTab("map"); }} />
+              <MobileMenuButton icon={Video} label="Videos" count={resolvedSummary.total_videos} onClick={() => goToTab("videos")} />
+              <MobileMenuButton icon={Trophy} label="Votaciones" count={pollState?.total_votes || undefined} onClick={() => goToTab("community")} />
+              <MobileMenuButton icon={UsersThree} label="Sponsors" count={sponsors.length || undefined} onClick={() => goToTab("community")} />
+              {viewer.isOwner ? <MobileMenuButton icon={GearSix} label="Ajustes" count={pendingManual.length || undefined} onClick={() => { setMissingVideosOpen(true); closeMenu(); }} /> : null}
+              {viewer.isOwner && viewer.adminUrl ? <MobileMenuButton icon={ChartBar} label="Panel admin" href={viewer.adminUrl} /> : null}
+            </nav>
+
+            <div className="mt-auto space-y-2">
+              {youtubeUrl ? (
+                <a href={youtubeUrl} target="_blank" rel="noreferrer" className="flex h-10 items-center justify-center gap-2 rounded-xl bg-[#c91f18] text-[12px] font-semibold text-white">
+                  <YoutubeLogo size={15} weight="fill" />
+                  Ver canal
+                </a>
+              ) : null}
+              <Link href={mapUrl} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]">
+                <MapPin size={15} />
+                Abrir mapa publico
+              </Link>
+              <button type="button" className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]" onClick={copyShareUrl}>
+                {copyState === "copied" ? <Check size={15} /> : <Copy size={15} />}
+                {copyState === "copied" ? "Enlace copiado" : "Copiar enlace"}
+              </button>
+            </div>
+          </motion.aside>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function MobileMenuButton({
+  icon: Icon,
+  label,
+  href,
+  onClick,
+  count,
+}: {
+  icon: Icon;
+  label: string;
+  href?: string;
+  onClick?: () => void;
+  count?: number;
+}) {
+  const content = (
+    <>
+      <Icon size={17} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {count ? <span className="rounded-md bg-[#c91f18] px-1.5 py-0.5 text-[10px] font-semibold text-white">{Math.min(999, count)}</span> : null}
+    </>
+  );
+
+  const className = "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[13px] font-medium text-[#dbe1e7] transition hover:bg-white/[0.07]";
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" className={className} onClick={onClick}>
+      {content}
+    </button>
   );
 }
 
@@ -622,12 +805,11 @@ function MobileOverviewView({
   cityCount,
   visibleRecentVideos,
   openVideo,
-  setMobileMenuOpen,
   setMobileTab,
 }: MapShellProps & { setMobileTab: Dispatch<SetStateAction<MobileMapTab>> }) {
   return (
     <div className="mx-auto flex min-h-full w-full max-w-[430px] flex-col">
-      <MobileBrandHeader channel={channel} onMenu={() => setMobileMenuOpen(true)} />
+      <MobileBrandHeader channel={channel} />
 
       <section className="mt-5 rounded-xl border border-white/10 bg-[#07101a]/88 p-3 shadow-[0_26px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
         <h1 className="text-[18px] font-semibold leading-6 text-[#f5f7fb]">Tus viajes en el mapa</h1>
@@ -671,6 +853,7 @@ function MobileOverviewView({
 }
 
 function MobileMapView({
+  channel,
   countryBuckets,
   destinationCandidates,
   selectedCountryCode,
@@ -680,16 +863,17 @@ function MobileMapView({
   selectCountry,
   visibleRecentVideos,
   activeVideo,
+  setMobileMenuOpen,
 }: MapShellProps) {
   const previewVideo = activeVideo || visibleRecentVideos[0] || null;
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-[430px] flex-col">
       <div className="pointer-events-auto flex h-9 items-center justify-between">
-        <span className="text-[13px] font-semibold text-white">9:41</span>
+        <span className="max-w-[104px] truncate text-[12px] font-semibold text-[#c8d0d8]">YOUMAP</span>
         <h1 className="text-[17px] font-semibold text-[#f5f7fb]">Mapa</h1>
-        <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full text-white" aria-label="Buscar">
-          <MagnifyingGlass size={21} />
+        <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full text-white" aria-label={`Abrir acciones de ${channel.channel_name}`} onClick={() => setMobileMenuOpen(true)}>
+          <List size={21} />
         </button>
       </div>
 
@@ -819,7 +1003,7 @@ function MobileMoreView(props: MapShellProps) {
     <div className="mx-auto w-full max-w-[430px]">
       <MobileActionBar {...props} />
       <div className="mt-4 space-y-3">
-        {props.viewer.isOwner || props.pendingManual.length > 0 || props.lastSyncSummary || props.syncError ? (
+        {props.showOperationsPanel && (props.canUseAdminPanels || props.lastSyncSummary || props.syncError) ? (
           <OperationsCard
             syncState={props.syncState}
             syncError={props.syncError}
@@ -836,12 +1020,10 @@ function MobileMoreView(props: MapShellProps) {
   );
 }
 
-function MobileBrandHeader({ channel, onMenu }: { channel: TravelChannel; onMenu: () => void }) {
+function MobileBrandHeader({ channel }: { channel: TravelChannel }) {
   return (
     <header className="flex items-center justify-between">
-      <button type="button" className="flex h-10 w-10 items-center justify-center rounded-lg text-[#f5f7fb]" aria-label="Abrir menu" onClick={onMenu}>
-        <List size={24} />
-      </button>
+      <span className="h-10 w-10" aria-hidden="true" />
 
       <div className="flex items-center gap-3">
         <span className="flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(255,0,0,0.72)] bg-[rgba(255,0,0,0.1)] text-[#ff342d]">
@@ -857,8 +1039,8 @@ function MobileBrandHeader({ channel, onMenu }: { channel: TravelChannel; onMenu
         </span>
       </div>
 
-      <button type="button" className="flex h-10 w-10 items-center justify-center rounded-lg text-[#f5f7fb]" aria-label="Notificaciones">
-        <Bell size={22} />
+      <button type="button" className="flex h-10 w-10 items-center justify-center rounded-lg text-[#f5f7fb]" aria-label={`Abrir canal de ${channel.channel_name}`} onClick={() => window.open(buildChannelUrl(channel) || "/", "_blank", "noopener,noreferrer")}>
+        <ArrowSquareOut size={21} />
       </button>
     </header>
   );
@@ -867,7 +1049,7 @@ function MobileBrandHeader({ channel, onMenu }: { channel: TravelChannel; onMenu
 function MobileSectionHeader({ title }: { title: string }) {
   return (
     <header className="flex h-10 items-center justify-between">
-      <span className="text-[13px] font-semibold text-white">9:41</span>
+      <span className="text-[12px] font-semibold text-[#c8d0d8]">YOUMAP</span>
       <h1 className="text-[18px] font-semibold text-[#f5f7fb]">{title}</h1>
       <span className="h-9 w-9" />
     </header>
@@ -895,6 +1077,7 @@ function MobileStatsGrid({
 function MobileActionBar({
   youtubeUrl,
   viewer,
+  canUseAdminPanels,
   pendingManual,
   copyState,
   copyShareUrl,
@@ -910,15 +1093,22 @@ function MobileActionBar({
       ) : (
         <span />
       )}
-      <button
-        type="button"
-        className="flex h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.055] text-[12px] font-medium text-[#f5f7fb]"
-        onClick={() => setMissingVideosOpen(true)}
-        disabled={!viewer.isOwner && pendingManual.length === 0}
-      >
-        <MagnifyingGlass size={14} />
-        Missing videos
-      </button>
+      {canUseAdminPanels ? (
+        <button
+          type="button"
+          className="flex h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.055] text-[12px] font-medium text-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-55"
+          onClick={() => setMissingVideosOpen(true)}
+          disabled={!viewer.isOwner && pendingManual.length === 0}
+        >
+          <MagnifyingGlass size={14} />
+          Missing videos
+        </button>
+      ) : (
+        <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.055] text-[12px] font-medium text-[#f5f7fb]" onClick={copyShareUrl}>
+          <LinkSimple size={14} />
+          Share
+        </button>
+      )}
       <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg bg-[#c91f18] text-[12px] font-semibold text-white" onClick={copyShareUrl}>
         {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
         {copyState === "copied" ? "Copiado" : "Copiar link"}
@@ -1032,7 +1222,7 @@ function MapSidebar({
     pollState || viewer.isOwner ? { label: "Votaciones", icon: Trophy, onClick: () => scrollToRail(votesRailRef), count: pollState?.total_votes || undefined } : null,
     sponsors.length > 0 ? { label: "Sponsors", icon: UsersThree, onClick: () => scrollToRail(sponsorsRailRef), count: sponsors.length } : null,
     viewer.isOwner && viewer.adminUrl ? { label: "Analytics", icon: ChartBar, href: viewer.adminUrl } : null,
-    viewer.isOwner && pendingManual.length > 0 ? { label: "Ajustes", icon: GearSix, onClick: () => setMissingVideosOpen(true), count: pendingManual.length } : null,
+    viewer.isOwner ? { label: "Ajustes", icon: GearSix, onClick: () => setMissingVideosOpen(true), count: pendingManual.length || undefined } : null,
   ];
   const navItems = rawNavItems.filter((item): item is SidebarNavItem => Boolean(item));
 
@@ -1087,7 +1277,7 @@ function MapSidebar({
 
           <button type="button" className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-medium text-[#dbe1e7] transition hover:bg-white/[0.08]" onClick={copyShareUrl}>
             {copyState === "copied" ? <Check size={14} /> : <Copy size={14} />}
-            {copyState === "copied" ? "Enlace copiado" : "Copiar enlace"}
+            {copyState === "copied" ? "Canal copiado" : "Copiar canal"}
           </button>
         </div>
         </aside>
@@ -1099,12 +1289,11 @@ function MapSidebar({
         <div className="pointer-events-auto fixed left-3 top-3 z-[360] hidden lg:block">
           <button
             type="button"
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-[#07101a]/90 px-3 text-[12px] font-medium text-[#f4f7fb] backdrop-blur transition hover:bg-[#0b1421]"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-[#07101a]/90 text-[12px] font-medium text-[#f4f7fb] backdrop-blur transition hover:bg-[#0b1421]"
             aria-label="Mostrar menu lateral"
             onClick={() => setDesktopMenuHidden(false)}
           >
             <List size={16} />
-            Menu
           </button>
         </div>
       ) : null}
@@ -1169,6 +1358,7 @@ function MapTopBar({
   youtubeUrl,
   channel,
   desktopMenuHidden,
+  canUseAdminPanels,
 }: MapShellProps) {
   return (
     <header className={cn("pointer-events-auto absolute inset-x-0 top-0 z-[370] px-16 py-3 sm:px-20 lg:px-4 xl:px-5", desktopMenuHidden ? "lg:left-0" : "lg:left-[184px]")}>
@@ -1197,13 +1387,13 @@ function MapTopBar({
               </a>
             </Button>
           ) : null}
-          {viewer.isOwner && pendingManual.length > 0 ? (
+          {canUseAdminPanels && pendingManual.length > 0 ? (
             <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => setMissingVideosOpen(true)}>
               <WarningCircle size={14} />
               Videos faltantes
             </Button>
           ) : null}
-          {viewer.isOwner && viewer.adminUrl ? (
+          {canUseAdminPanels && viewer.adminUrl ? (
             <Button asChild size="sm" variant="outline" className="shrink-0">
               <Link href={viewer.adminUrl}>
                 <GearSix size={14} />
@@ -1213,7 +1403,7 @@ function MapTopBar({
           ) : null}
           <Button type="button" size="sm" className="shrink-0 bg-[#c91f18] hover:bg-[#e03128]" onClick={copyShareUrl}>
             {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
-            {copyState === "copied" ? "Copiado" : "Copiar enlace"}
+            {copyState === "copied" ? "Copiado" : "Copiar canal"}
           </Button>
           <span className="hidden max-w-[150px] truncate text-[11px] text-[#9da5ae] 2xl:block">{channel.canonicalHandle ? `@${channel.canonicalHandle}` : "Mapa publico"}</span>
         </div>
@@ -1296,8 +1486,14 @@ function MapCenterStage({
   selectedCountryName,
   windowFilter,
   setWindowFilter,
+  desktopMapTab,
+  setDesktopMapTab,
   selectCountry,
   destinationCandidates,
+  viewer,
+  channelId,
+  pollState,
+  sponsors,
 }: MapShellProps) {
   return (
     <section className="pointer-events-none relative order-1 min-h-[520px] xl:order-none xl:min-h-0">
@@ -1317,23 +1513,23 @@ function MapCenterStage({
         <button
           type="button"
           className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]"
-          data-active={selectedCountryCode ? "true" : "false"}
-          onClick={() => selectCountry(null)}
+          data-active={desktopMapTab === "watched" ? "true" : "false"}
+          onClick={() => setDesktopMapTab("watched")}
         >
           <MapPin size={13} weight="fill" />
-          Visitados
+          Vistos
         </button>
-        <button type="button" className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]" onClick={() => selectCountry(destinationCandidates[0]?.country_code || countryBuckets[0]?.country_code || null)}>
+        <button type="button" className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]" data-active={desktopMapTab === "saved" ? "true" : "false"} onClick={() => setDesktopMapTab("saved")}>
           <Target size={13} weight="fill" />
-          Pendientes
+          Guardados
         </button>
-        <button type="button" className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]" onClick={() => selectCountry(countryBuckets[0]?.country_code || null)}>
+        <button type="button" className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]" data-active={desktopMapTab === "featured" ? "true" : "false"} onClick={() => setDesktopMapTab("featured")}>
           <Star size={13} weight="fill" className="text-[#f5b82e]" />
           Destacados
         </button>
       </div>
 
-      <div className="pointer-events-auto absolute left-3 top-1/2 z-[330] hidden -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#07101a]/82 backdrop-blur-2xl md:flex">
+      <div className="pointer-events-auto absolute right-3 top-1/2 z-[330] hidden -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#07101a]/82 backdrop-blur-2xl md:flex">
         <button type="button" className="flex h-10 w-10 items-center justify-center text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => selectCountry(null)} aria-label="Mostrar mapa completo">
           <House size={16} />
         </button>
@@ -1361,7 +1557,7 @@ function MapCenterStage({
       </AnimatePresence>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[330] px-0 pb-0 md:px-4 md:pb-2">
-        <SuggestedDestinations candidates={destinationCandidates} onSelect={selectCountry} />
+        <SuggestedDestinations candidates={destinationCandidates} onSelect={selectCountry} viewer={viewer} channelId={channelId} pollState={pollState} sponsors={sponsors} setDesktopMapTab={setDesktopMapTab} />
       </div>
     </section>
   );
@@ -1371,14 +1567,15 @@ function MapRightRail({
   channelId,
   viewer,
   pollState,
-  availablePollOptions,
-  setPollState,
+  setDesktopMapTab,
   nextDestination,
   destinationCandidates,
   sponsors,
   syncState,
   syncError,
   lastSyncSummary,
+  showOperationsPanel,
+  canUseAdminPanels,
   pendingManual,
   allowRefresh,
   handleRefresh,
@@ -1387,18 +1584,24 @@ function MapRightRail({
   votesRailRef,
   sponsorsRailRef,
 }: MapShellProps) {
+  const hasLivePoll = Boolean(pollState && pollState.status === "live");
+  const showDestinationWinner = Boolean(hasLivePoll && pollState && pollState.total_votes > 0);
+  const showSponsorOnRail = hasLivePoll;
+
   return (
     <aside className="pointer-events-auto order-3 flex min-h-0 flex-col gap-3 xl:order-none xl:overflow-y-auto xl:pr-1" data-map-scroll="true">
-      <DestinationCard
-        destination={nextDestination}
-        fallbackCandidates={destinationCandidates}
-        onRefresh={handleRefresh}
-        allowRefresh={allowRefresh}
-        syncState={syncState}
-        onSelect={selectCountry}
-      />
+      {showDestinationWinner ? (
+        <DestinationCard
+          destination={nextDestination}
+          fallbackCandidates={destinationCandidates}
+          onRefresh={handleRefresh}
+          allowRefresh={allowRefresh}
+          syncState={syncState}
+          onSelect={selectCountry}
+        />
+      ) : null}
 
-      {viewer.isOwner || pendingManual.length > 0 || lastSyncSummary || syncError ? (
+      {showOperationsPanel && (canUseAdminPanels || lastSyncSummary || syncError) ? (
         <OperationsCard
           syncState={syncState}
           syncError={syncError}
@@ -1410,22 +1613,17 @@ function MapRightRail({
         />
       ) : null}
 
-      <div ref={votesRailRef}>
-        {channelId && (pollState || viewer.isOwner) ? (
-          <FanVoteCard
-            channelId={channelId}
-            viewer={viewer}
-            poll={pollState}
-            availableOptions={availablePollOptions}
-            onPollChange={setPollState}
-          />
-        ) : (
-          <FanVoteSummary candidates={destinationCandidates} onSelect={selectCountry} />
-        )}
-      </div>
+      {viewer.isOwner && channelId ? (
+        <div ref={votesRailRef}>
+          <Button type="button" variant="outline" className="w-full justify-center" onClick={() => setDesktopMapTab("saved")}>
+            <Trophy size={14} />
+            Crear votacion
+          </Button>
+        </div>
+      ) : null}
 
       <div ref={sponsorsRailRef}>
-        {sponsors.length > 0 ? <SponsorsRail sponsors={sponsors} /> : <SponsorEmptyState />}
+        {showSponsorOnRail ? (sponsors.length > 0 ? <SponsorsRail sponsors={sponsors} /> : <SponsorEmptyState />) : null}
       </div>
     </aside>
   );
@@ -1571,35 +1769,77 @@ function OperationsCard({
           </div>
         ) : null}
         {syncError ? <p className="text-[12px] leading-5 text-[#ff8b8b]">{syncError}</p> : null}
+        {!pendingManual.length && !lastSyncSummary && !syncError && syncState !== "running" ? (
+          <div className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-3">
+            <p className="text-[13px] font-medium text-[#f5f7fb]">Mapa al dia</p>
+            <p className="mt-1 text-[12px] leading-5 text-[#9da5ae]">No hay videos pendientes de revision manual en este momento.</p>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
 }
 
-function SuggestedDestinations({ candidates, onSelect }: { candidates: DestinationCandidate[]; onSelect: (countryCode: string | null) => void }) {
-  if (candidates.length === 0) return null;
+function SuggestedDestinations({
+  candidates,
+  onSelect,
+  viewer,
+  channelId,
+  pollState,
+  sponsors,
+  setDesktopMapTab,
+}: {
+  candidates: DestinationCandidate[];
+  onSelect: (countryCode: string | null) => void;
+  viewer: MapViewerContext;
+  channelId: string | null;
+  pollState: MapPollRecord | null;
+  sponsors: MapRailSponsor[];
+  setDesktopMapTab: Dispatch<SetStateAction<DesktopMapTab>>;
+}) {
+  const hasLivePoll = Boolean(pollState && pollState.status === "live");
+  const shouldShowSponsors = !hasLivePoll;
+  if (!shouldShowSponsors && candidates.length === 0) return null;
 
   return (
     <div className="pointer-events-auto mx-auto hidden max-w-[760px] rounded-2xl border border-white/10 bg-[#07101a]/82 p-3 backdrop-blur-2xl md:block">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[14px] font-semibold text-[#f5f7fb]">Proximos destinos sugeridos por la comunidad</h2>
-        <span className="text-[11px] text-[#aab2bc]">Ver todas las votaciones</span>
+        <h2 className="text-[14px] font-semibold text-[#f5f7fb]">{shouldShowSponsors ? "Sponsors destacados" : "Proximos destinos sugeridos por la comunidad"}</h2>
+        {viewer.isOwner && channelId ? (
+          <Button type="button" size="sm" variant="outline" onClick={() => setDesktopMapTab("saved")}>
+            <Trophy size={13} />
+            Crear votacion
+          </Button>
+        ) : (
+          <span className="text-[11px] text-[#aab2bc]">Ver todas las votaciones</span>
+        )}
       </div>
-      <div className="grid grid-cols-4 gap-2">
-        {candidates.slice(0, 4).map((candidate) => (
-          <button key={candidate.country_code} type="button" onClick={() => onSelect(candidate.country_code)} className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]">
-            <div className="h-16 bg-[linear-gradient(135deg,rgba(255,0,0,0.42),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover" />
-            <div className="p-2">
-              <p className="truncate text-[11px] font-semibold text-[#f5f7fb]">{candidate.country_name}</p>
-              <p className="truncate text-[10px] text-[#9da5ae]">{candidate.cities[0] || candidate.country_code}</p>
-              <p className="mt-1 flex items-center gap-1 text-[10px] text-[#ff6a61]">
-                <Target size={10} weight="fill" />
-                {candidate.votes > 0 ? `${formatExactNumber(candidate.votes)} votos` : `${candidate.percent}% score`}
-              </p>
-            </div>
-          </button>
-        ))}
-      </div>
+      {shouldShowSponsors ? (
+        <div className="grid grid-cols-4 gap-2">
+          {sponsors.slice(0, 4).map((sponsor) => (
+            <a key={sponsor.id} href={sponsor.affiliate_url || "#"} target={sponsor.affiliate_url ? "_blank" : undefined} rel={sponsor.affiliate_url ? "noreferrer" : undefined} className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left transition hover:bg-white/[0.08]">
+              <p className="truncate text-[12px] font-semibold text-[#f5f7fb]">{sponsor.brand_name}</p>
+              <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{sponsor.description || "Sponsor activo"}</p>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-4 gap-2">
+          {candidates.slice(0, 4).map((candidate) => (
+            <button key={candidate.country_code} type="button" onClick={() => onSelect(candidate.country_code)} className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]">
+              <div className="h-16 bg-[linear-gradient(135deg,rgba(255,0,0,0.42),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover" />
+              <div className="p-2">
+                <p className="truncate text-[11px] font-semibold text-[#f5f7fb]">{candidate.country_name}</p>
+                <p className="truncate text-[10px] text-[#9da5ae]">{candidate.cities[0] || candidate.country_code}</p>
+                <p className="mt-1 flex items-center gap-1 text-[10px] text-[#ff6a61]">
+                  <Target size={10} weight="fill" />
+                  {candidate.votes > 0 ? `${formatExactNumber(candidate.votes)} votos` : `${candidate.percent}% score`}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
