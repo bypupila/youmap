@@ -215,6 +215,15 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 
 ## Registro de memoria
 
+### 2026-04-29
+
+- Se reemplaza el modal centrado de videos del mapa por `VideoSelectionSheet`, un panel overlay basado en `Sheet` que mantiene el mapa visible y evita cortes de contenido al abrir un video desde una banderita.
+- El nuevo visor conserva el video seleccionado visible, mueve los videos relacionados a una lista con scroll propio y mantiene tracking de `map_video_opened` / `video_youtube_opened`.
+- En desktop/tablet, el visor de video deja de montarse como `Sheet` y pasa a ser una tarjeta flotante centrada dentro del area real del mapa, con sponsors en el bottom del mapa y actividad/estadisticas en el rail derecho.
+- La actividad local de videos se comparte entre desktop y mobile: `Vistos` solo se marca al abrir YouTube, y `Abiertos`, `Guardados` y `Destacados` viven en localStorage como estado de este navegador sin cambiar APIs ni base de datos.
+- El mapa desktop/tablet empieza en `lg` (`>=1024px`): el sidebar global se compacta antes de `xl`, el video seleccionado queda centrado dentro de `MapCenterStage`, `SuggestedDestinations` pertenece al bottom del mapa y `MapVideoActivityPanel` vive en el rail derecho debajo de operacion para evitar overlays que bloqueen pins o controles.
+- Se valida responsive con Playwright en 320, 390, 600, 900, 1024, 1212, 1492 y 2048 px: sin overflow horizontal, sin errores de consola, sheet mobile y menu mobile dentro del viewport, card desktop centrada y acciones de visto/guardado/destacado accesibles.
+
 ### 2026-04-28
 
 - Se instala Agentation como herramienta local de feedback visual (`agentation` dev dependency), pero no se monta en el layout raiz; cualquier uso debe ser opt-in y client-only para no interferir con hidratacion ni overlays de desarrollo.

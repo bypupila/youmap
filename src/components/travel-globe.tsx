@@ -29,6 +29,7 @@ interface TravelGlobeProps {
   compact?: boolean;
   initialCountryCode?: string | null;
   focusCountryCode?: string | null;
+  focusVideoId?: string | null;
   selectedCountryCode?: string | null;
   interactive?: boolean;
   showControls?: boolean;
@@ -50,6 +51,7 @@ export function TravelGlobe({
   compact = false,
   initialCountryCode = null,
   focusCountryCode = null,
+  focusVideoId = null,
   selectedCountryCode = null,
   interactive = true,
   showControls = true,
@@ -74,6 +76,7 @@ export function TravelGlobe({
   const [hoveredPolygonCode, setHoveredPolygonCode] = useState<string | null>(null);
   const didApplyInitialSelection = useRef(false);
   const didApplyFocusSelection = useRef<string | null>(null);
+  const didApplyFocusVideo = useRef<string | null>(null);
 
   const totalViews = useMemo(
     () => videoLocations.reduce((sum, video) => sum + Number(video.view_count || 0), 0),
@@ -224,6 +227,25 @@ export function TravelGlobe({
     didApplyFocusSelection.current = focusCountryCode.toUpperCase();
     focusCountryOnGlobe(candidate);
   }, [focusCountryCode, videoLocations, pointMode, pointsData, focusCountryOnGlobe]);
+
+  useEffect(() => {
+    const normalizedVideoId = String(focusVideoId || "").trim();
+    if (!normalizedVideoId || pointsData.length === 0 || !globeRef.current) return;
+    if (didApplyFocusVideo.current === normalizedVideoId) return;
+    const candidate = pointsData.find((point) =>
+      point.videos.some((video) => video.youtube_video_id === normalizedVideoId)
+    );
+    if (!candidate) return;
+
+    didApplyFocusVideo.current = normalizedVideoId;
+    didApplyFocusSelection.current = candidate.country_code.toUpperCase();
+    setRotationEnabled(false);
+    setSelectedPoint(candidate);
+    globeRef.current.pointOfView(
+      { lat: candidate.lat, lng: candidate.lng, altitude: pointMode === "video" ? 0.72 : 1.2 },
+      850
+    );
+  }, [focusVideoId, pointMode, pointsData]);
 
   useEffect(() => {
     if (!globeRef.current || !rotationEnabled) return;
@@ -703,6 +725,9 @@ function createFlagPinElement(
 ) {
   const marker = document.createElement(interactive ? "button" : "div");
   if (interactive) marker.setAttribute("type", "button");
+  marker.setAttribute("data-globe-marker", "true");
+  marker.setAttribute("aria-label", `${point.kind === "video" ? "Abrir video" : "Abrir destino"}: ${point.country_name}`);
+  marker.tabIndex = -1;
   marker.style.cursor = interactive ? "pointer" : "default";
   marker.style.border = "0";
   marker.style.padding = "0";

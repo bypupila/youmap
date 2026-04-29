@@ -33,9 +33,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import posthog from "posthog-js";
+import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
+import { MapVideoActivityPanel } from "@/components/map/map-video-activity-panel";
 import { MissingVideosDialog } from "@/components/map/missing-videos-dialog";
-import { VideoCarouselDialog } from "@/components/map/video-carousel-dialog";
+import { useLocalVideoActivity } from "@/components/map/video-activity";
+import type { VideoActivityController, VideoActivityTab } from "@/components/map/video-activity";
+import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 import { TravelGlobe } from "@/components/travel-globe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,7 +57,7 @@ type FilterWindow = "30" | "90" | "365" | "all";
 type SyncState = "idle" | "running" | "success" | "error";
 type MobileMapTab = "overview" | "map" | "videos" | "community" | "more";
 type MapViewMode = "viewer" | "creator" | "demo";
-type DesktopMapTab = "all" | "watched" | "saved" | "featured";
+type DesktopMapTab = VideoActivityTab;
 type GlobeCommandAction = "reset_view" | "zoom_out" | "toggle_rotation";
 
 const EMPTY_MANUAL_QUEUE: ManualVerificationItem[] = [];
@@ -138,9 +142,12 @@ type MapShellProps = {
   selectedCountryCode: string | null;
   selectedCountryName: string | null;
   visibleRecentVideos: TravelVideoLocation[];
+  mapVideos: TravelVideoLocation[];
   nextDestination: DestinationCandidate | null;
   destinationCandidates: DestinationCandidate[];
   activeVideo: TravelVideoLocation | null;
+  pinnedVideo: TravelVideoLocation | null;
+  videoActivity: VideoActivityController;
   showLegend: boolean;
   showOperationsPanel: boolean;
   showActiveVideoCard: boolean;
@@ -171,6 +178,8 @@ type MapShellProps = {
   locateFirstSearchResult: () => void;
   selectCountry: (countryCode: string | null) => void;
   openVideo: (video: TravelVideoLocation) => void;
+  changePinnedVideo: (video: TravelVideoLocation) => void;
+  closePinnedVideo: () => void;
   copyShareUrl: () => Promise<void>;
   handleRefresh: () => Promise<void>;
   setMissingVideosOpen: Dispatch<SetStateAction<boolean>>;
@@ -203,6 +212,7 @@ export function MapExperience({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCountryCode, setSelectedCountryCode] = useState<string | null>(null);
   const [focusCountryCode, setFocusCountryCode] = useState<string | null>(null);
+  const [focusVideoId, setFocusVideoId] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<TravelVideoLocation | null>(null);
   const [pinnedVideo, setPinnedVideo] = useState<TravelVideoLocation | null>(null);
   const [syncState, setSyncState] = useState<SyncState>("idle");
@@ -216,6 +226,10 @@ export function MapExperience({
   const [desktopMapTab, setDesktopMapTab] = useState<DesktopMapTab>("all");
   const [globeCommand, setGlobeCommand] = useState<{ id: number; action: GlobeCommandAction } | null>(null);
   const [pollState, setPollState] = useState<MapPollRecord | null>(activePoll);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : false
+  );
+  const videoActivity = useLocalVideoActivity();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const videosRailRef = useRef<HTMLDivElement | null>(null);
   const votesRailRef = useRef<HTMLDivElement | null>(null);
@@ -232,6 +246,14 @@ export function MapExperience({
   useEffect(() => {
     setPollState(activePoll);
   }, [activePoll]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktopViewport(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!interactive) return;
@@ -294,29 +316,31 @@ export function MapExperience({
       .sort(sortRecentVideos);
   }, [searchFilteredVideos, selectedCountryCode]);
 
-  const watchedVideos = useMemo(() => {
-    return searchFilteredVideos.filter((video) => {
-      if (!video.youtube_video_id || typeof window === "undefined") return false;
-      try {
-        const raw = window.localStorage.getItem("travelmap_seen_videos_v1");
-        if (!raw) return false;
-        const parsed = JSON.parse(raw) as string[];
-        return parsed.includes(video.youtube_video_id);
-      } catch {
-        return false;
-      }
-    });
-  }, [searchFilteredVideos]);
-
-  const featuredVideos = useMemo(() => searchFilteredVideos.slice(0, 5), [searchFilteredVideos]);
+  const watchedVideos = useMemo(
+    () => searchFilteredVideos.filter((video) => videoActivity.seenIds.has(video.youtube_video_id)),
+    [searchFilteredVideos, videoActivity.seenIds]
+  );
+  const openedVideos = useMemo(
+    () => searchFilteredVideos.filter((video) => videoActivity.openedIds.has(video.youtube_video_id)),
+    [searchFilteredVideos, videoActivity.openedIds]
+  );
+  const savedVideos = useMemo(
+    () => searchFilteredVideos.filter((video) => videoActivity.savedIds.has(video.youtube_video_id)),
+    [searchFilteredVideos, videoActivity.savedIds]
+  );
+  const featuredVideos = useMemo(
+    () => searchFilteredVideos.filter((video) => videoActivity.featuredIds.has(video.youtube_video_id)),
+    [searchFilteredVideos, videoActivity.featuredIds]
+  );
 
   const filteredVideos = useMemo(() => {
     if (desktopMapTab === "watched") return watchedVideos;
-    if (desktopMapTab === "saved") return searchFilteredVideos;
+    if (desktopMapTab === "opened") return openedVideos;
+    if (desktopMapTab === "saved") return savedVideos;
     if (desktopMapTab === "featured") return featuredVideos;
     if (!selectedCountryCode) return searchFilteredVideos;
     return selectedCountryVideos;
-  }, [desktopMapTab, watchedVideos, searchFilteredVideos, featuredVideos, selectedCountryCode, selectedCountryVideos]);
+  }, [desktopMapTab, watchedVideos, openedVideos, savedVideos, featuredVideos, selectedCountryCode, searchFilteredVideos, selectedCountryVideos]);
 
   const recentVideos = useMemo(() => items.slice().sort(sortRecentVideos).slice(0, 6), [items]);
   const visibleRecentVideos = selectedCountryCode ? selectedCountryVideos.slice(0, 6) : recentVideos;
@@ -365,6 +389,7 @@ export function MapExperience({
   const youtubeUrl = buildChannelUrl(channel);
   const mapUrl = shellViewer.shareUrl || (channelId ? `/map?channelId=${encodeURIComponent(channelId)}` : "/map");
   const shouldShowChrome = showHeader || showLegend || showOperationsPanel || showActiveVideoCard;
+  const shouldUseDesktopVideoCard = shouldShowChrome && isDesktopViewport;
 
   async function reloadMapData() {
     if (!channelId) return;
@@ -451,9 +476,14 @@ export function MapExperience({
     }
   }
 
-  function openVideo(video: TravelVideoLocation) {
+  function setSelectedVideo(video: TravelVideoLocation | null) {
     setPinnedVideo(video);
-    setFocusCountryCode(video.country_code || null);
+    setFocusCountryCode(video?.country_code || null);
+    setFocusVideoId(video?.youtube_video_id || null);
+  }
+
+  function openVideo(video: TravelVideoLocation) {
+    setSelectedVideo(video);
     posthog.capture("map_video_opened", {
       video_id: video.youtube_video_id,
       video_title: video.title,
@@ -524,9 +554,12 @@ export function MapExperience({
     selectedCountryCode,
     selectedCountryName,
     visibleRecentVideos,
+    mapVideos: searchFilteredVideos,
     nextDestination,
     destinationCandidates,
     activeVideo,
+    pinnedVideo,
+    videoActivity,
     showLegend,
     showOperationsPanel,
     showActiveVideoCard,
@@ -557,6 +590,8 @@ export function MapExperience({
     issueGlobeCommand,
     selectCountry,
     openVideo,
+    changePinnedVideo: setSelectedVideo,
+    closePinnedVideo: () => setSelectedVideo(null),
     copyShareUrl,
     handleRefresh,
     setMissingVideosOpen,
@@ -576,9 +611,10 @@ export function MapExperience({
           showSummaryCard={false}
           showPointPanel={false}
           onActiveVideoChange={setActiveVideo}
-          onPinnedVideoChange={setPinnedVideo}
+          onPinnedVideoChange={(video) => (video ? openVideo(video) : setSelectedVideo(null))}
           onCountrySelect={selectCountry}
           focusCountryCode={focusCountryCode}
+          focusVideoId={focusVideoId}
           selectedCountryCode={selectedCountryCode}
           command={globeCommand}
         />
@@ -598,9 +634,10 @@ export function MapExperience({
         showSummaryCard={false}
         showPointPanel={false}
         onActiveVideoChange={setActiveVideo}
-        onPinnedVideoChange={setPinnedVideo}
+        onPinnedVideoChange={(video) => (video ? openVideo(video) : setSelectedVideo(null))}
         onCountrySelect={selectCountry}
         focusCountryCode={focusCountryCode}
+        focusVideoId={focusVideoId}
         selectedCountryCode={selectedCountryCode}
         command={globeCommand}
       />
@@ -622,12 +659,13 @@ export function MapExperience({
         onReload={reloadMapData}
       />
 
-      <VideoCarouselDialog
-        open={Boolean(pinnedVideo)}
+      <VideoSelectionSheet
+        open={Boolean(pinnedVideo) && !shouldUseDesktopVideoCard}
         videos={searchFilteredVideos}
         currentVideo={pinnedVideo}
-        onClose={() => setPinnedVideo(null)}
-        onChangeVideo={(video) => setPinnedVideo(video)}
+        activity={videoActivity}
+        onClose={() => setSelectedVideo(null)}
+        onChangeVideo={(video) => setSelectedVideo(video)}
       />
     </div>
   );
@@ -652,7 +690,7 @@ function MapAppShell(props: MapShellProps) {
 
           <div
             data-map-scroll="true"
-            className="pointer-events-auto grid min-h-0 grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 xl:pointer-events-none xl:grid-cols-[minmax(238px,270px)_minmax(440px,1fr)_minmax(282px,318px)] xl:gap-3 xl:overflow-hidden xl:px-5 xl:pb-5"
+            className="pointer-events-auto grid min-h-0 grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 lg:pointer-events-none lg:grid-cols-[minmax(168px,200px)_minmax(360px,1fr)_minmax(210px,250px)] lg:overflow-hidden xl:grid-cols-[minmax(238px,270px)_minmax(460px,1fr)_minmax(282px,318px)] xl:gap-3 xl:px-5 xl:pb-5 2xl:grid-cols-[minmax(320px,370px)_minmax(560px,1fr)_minmax(360px,430px)]"
           >
             <MapOverviewRail {...props} />
             <MapCenterStage {...props} />
@@ -731,8 +769,8 @@ function MobileMapMenu({
             initial={{ x: -280 }}
             animate={{ x: 0 }}
             exit={{ x: -280 }}
-            transition={{ type: "spring", stiffness: 180, damping: 24 }}
-            className="flex h-full w-[288px] flex-col border-r border-white/10 bg-[#060a11] px-4 pb-4 pt-5"
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="flex h-full w-[min(288px,calc(100vw-16px))] flex-col border-r border-white/10 bg-[#060a11] px-4 pb-4 pt-5"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between gap-3">
@@ -1232,27 +1270,7 @@ function MapSidebar({
   votesRailRef,
   sponsorsRailRef,
 }: MapShellProps) {
-  const [fallbackChannelThumb, setFallbackChannelThumb] = useState<string | null>(null);
-  const channelThumb = channel.thumbnail_url || fallbackChannelThumb;
-
-  useEffect(() => {
-    if (channel.thumbnail_url || !youtubeUrl) return;
-    let active = true;
-    fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => {
-        if (!active) return;
-        const thumb = String(payload?.thumbnail_url || "").trim();
-        setFallbackChannelThumb(thumb || null);
-      })
-      .catch(() => {
-        if (!active) return;
-        setFallbackChannelThumb(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [channel.thumbnail_url, youtubeUrl]);
+  const channelThumb = channel.thumbnail_url || null;
 
   const rawNavItems: Array<SidebarNavItem | null> = [
     { label: "Inicio", icon: House, href: "/" },
@@ -1268,12 +1286,12 @@ function MapSidebar({
   return (
     <>
       {!desktopMenuHidden ? (
-        <aside className="pointer-events-auto hidden w-[184px] shrink-0 border-r border-white/10 bg-[#060a11]/95 px-3 py-4 backdrop-blur-2xl lg:flex lg:flex-col">
-          <Link href={mapUrl} className="mb-5 flex items-center gap-3 rounded-2xl px-2 py-1.5 transition-colors hover:bg-white/[0.04]">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[rgba(255,0,0,0.55)] bg-[rgba(255,0,0,0.12)] text-[#ff3b3b]">
+        <aside className="pointer-events-auto hidden w-[72px] shrink-0 border-r border-white/10 bg-[#060a11]/95 px-2 py-3 backdrop-blur-2xl lg:flex lg:flex-col xl:w-[184px] xl:px-3 xl:py-4">
+          <Link href={mapUrl} className="mb-4 flex items-center justify-center gap-3 rounded-2xl px-1 py-1.5 transition-colors hover:bg-white/[0.04] xl:mb-5 xl:justify-start xl:px-2">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[rgba(255,0,0,0.55)] bg-[rgba(255,0,0,0.12)] text-[#ff3b3b] xl:h-12 xl:w-12">
             <YoutubeLogo size={22} weight="fill" />
           </span>
-          <span className="min-w-0">
+          <span className="hidden min-w-0 xl:block">
             <span className="block text-[10px] font-semibold uppercase leading-3 tracking-[0.16em] text-[#c8d0d8]">World by</span>
             <span className="block truncate text-[15px] font-semibold leading-5 text-[#f6f7f8]">{channel.channel_name}</span>
             <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-[#ff3b3b]">
@@ -1289,7 +1307,7 @@ function MapSidebar({
           ))}
         </nav>
 
-        <div className="mt-auto space-y-3">
+        <div className="mt-auto hidden space-y-3 xl:block">
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
             <div className="flex items-center gap-3">
               <ChannelAvatar channel={channel} size="sm" thumbnailUrlOverride={channelThumb} />
@@ -1445,8 +1463,8 @@ function MapOverviewRail({
   videosRailRef,
 }: MapShellProps) {
   return (
-    <aside ref={videosRailRef} className="pointer-events-auto order-2 min-h-0 xl:order-none xl:overflow-hidden">
-      <Card className="tm-surface-strong flex min-h-[420px] flex-col rounded-xl border-white/10 xl:h-full">
+    <aside ref={videosRailRef} className="pointer-events-auto order-2 min-h-0 lg:order-none lg:overflow-hidden">
+      <Card className="tm-surface-strong flex min-h-[420px] flex-col rounded-xl border-white/10 lg:h-full">
         <CardHeader className="border-b border-white/10 px-3 pb-3 pt-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1513,8 +1531,12 @@ function MapCenterStage({
   selectedCountryName,
   windowFilter,
   setWindowFilter,
-  desktopMapTab,
   setDesktopMapTab,
+  mapVideos,
+  pinnedVideo,
+  videoActivity,
+  closePinnedVideo,
+  changePinnedVideo,
   selectCountry,
   destinationCandidates,
   viewer,
@@ -1524,7 +1546,7 @@ function MapCenterStage({
   issueGlobeCommand,
 }: MapShellProps) {
   return (
-    <section className="pointer-events-none relative order-1 min-h-[520px] overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] xl:order-none xl:min-h-0">
+    <section className="pointer-events-none relative order-1 min-h-[520px] overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] lg:order-none lg:min-h-0">
       <div className="pointer-events-auto absolute left-1/2 top-3 z-[340] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-xl border border-white/10 bg-[#07101a]/88 p-1.5 backdrop-blur-2xl">
         {(["all", "365", "90", "30"] as FilterWindow[]).map((option) => (
           <button
@@ -1537,24 +1559,6 @@ function MapCenterStage({
             {option === "all" ? "Todos" : `${option}d`}
           </button>
         ))}
-        <span className="mx-1 my-2 w-px shrink-0 bg-white/10" />
-        <button
-          type="button"
-          className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]"
-          data-active={desktopMapTab === "watched" ? "true" : "false"}
-          onClick={() => setDesktopMapTab("watched")}
-        >
-          <MapPin size={13} weight="fill" />
-          Vistos
-        </button>
-        <button type="button" className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]" data-active={desktopMapTab === "saved" ? "true" : "false"} onClick={() => setDesktopMapTab("saved")}>
-          <Target size={13} weight="fill" />
-          Guardados
-        </button>
-        <button type="button" className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]" data-active={desktopMapTab === "featured" ? "true" : "false"} onClick={() => setDesktopMapTab("featured")}>
-          <Star size={13} weight="fill" className="text-[#f5b82e]" />
-          Destacados
-        </button>
       </div>
 
       <div className="pointer-events-auto absolute right-3 top-1/2 z-[330] hidden -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/86 backdrop-blur-2xl md:flex">
@@ -1587,7 +1591,17 @@ function MapCenterStage({
         ) : null}
       </AnimatePresence>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[330] px-0 pb-0 md:px-3 md:pb-3">
+      <div className="pointer-events-none absolute left-1/2 top-[44%] z-[430] hidden w-[min(340px,calc(100%-1.5rem))] -translate-x-1/2 -translate-y-1/2 lg:block xl:top-[46%] xl:w-[min(380px,calc(100%-4rem))] 2xl:w-[min(480px,calc(100%-6rem))]">
+        <DesktopVideoMapCard
+          videos={mapVideos}
+          currentVideo={pinnedVideo}
+          activity={videoActivity}
+          onClose={closePinnedVideo}
+          onChangeVideo={changePinnedVideo}
+        />
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[330] px-2 pb-2 md:px-3 md:pb-3 lg:px-4 lg:pb-4">
         <SuggestedDestinations candidates={destinationCandidates} onSelect={selectCountry} viewer={viewer} channelId={channelId} pollState={pollState} sponsors={sponsors} setDesktopMapTab={setDesktopMapTab} />
       </div>
     </section>
@@ -1599,6 +1613,9 @@ function MapRightRail({
   viewer,
   pollState,
   setDesktopMapTab,
+  desktopMapTab,
+  mapVideos,
+  videoActivity,
   nextDestination,
   destinationCandidates,
   sponsors,
@@ -1612,6 +1629,7 @@ function MapRightRail({
   handleRefresh,
   setMissingVideosOpen,
   selectCountry,
+  openVideo,
   votesRailRef,
   sponsorsRailRef,
 }: MapShellProps) {
@@ -1620,18 +1638,7 @@ function MapRightRail({
   const showSponsorOnRail = hasLivePoll;
 
   return (
-    <aside className="pointer-events-auto order-3 flex min-h-0 flex-col gap-3 xl:order-none xl:overflow-y-auto xl:pr-1" data-map-scroll="true">
-      {showDestinationWinner ? (
-        <DestinationCard
-          destination={nextDestination}
-          fallbackCandidates={destinationCandidates}
-          onRefresh={handleRefresh}
-          allowRefresh={allowRefresh}
-          syncState={syncState}
-          onSelect={selectCountry}
-        />
-      ) : null}
-
+    <aside className="pointer-events-auto order-3 flex min-h-0 flex-col gap-3 lg:order-none lg:overflow-y-auto lg:pr-1" data-map-scroll="true">
       {showOperationsPanel && (canUseAdminPanels || lastSyncSummary || syncError) ? (
         <OperationsCard
           syncState={syncState}
@@ -1641,6 +1648,26 @@ function MapRightRail({
           allowRefresh={allowRefresh}
           onRefresh={handleRefresh}
           onMissing={() => setMissingVideosOpen(true)}
+        />
+      ) : null}
+
+      <MapVideoActivityPanel
+        videos={mapVideos}
+        activity={videoActivity}
+        activeTab={desktopMapTab}
+        canUseAdminPanels={canUseAdminPanels}
+        onTabChange={setDesktopMapTab}
+        onOpenVideo={openVideo}
+      />
+
+      {showDestinationWinner ? (
+        <DestinationCard
+          destination={nextDestination}
+          fallbackCandidates={destinationCandidates}
+          onRefresh={handleRefresh}
+          allowRefresh={allowRefresh}
+          syncState={syncState}
+          onSelect={selectCountry}
         />
       ) : null}
 
@@ -1833,11 +1860,11 @@ function SuggestedDestinations({
   if (!shouldShowSponsors && candidates.length === 0) return null;
 
   return (
-    <div className="pointer-events-auto mx-auto hidden max-w-[700px] rounded-xl border border-white/10 bg-[#07101a]/86 p-3 backdrop-blur-2xl md:block">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[14px] font-semibold text-[#f5f7fb]">{shouldShowSponsors ? "Sponsors destacados" : "Proximos destinos sugeridos por la comunidad"}</h2>
+    <div className="pointer-events-auto mx-auto hidden w-full max-w-[700px] rounded-xl border border-white/10 bg-[#07101a]/86 p-2 backdrop-blur-2xl md:block xl:p-3">
+      <div className="mb-2 flex items-center justify-between gap-3 xl:mb-3">
+        <h2 className="truncate text-[12px] font-semibold text-[#f5f7fb] xl:text-[14px]">{shouldShowSponsors ? "Sponsors destacados" : "Proximos destinos sugeridos por la comunidad"}</h2>
         {viewer.isOwner && channelId ? (
-          <Button type="button" size="sm" variant="outline" onClick={() => setDesktopMapTab("saved")}>
+          <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 px-2 text-[11px] xl:px-3 xl:text-[12px]" onClick={() => setDesktopMapTab("saved")}>
             <Trophy size={13} />
             Crear votacion
           </Button>
@@ -1846,19 +1873,19 @@ function SuggestedDestinations({
         )}
       </div>
       {shouldShowSponsors ? (
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           {sponsors.slice(0, 4).map((sponsor) => (
-            <a key={sponsor.id} href={sponsor.affiliate_url || "#"} target={sponsor.affiliate_url ? "_blank" : undefined} rel={sponsor.affiliate_url ? "noreferrer" : undefined} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-3 text-left transition hover:bg-white/[0.08]">
+            <a key={sponsor.id} href={sponsor.affiliate_url || "#"} target={sponsor.affiliate_url ? "_blank" : undefined} rel={sponsor.affiliate_url ? "noreferrer" : undefined} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-2 text-left transition hover:bg-white/[0.08] xl:p-3">
               <p className="truncate text-[12px] font-semibold text-[#f5f7fb]">{sponsor.brand_name}</p>
               <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{sponsor.description || "Sponsor activo"}</p>
             </a>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           {candidates.slice(0, 4).map((candidate) => (
             <button key={candidate.country_code} type="button" onClick={() => onSelect(candidate.country_code)} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]">
-              <div className="h-12 bg-[linear-gradient(135deg,rgba(255,0,0,0.42),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover" />
+              <div className="h-9 bg-[linear-gradient(135deg,rgba(255,0,0,0.42),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover xl:h-12" />
               <div className="p-2">
                 <p className="truncate text-[11px] font-semibold text-[#f5f7fb]">{candidate.country_name}</p>
                 <p className="truncate text-[10px] text-[#9da5ae]">{candidate.cities[0] || candidate.country_code}</p>
@@ -1942,12 +1969,19 @@ function OverviewMetric({ label, value, tone }: { label: string; value: number; 
 
 function SidebarItem({ item, mobile = false }: { item: SidebarNavItem; mobile?: boolean }) {
   const Icon = item.icon;
-  const className = "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium text-[#dbe1e7] transition hover:bg-white/[0.07]";
+  const className = cn(
+    "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium text-[#dbe1e7] transition hover:bg-white/[0.07]",
+    !mobile && "lg:h-10 lg:justify-center lg:px-0 xl:h-auto xl:justify-start xl:px-3"
+  );
   const content = (
     <>
-      <Icon size={17} />
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      {item.count ? <span className="rounded-md bg-[#c91f18] px-1.5 py-0.5 text-[10px] font-semibold text-white">{item.count}</span> : null}
+      <Icon size={17} className="shrink-0" />
+      <span className={cn("min-w-0 flex-1 truncate", !mobile && "lg:hidden xl:block")}>{item.label}</span>
+      {item.count ? (
+        <span className={cn("rounded-md bg-[#c91f18] px-1.5 py-0.5 text-[10px] font-semibold text-white", !mobile && "lg:hidden xl:inline-flex")}>
+          {item.count}
+        </span>
+      ) : null}
     </>
   );
 

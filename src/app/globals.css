@@ -259,6 +259,35 @@ a {
   transform: translateY(1px) scale(0.98);
 }
 
+/* Keep Agentation fully out of layout flow (dev-only toolbar/overlays). */
+[data-agentation-toolbar="true"].tm-agentation-overlay {
+  position: fixed !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  left: auto !important;
+  top: auto !important;
+  z-index: 2147483000 !important;
+}
+
+[data-feedback-toolbar][role="dialog"] {
+  position: fixed !important;
+  z-index: 2147483001 !important;
+  max-height: min(76dvh, 640px) !important;
+  overflow: auto !important;
+}
+
+@media (min-width: 1024px) {
+  [data-slot="sheet-content"].travel-video-sheet-content {
+    top: 12px !important;
+    right: 12px !important;
+    bottom: 12px !important;
+    left: auto !important;
+    width: min(860px, calc(100vw - 2rem)) !important;
+    height: calc(100dvh - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+  }
+}
+
 .yt-card {
   background: linear-gradient(180deg, rgba(25, 28, 31, 0.94), rgba(18, 21, 23, 0.9));
   border: 1px solid var(--travel-border);

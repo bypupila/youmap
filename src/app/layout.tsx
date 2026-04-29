@@ -4,6 +4,7 @@ import Script from "next/script";
 import "@/app/globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AgentationToolbar } from "@/components/dev/agentation-toolbar";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -91,6 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           `}
         </Script>
         <TooltipProvider>{children}</TooltipProvider>
+        <AgentationToolbar />
       </body>
     </html>
   );

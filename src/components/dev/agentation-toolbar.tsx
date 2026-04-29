@@ -11,5 +11,5 @@ export function AgentationToolbar() {
     return null;
   }
 
-  return <Agentation />;
+  return <Agentation className="tm-agentation-overlay" />;
 }
