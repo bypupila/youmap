@@ -1,21 +1,58 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
-import { loadMapPollById } from "@/lib/map-polls";
+import { getSessionUserById, getSessionUserIdFromRequest, userIsSuperAdmin } from "@/lib/current-user";
+import { hashValue, loadMapPollById, MAP_VOTER_COOKIE, type MapPollRecord } from "@/lib/map-polls";
 import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
+
+type Audience = "owner" | "authenticated_viewer" | "anonymous_viewer";
+
+function sanitizePollForAudience(poll: MapPollRecord, audience: Audience) {
+  if (audience !== "anonymous_viewer") {
+    return poll;
+  }
+
+  const rankedCountries = poll.country_options
+    .slice()
+    .sort((a, b) => b.votes - a.votes || a.sort_order - b.sort_order || a.country_code.localeCompare(b.country_code));
+
+  const hideVotes = poll.status === "live" || poll.status === "closed";
+
+  if (!hideVotes) {
+    return poll;
+  }
+
+  return {
+    ...poll,
+    total_votes: 0,
+    country_options: rankedCountries.map((country) => ({
+      ...country,
+      votes: 0,
+      cities: country.cities.map((city) => ({ ...city, votes: 0 })),
+    })),
+  };
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ pollId: string }> }) {
   try {
     const userId = getSessionUserIdFromRequest(request);
     const { pollId } = await params;
-    const poll = await loadMapPollById(pollId);
+
+    const cookieStore = await cookies();
+    const rawVoter = String(cookieStore.get(MAP_VOTER_COOKIE)?.value || "").trim();
+    const voterFingerprint = rawVoter ? hashValue(rawVoter) : null;
+
+    const poll = await loadMapPollById(pollId, voterFingerprint);
 
     if (!poll) {
       return NextResponse.json({ error: "Poll not found" }, { status: 404 });
     }
 
-    if (poll.status === "draft") {
+    const sessionUser = userId ? await getSessionUserById(userId) : null;
+    const isSuperAdmin = userIsSuperAdmin(sessionUser?.role);
+    let isOwner = false;
+    if (userId) {
       const rows = await sql<Array<{ user_id: string }>>`
         select c.user_id
         from public.map_polls p
@@ -23,12 +60,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ poll
         where p.id = ${pollId}
         limit 1
       `;
-      if (!userId || rows[0]?.user_id !== userId) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      isOwner = rows[0]?.user_id === userId || isSuperAdmin;
     }
 
-    return NextResponse.json({ poll });
+    if (poll.status === "draft" && !isOwner) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const audience: Audience = isOwner ? "owner" : userId ? "authenticated_viewer" : "anonymous_viewer";
+    const sanitizedPoll = sanitizePollForAudience(poll, audience);
+
+    return NextResponse.json({
+      poll: sanitizedPoll,
+      audience,
+      can_view_detailed_stats: audience !== "anonymous_viewer",
+    });
   } catch (error) {
     console.error("[api/map/polls/[pollId]/results]", error);
     return NextResponse.json({ error: "Could not load poll results" }, { status: 500 });

@@ -1,0 +1,21 @@
+{
+  "createdAt": "2026-04-30T20:40:25.247Z",
+  "channelId": "81fce475-a0fb-43de-891f-f51669cf2ac0",
+  "ownerUsername": "by.pupila",
+  "publicUrl": "http://localhost:3000/u/by.pupila",
+  "poll": {
+    "id": "bd4ba967-4935-43de-9eaa-b309da3145c2",
+    "title": "phase2-e2e-1777581613619",
+    "mode": "country",
+    "countries": [
+      "AR",
+      "US"
+    ]
+  },
+  "viewer": {
+    "id": "bd8dcf74-600c-473b-902e-9e9430b86f5b",
+    "username": "viewer_613619",
+    "email": "viewer_613619@example.com",
+    "password": "ViewerPass123!"
+  }
+}

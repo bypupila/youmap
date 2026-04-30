@@ -86,3 +86,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const isDemoMode = url.searchParams.get("demo") === "1";
+    const sponsorId = String(url.searchParams.get("id") || "").trim();
+    if (!sponsorId) {
+      return NextResponse.json({ error: "Missing sponsor id" }, { status: 400 });
+    }
+
+    if (isDemoMode) {
+      return NextResponse.json({ ok: true, id: sponsorId, demo: true });
+    }
+
+    const userId = getSessionUserIdFromRequest(request);
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const updated = await sql<Array<{ id: string }>>`
+      update public.sponsors
+      set active = false, updated_at = now()
+      where id = ${sponsorId}
+        and user_id = ${userId}
+      returning id
+    `;
+
+    if (!updated[0]?.id) {
+      return NextResponse.json({ error: "Sponsor not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, id: updated[0].id });
+  } catch (error) {
+    console.error("[api/sponsors DELETE]", error);
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+}

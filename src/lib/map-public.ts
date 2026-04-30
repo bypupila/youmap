@@ -1,4 +1,5 @@
 import { normalizeUsername } from "@/lib/auth-identifiers";
+import { getSessionUserById, type AppUserRole, userIsSuperAdmin } from "@/lib/current-user";
 import { DEMO_CHANNEL, DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG, DEMO_USERNAME, getDemoSponsorByCountry, isDemoUsername } from "@/lib/demo-data";
 import { loadMapDataByChannelId, type MapDataPayload } from "@/lib/map-data";
 import { buildPollOptionsFromVideos, loadMapPoll, type MapPollRecord } from "@/lib/map-polls";
@@ -7,6 +8,9 @@ import type { TravelChannel } from "@/lib/types";
 
 export interface MapViewerContext {
   isOwner: boolean;
+  isAuthenticated: boolean;
+  role: AppUserRole;
+  isSuperAdmin: boolean;
   shareUrl: string;
   adminUrl: string | null;
 }
@@ -51,32 +55,42 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const EXAMPLE_SPONSORS: MapRailSponsor[] = [
   {
     id: "example-sponsor-1",
-    brand_name: "Nomad Gear",
-    logo_url: null,
-    description: "Backpacks y packing systems pensados para creators que se mueven todo el año.",
-    discount_code: "PUPILA10",
-    affiliate_url: "https://example.com/nomad-gear",
+    brand_name: "Booking.com",
+    logo_url: "/brands/booking.svg",
+    description: "Plataforma global de alojamiento para creators y audiencias viajeras.",
+    discount_code: null,
+    affiliate_url: "https://www.booking.com",
     country_codes: ["GLOBAL"],
     isExample: true,
   },
   {
     id: "example-sponsor-2",
-    brand_name: "RailPass Japan",
-    logo_url: null,
-    description: "Transporte y eSIM para rutas intensas por Japón y Asia urbana.",
-    discount_code: "TOKYO5",
-    affiliate_url: "https://example.com/railpass-japan",
+    brand_name: "GetYourGuide",
+    logo_url: "/brands/getyourguide.svg",
+    description: "Tours y experiencias para creadores de viajes en rutas urbanas y culturales.",
+    discount_code: null,
+    affiliate_url: "https://www.getyourguide.com",
     country_codes: ["JP"],
     isExample: true,
   },
   {
     id: "example-sponsor-3",
-    brand_name: "Andes Outdoor",
-    logo_url: null,
-    description: "Equipamiento outdoor para roadtrips, altura y trekkings largos.",
-    discount_code: "ANDES12",
-    affiliate_url: "https://example.com/andes-outdoor",
+    brand_name: "IATI Seguros",
+    logo_url: "/brands/iati.svg",
+    description: "Seguro de viaje utilizado por creadores hispanohablantes.",
+    discount_code: null,
+    affiliate_url: "https://www.iatiseguros.com",
     country_codes: ["AR", "CL", "PE"],
+    isExample: true,
+  },
+  {
+    id: "example-sponsor-4",
+    brand_name: "Airbnb",
+    logo_url: "/brands/airbnb.svg",
+    description: "Alojamientos y experiencias para contenido de viajes auténtico.",
+    discount_code: null,
+    affiliate_url: "https://www.airbnb.com",
+    country_codes: ["GLOBAL"],
     isExample: true,
   },
 ];
@@ -139,13 +153,25 @@ async function resolvePublicChannel(identifier: string): Promise<PublicChannelRo
 
 async function loadSponsorsForUser(userId: string, fallbackKey: string | null) {
   if (userId === DEMO_CHANNEL.user_id) {
-    return [
+    const demoSponsors = [
       { ...getDemoSponsorByCountry(null), country_codes: ["GLOBAL"] },
       { ...getDemoSponsorByCountry("JP"), country_codes: ["JP"] },
       { ...getDemoSponsorByCountry("AR"), country_codes: ["AR"] },
-    ].map((sponsor) => ({
+      { ...getDemoSponsorByCountry("MA"), country_codes: ["MA"] },
+    ];
+    return demoSponsors.map((sponsor) => ({
       ...sponsor,
-      logo_url: null,
+      logo_url:
+        sponsor.brand_name === "Booking.com"
+          ? "/brands/booking.svg"
+          : sponsor.brand_name === "GetYourGuide"
+            ? "/brands/getyourguide.svg"
+            : sponsor.brand_name === "IATI Seguros"
+              ? "/brands/iati.svg"
+              : sponsor.brand_name === "Airbnb"
+                ? "/brands/airbnb.svg"
+                : null,
+      isExample: true,
     }));
   }
 
@@ -259,8 +285,10 @@ async function loadPublicMapPayloadByChannelRef(
   const mapPayload = await loadMapDataByChannelId(channelRef.id);
   if (!mapPayload) return null;
 
+  const sessionUser = viewerUserId ? await getSessionUserById(viewerUserId) : null;
+  const isSuperAdmin = userIsSuperAdmin(sessionUser?.role);
   const canonicalHandle = normalizeChannelHandle(channelRef.channel_handle || channelRef.username);
-  const isOwner = Boolean(viewerUserId && viewerUserId === channelRef.user_id);
+  const isOwner = Boolean((viewerUserId && viewerUserId === channelRef.user_id) || isSuperAdmin);
   const availablePollOptions = buildPollOptionsFromVideos(mapPayload.videoLocations);
   const activePoll = await loadMapPoll(channelRef.id, {
     includeDraft: isOwner,
@@ -277,8 +305,11 @@ async function loadPublicMapPayloadByChannelRef(
     },
     viewer: {
       isOwner,
+      isAuthenticated: Boolean(viewerUserId),
+      role: sessionUser?.role || "viewer",
+      isSuperAdmin,
       shareUrl: buildPublicShareUrl(channelRef.channel_handle || channelRef.username),
-      adminUrl: isOwner ? `/dashboard?channelId=${encodeURIComponent(channelRef.id)}` : null,
+      adminUrl: isOwner || isSuperAdmin ? `/dashboard?channelId=${encodeURIComponent(channelRef.id)}` : null,
     },
     sponsors,
     activePoll,

@@ -95,6 +95,10 @@ Opcionales de facturacion Polar:
 - `POLAR_WEBHOOK_SECRET`
 - `POLAR_TRIAL_DISCOUNT_ID`
 
+Opcionales para operacion de votaciones:
+
+- `MAP_POLLS_CRON_TOKEN` (si se define, habilita auth por query/header para ejecuciones manuales)
+
 Bootstrap recomendado para este proyecto (crea productos nuevos y sincroniza IDs en Neon):
 
 ```bash
@@ -157,6 +161,16 @@ npm run security:rotate-auth
 
 Procedimiento de remediacion y rotacion: `docs/SECURITY_SECRETS.md`.
 
+## Roles (RBAC)
+
+- Roles persistidos en `public.users.role`: `viewer`, `creator`, `superadmin`.
+- `creator` y `superadmin` pueden gestionar mapas de su contexto; `superadmin` tiene acceso global operativo.
+- Para cambiar rol desde CLI:
+
+```bash
+npm run user:set-role -- --identifier=<email|username|uuid> --role=<viewer|creator|superadmin>
+```
+
 ## Vercel (produccion)
 
 En Vercel, `Project Settings > Environment Variables`, configura las mismas claves requeridas de `.env.example` para `Production` y `Preview`, especialmente:
@@ -168,6 +182,14 @@ En Vercel, `Project Settings > Environment Variables`, configura las mismas clav
 - `NOMINATIM_USER_AGENT`
 - `NOMINATIM_EMAIL`
 - `NEXT_PUBLIC_APP_URL`
+
+Si quieres proteger el cron de cierre de votaciones:
+
+- Define `MAP_POLLS_CRON_TOKEN`.
+- El cron de `vercel.json` sigue funcionando por `user-agent` de Vercel Cron.
+- Para ejecuciones manuales/externas, usa:
+  `/api/map/polls/close-expired?token=<MAP_POLLS_CRON_TOKEN>`
+  o header `x-cron-token` / `Authorization: Bearer`.
 
 ## Estructura
 
@@ -191,6 +213,13 @@ En Vercel, `Project Settings > Environment Variables`, configura las mismas clav
 - `GET /api/map/sync/:runId`
 - `GET /api/map/manual-verify?channelId=<id>`
 - `POST /api/map/manual-verify` body `{ channelId, videoId, country_code, city }`
+
+## APIs de votaciones (mapa)
+
+- `POST /api/map/polls` crea/edita/publica/cierra (owner del canal)
+- `POST /api/map/polls/:pollId/vote` voto irreversible con rate-limit anonimo
+- `GET /api/map/polls/:pollId/results` resultados con payload segun audiencia
+- `GET|POST /api/map/polls/close-expired` cierre batch de encuestas vencidas
 
 ## Siguiente fase recomendada
 

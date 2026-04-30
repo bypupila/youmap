@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getSessionUserFromRequest, userIsSuperAdmin } from "@/lib/current-user";
 import { fetchMapSyncRun } from "@/lib/map-sync";
 import { sql } from "@/lib/neon";
 
@@ -13,8 +13,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
       return NextResponse.json({ error: "runId is required" }, { status: 400 });
     }
 
-    const userId = getSessionUserIdFromRequest(_request);
-    if (!userId) {
+    const sessionUser = await getSessionUserFromRequest(_request);
+    if (!sessionUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -31,7 +31,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
       limit 1
     `;
     const channel = channels[0] || null;
-    if (!channel || channel.user_id !== userId) {
+    const canManage = Boolean(channel && (channel.user_id === sessionUser.id || userIsSuperAdmin(sessionUser.role)));
+    if (!canManage) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

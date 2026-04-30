@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ArrowSquareOut,
   ArrowsClockwise,
+  CaretLeft,
   CaretRight,
   ChartBar,
   Check,
@@ -18,11 +19,12 @@ import {
   List,
   MagnifyingGlass,
   MapPin,
+  Minus,
   Play,
   Plus,
   Star,
-  Target,
   Trophy,
+  Trash,
   UsersThree,
   Video,
   WarningCircle,
@@ -60,10 +62,17 @@ type SyncState = "idle" | "running" | "success" | "error";
 type MobileMapTab = "overview" | "map" | "videos" | "community" | "more";
 type MapViewMode = "viewer" | "creator" | "demo";
 type DesktopMapTab = VideoActivityTab;
-type GlobeCommandAction = "reset_view" | "zoom_out" | "toggle_rotation";
+type GlobeCommandAction = "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation";
 
 const EMPTY_MANUAL_QUEUE: ManualVerificationItem[] = [];
-const DEFAULT_VIEWER: MapViewerContext = { isOwner: false, shareUrl: "", adminUrl: null };
+const DEFAULT_VIEWER: MapViewerContext = {
+  isOwner: false,
+  isAuthenticated: false,
+  role: "viewer",
+  isSuperAdmin: false,
+  shareUrl: "",
+  adminUrl: null,
+};
 
 interface PollOptionInput {
   country_code: string;
@@ -128,6 +137,14 @@ type SidebarNavItem = {
   count?: number;
 };
 
+type SponsorInput = {
+  brand_name: string;
+  logo_url: string | null;
+  affiliate_url: string | null;
+  description: string | null;
+  country_code: string | null;
+};
+
 type MapShellProps = {
   channel: TravelChannel;
   channelId: string | null;
@@ -138,6 +155,7 @@ type MapShellProps = {
   cityCount: number;
   pendingManual: ManualVerificationItem[];
   pollState: MapPollRecord | null;
+  hideLivePollMetrics: boolean;
   sponsors: MapRailSponsor[];
   headerEyebrow?: string;
   countryBuckets: CountryBucket[];
@@ -163,9 +181,9 @@ type MapShellProps = {
   interactive: boolean;
   viewMode: MapViewMode;
   canUseAdminPanels: boolean;
+  isDemoMode: boolean;
   desktopMapTab: DesktopMapTab;
   mobileMenuOpen: boolean;
-  desktopMenuHidden: boolean;
   availablePollOptions: PollOptionInput[];
   videosRailRef: RefObject<HTMLDivElement | null>;
   votesRailRef: RefObject<HTMLDivElement | null>;
@@ -173,9 +191,11 @@ type MapShellProps = {
   setWindowFilter: Dispatch<SetStateAction<FilterWindow>>;
   setSearchQuery: Dispatch<SetStateAction<string>>;
   setMobileMenuOpen: Dispatch<SetStateAction<boolean>>;
-  setDesktopMenuHidden: Dispatch<SetStateAction<boolean>>;
   setPollState: Dispatch<SetStateAction<MapPollRecord | null>>;
   setDesktopMapTab: Dispatch<SetStateAction<DesktopMapTab>>;
+  createSponsor: (input: SponsorInput) => Promise<void>;
+  deleteSponsor: (sponsorId: string) => Promise<void>;
+  resetDemoSponsors: () => void;
   issueGlobeCommand: (action: GlobeCommandAction) => void;
   locateFirstSearchResult: () => void;
   selectCountry: (countryCode: string | null) => void;
@@ -224,10 +244,11 @@ export function MapExperience({
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [missingVideosOpen, setMissingVideosOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [desktopMenuHidden, setDesktopMenuHidden] = useState(false);
   const [desktopMapTab, setDesktopMapTab] = useState<DesktopMapTab>("all");
   const [globeCommand, setGlobeCommand] = useState<{ id: number; action: GlobeCommandAction } | null>(null);
   const [pollState, setPollState] = useState<MapPollRecord | null>(activePoll);
+  const [sponsorItems, setSponsorItems] = useState<MapRailSponsor[]>(sponsors);
+  const demoSponsorsBaselineRef = useRef<MapRailSponsor[]>(sponsors);
   const [isDesktopViewport, setIsDesktopViewport] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : false
   );
@@ -248,6 +269,11 @@ export function MapExperience({
   useEffect(() => {
     setPollState(activePoll);
   }, [activePoll]);
+
+  useEffect(() => {
+    setSponsorItems(sponsors);
+    demoSponsorsBaselineRef.current = sponsors;
+  }, [sponsors]);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -375,7 +401,11 @@ export function MapExperience({
     [countryBuckets, pollState]
   );
   const resolvedViewMode: MapViewMode = viewMode || (viewer.isOwner ? "creator" : "viewer");
+  const isDemoMode = resolvedViewMode === "demo";
   const canUseAdminPanels = resolvedViewMode === "creator" || resolvedViewMode === "demo" || viewer.isOwner;
+  const hideLivePollMetrics = Boolean(
+    pollState && pollState.status === "live" && !viewer.isOwner && !viewer.isAuthenticated
+  );
   const shellViewer: MapViewerContext = canUseAdminPanels
     ? {
         ...viewer,
@@ -540,6 +570,78 @@ export function MapExperience({
     setGlobeCommand({ id: Date.now(), action });
   }
 
+  async function createSponsor(input: SponsorInput) {
+    if (resolvedViewMode === "viewer") return;
+
+    if (isDemoMode) {
+      const nextSponsor: MapRailSponsor = {
+        id: `demo-local-${Date.now()}`,
+        brand_name: input.brand_name,
+        logo_url: input.logo_url,
+        description: input.description,
+        discount_code: null,
+        affiliate_url: input.affiliate_url,
+        country_codes: input.country_code ? [input.country_code.toUpperCase()] : ["GLOBAL"],
+        isExample: true,
+      };
+      setSponsorItems((current) => [nextSponsor, ...current]);
+      return;
+    }
+
+    const payload = {
+      brand_name: input.brand_name,
+      logo_url: input.logo_url || "",
+      website_url: "",
+      affiliate_url: input.affiliate_url || "",
+      discount_code: "",
+      description: input.description || "",
+      country_code: input.country_code || null,
+    };
+
+    const response = await fetch("/api/sponsors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(typeof json?.error === "string" ? json.error : "No se pudo crear el sponsor.");
+    }
+
+    const nextSponsor: MapRailSponsor = {
+      id: String(json?.id || `local-${Date.now()}`),
+      brand_name: input.brand_name,
+      logo_url: input.logo_url,
+      description: input.description,
+      discount_code: null,
+      affiliate_url: input.affiliate_url,
+      country_codes: input.country_code ? [input.country_code.toUpperCase()] : ["GLOBAL"],
+    };
+    setSponsorItems((current) => [nextSponsor, ...current]);
+  }
+
+  async function deleteSponsor(sponsorId: string) {
+    if (resolvedViewMode === "viewer") return;
+
+    if (isDemoMode) {
+      setSponsorItems((current) => current.filter((sponsor) => sponsor.id !== sponsorId));
+      return;
+    }
+
+    const response = await fetch(`/api/sponsors?id=${encodeURIComponent(sponsorId)}`, { method: "DELETE" });
+    const json = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(typeof json?.error === "string" ? json.error : "No se pudo eliminar el sponsor.");
+    }
+
+    setSponsorItems((current) => current.filter((sponsor) => sponsor.id !== sponsorId));
+  }
+
+  function resetDemoSponsors() {
+    if (!isDemoMode) return;
+    setSponsorItems(demoSponsorsBaselineRef.current);
+  }
+
   const shellProps: MapShellProps = {
     channel,
     channelId,
@@ -550,7 +652,8 @@ export function MapExperience({
     cityCount,
     pendingManual,
     pollState,
-    sponsors,
+    hideLivePollMetrics,
+    sponsors: sponsorItems,
     headerEyebrow,
     countryBuckets,
     selectedCountryCode,
@@ -575,10 +678,10 @@ export function MapExperience({
     interactive,
     viewMode: resolvedViewMode,
     canUseAdminPanels,
+    isDemoMode,
     desktopMapTab,
     setDesktopMapTab,
     mobileMenuOpen,
-    desktopMenuHidden,
     availablePollOptions,
     videosRailRef,
     votesRailRef,
@@ -586,8 +689,10 @@ export function MapExperience({
     setWindowFilter,
     setSearchQuery,
     setMobileMenuOpen,
-    setDesktopMenuHidden,
     setPollState,
+    createSponsor,
+    deleteSponsor,
+    resetDemoSponsors,
     locateFirstSearchResult,
     issueGlobeCommand,
     selectCountry,
@@ -692,7 +797,7 @@ function MapAppShell(props: MapShellProps) {
 
           <div
             data-map-scroll="true"
-            className="pointer-events-auto grid min-h-0 grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 lg:pointer-events-none lg:grid-cols-[minmax(168px,200px)_minmax(360px,1fr)_minmax(210px,250px)] lg:overflow-hidden xl:grid-cols-[minmax(238px,270px)_minmax(460px,1fr)_minmax(282px,318px)] xl:gap-3 xl:px-5 xl:pb-5 2xl:grid-cols-[minmax(320px,370px)_minmax(560px,1fr)_minmax(360px,430px)]"
+            className="pointer-events-auto grid min-h-0 grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 lg:pointer-events-none lg:grid-cols-[minmax(210px,250px)_minmax(360px,1fr)_minmax(210px,250px)] lg:overflow-hidden xl:grid-cols-[minmax(282px,318px)_minmax(460px,1fr)_minmax(282px,318px)] xl:gap-3 xl:px-5 xl:pb-5 2xl:grid-cols-[minmax(360px,430px)_minmax(560px,1fr)_minmax(360px,430px)]"
           >
             <MapOverviewRail {...props} />
             <MapCenterStage {...props} />
@@ -728,7 +833,11 @@ function MobileMapShell({
         {mobileTab === "more" ? <MobileMoreView {...props} /> : null}
       </div>
 
-      <MobileBottomNav activeTab={mobileTab} setActiveTab={setMobileTab} voteCount={props.pollState?.total_votes || props.destinationCandidates.length} />
+      <MobileBottomNav
+        activeTab={mobileTab}
+        setActiveTab={setMobileTab}
+        voteCount={props.hideLivePollMetrics ? undefined : props.pollState?.total_votes || props.destinationCandidates.length}
+      />
       <MobileMapMenu {...props} setMobileTab={setMobileTab} />
     </div>
   );
@@ -742,6 +851,7 @@ function MobileMapMenu({
   resolvedSummary,
   pendingManual,
   pollState,
+  hideLivePollMetrics,
   sponsors,
   mobileMenuOpen,
   setMobileMenuOpen,
@@ -792,7 +902,12 @@ function MobileMapMenu({
               <MobileMenuButton icon={House} label="Inicio" href="/" />
               <MobileMenuButton icon={MapPin} label="Mapa" count={resolvedSummary.total_countries} onClick={() => { selectCountry(null); goToTab("map"); }} />
               <MobileMenuButton icon={Video} label="Videos" count={resolvedSummary.total_videos} onClick={() => goToTab("videos")} />
-              <MobileMenuButton icon={Trophy} label="Votaciones" count={pollState?.total_votes || undefined} onClick={() => goToTab("community")} />
+              <MobileMenuButton
+                icon={Trophy}
+                label="Votaciones"
+                count={hideLivePollMetrics ? undefined : pollState?.total_votes || undefined}
+                onClick={() => goToTab("community")}
+              />
               <MobileMenuButton icon={UsersThree} label="Sponsors" count={sponsors.length || undefined} onClick={() => goToTab("community")} />
               {viewer.isOwner ? <MobileMenuButton icon={GearSix} label="Ajustes" count={pendingManual.length || undefined} onClick={() => { setMissingVideosOpen(true); closeMenu(); }} /> : null}
               {viewer.isOwner && viewer.adminUrl ? <MobileMenuButton icon={ChartBar} label="Panel admin" href={viewer.adminUrl} /> : null}
@@ -924,6 +1039,7 @@ function MobileMapView({
   visibleRecentVideos,
   activeVideo,
   setMobileMenuOpen,
+  hideLivePollMetrics,
 }: MapShellProps) {
   const previewVideo = activeVideo || visibleRecentVideos[0] || null;
 
@@ -998,7 +1114,7 @@ function MobileMapView({
         ) : null}
       </div>
 
-      <MobileSuggestedDestinations candidates={destinationCandidates} onSelect={selectCountry} />
+      <MobileSuggestedDestinations candidates={destinationCandidates} onSelect={selectCountry} hideVotes={hideLivePollMetrics} />
     </div>
   );
 }
@@ -1038,20 +1154,24 @@ function MobileCommunityView(props: MapShellProps) {
         </div>
       ) : null}
       <div className="mt-4 space-y-3">
-        <DestinationCard
-          destination={props.nextDestination}
-          fallbackCandidates={props.destinationCandidates}
-          onRefresh={props.handleRefresh}
-          allowRefresh={props.allowRefresh}
-          syncState={props.syncState}
-          onSelect={props.selectCountry}
-        />
+        {!props.hideLivePollMetrics ? (
+          <DestinationCard
+            destination={props.nextDestination}
+            fallbackCandidates={props.destinationCandidates}
+            onRefresh={props.handleRefresh}
+            allowRefresh={props.allowRefresh}
+            syncState={props.syncState}
+            onSelect={props.selectCountry}
+            hideVotes={props.hideLivePollMetrics}
+          />
+        ) : null}
         {props.channelId && (props.pollState || props.viewer.isOwner) ? (
           <FanVoteCard
             channelId={props.channelId}
             viewer={props.viewer}
             poll={props.pollState}
             availableOptions={props.availablePollOptions}
+            isDemoMode={props.isDemoMode}
             onPollChange={props.setPollState}
           />
         ) : (
@@ -1060,9 +1180,10 @@ function MobileCommunityView(props: MapShellProps) {
         <SponsorsRail
           sponsors={props.sponsors}
           viewer={props.viewer}
-          channelId={props.channelId}
-          channelName={props.channel.channel_name}
-          mapUrl={props.mapUrl}
+          isDemoMode={props.isDemoMode}
+          createSponsor={props.createSponsor}
+          deleteSponsor={props.deleteSponsor}
+          resetDemoSponsors={props.resetDemoSponsors}
         />
       </div>
     </div>
@@ -1088,9 +1209,10 @@ function MobileMoreView(props: MapShellProps) {
         <SponsorsRail
           sponsors={props.sponsors}
           viewer={props.viewer}
-          channelId={props.channelId}
-          channelName={props.channel.channel_name}
-          mapUrl={props.mapUrl}
+          isDemoMode={props.isDemoMode}
+          createSponsor={props.createSponsor}
+          deleteSponsor={props.deleteSponsor}
+          resetDemoSponsors={props.resetDemoSponsors}
         />
       </div>
     </div>
@@ -1197,9 +1319,11 @@ function MobileActionBar({
 function MobileSuggestedDestinations({
   candidates,
   onSelect,
+  hideVotes = false,
 }: {
   candidates: DestinationCandidate[];
   onSelect: (countryCode: string | null) => void;
+  hideVotes?: boolean;
 }) {
   if (candidates.length === 0) return null;
 
@@ -1216,7 +1340,7 @@ function MobileSuggestedDestinations({
             <span className="block truncate text-[9px] text-[#aab2bc]">{candidate.cities[0] || "Destino"}</span>
             <span className="mt-1 flex items-center gap-1 text-[9px] text-[#ff5a52]">
               <MapPin size={9} weight="fill" />
-              {candidate.votes || candidate.percent} votos
+              {hideVotes ? "Top destino" : `${candidate.votes || candidate.percent} votos`}
             </span>
           </button>
         ))}
@@ -1232,7 +1356,7 @@ function MobileBottomNav({
 }: {
   activeTab: MobileMapTab;
   setActiveTab: Dispatch<SetStateAction<MobileMapTab>>;
-  voteCount: number;
+  voteCount?: number;
 }) {
   const items: Array<{ id: MobileMapTab; label: string; icon: Icon; badge?: number }> = [
     { id: "overview", label: "Overview", icon: House },
@@ -1278,9 +1402,9 @@ function MapSidebar({
   resolvedSummary,
   pendingManual,
   pollState,
+  hideLivePollMetrics,
   sponsors,
   mobileMenuOpen,
-  desktopMenuHidden,
   setMobileMenuOpen,
   selectCountry,
   setMissingVideosOpen,
@@ -1295,7 +1419,14 @@ function MapSidebar({
     { label: "Inicio", icon: House, href: "/" },
     { label: "Mapa", icon: MapPin, onClick: () => selectCountry(null), count: resolvedSummary.total_countries },
     { label: "Videos", icon: Video, onClick: () => scrollToRail(videosRailRef), count: resolvedSummary.total_videos },
-    pollState || viewer.isOwner ? { label: "Votaciones", icon: Trophy, onClick: () => scrollToRail(votesRailRef), count: pollState?.total_votes || undefined } : null,
+    pollState || viewer.isOwner
+      ? {
+          label: "Votaciones",
+          icon: Trophy,
+          onClick: () => scrollToRail(votesRailRef),
+          count: hideLivePollMetrics ? undefined : pollState?.total_votes || undefined,
+        }
+      : null,
     sponsors.length > 0 ? { label: "Sponsors", icon: UsersThree, onClick: () => scrollToRail(sponsorsRailRef), count: sponsors.length } : null,
     viewer.isOwner && viewer.adminUrl ? { label: "Analytics", icon: ChartBar, href: viewer.adminUrl } : null,
     viewer.isOwner ? { label: "Ajustes", icon: GearSix, onClick: () => setMissingVideosOpen(true), count: pendingManual.length || undefined } : null,
@@ -1304,8 +1435,7 @@ function MapSidebar({
 
   return (
     <>
-      {!desktopMenuHidden ? (
-        <aside className="pointer-events-auto hidden w-[72px] shrink-0 border-r border-white/10 bg-[#060a11]/95 px-2 py-3 backdrop-blur-2xl lg:flex lg:flex-col xl:w-[184px] xl:px-3 xl:py-4">
+      <aside className="pointer-events-auto hidden w-[72px] shrink-0 border-r border-white/10 bg-[#060a11]/95 px-2 py-3 backdrop-blur-2xl lg:flex lg:flex-col xl:w-[184px] xl:px-3 xl:py-4">
           <Link href={mapUrl} className="mb-4 flex items-center justify-center gap-3 rounded-2xl px-1 py-1.5 transition-colors hover:bg-white/[0.04] xl:mb-5 xl:justify-start xl:px-2">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[rgba(255,0,0,0.55)] bg-[rgba(255,0,0,0.12)] text-[#ff3b3b] xl:h-12 xl:w-12">
             <YoutubeLogo size={22} weight="fill" />
@@ -1348,10 +1478,7 @@ function MapSidebar({
             ) : null}
           </div>
         </div>
-        </aside>
-      ) : (
-        <div className="pointer-events-none hidden w-0 shrink-0 lg:block" />
-      )}
+      </aside>
 
       <div className="pointer-events-auto fixed left-3 top-3 z-[360] lg:hidden">
         <button
@@ -1410,8 +1537,6 @@ function MapTopBar({
   copyState,
   setMissingVideosOpen,
   channel,
-  desktopMenuHidden,
-  setDesktopMenuHidden,
   canUseAdminPanels,
   headerEyebrow,
 }: MapShellProps) {
@@ -1419,16 +1544,6 @@ function MapTopBar({
     <header className="pointer-events-auto z-[370] px-4 py-3 xl:px-5">
       <div className="mx-auto grid min-h-[52px] w-full grid-cols-1 gap-3 rounded-xl border border-white/10 bg-[#07101a]/86 p-2 shadow-[0_28px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-center gap-2">
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            className="hidden shrink-0 lg:inline-flex"
-            aria-label={desktopMenuHidden ? "Mostrar menu lateral" : "Ocultar menu lateral"}
-            onClick={() => setDesktopMenuHidden((current) => !current)}
-          >
-            <List size={15} />
-          </Button>
           <div className="yt-search h-10 min-h-10 w-full max-w-none rounded-xl border-white/10 bg-white/[0.04]">
             <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
               <MagnifyingGlass size={16} />
@@ -1475,10 +1590,10 @@ function MapOverviewRail({
   channel,
   resolvedSummary,
   cityCount,
-  visibleRecentVideos,
+  countryBuckets,
   selectedCountryCode,
   selectedCountryName,
-  openVideo,
+  selectCountry,
   videosRailRef,
 }: MapShellProps) {
   return (
@@ -1504,40 +1619,42 @@ function MapOverviewRail({
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-3">
-            <h2 className="text-[13px] font-semibold text-[#f5f7fb]">Videos recientes</h2>
-            <Badge variant="outline" className="bg-white/[0.04] text-[11px] text-[#c6cdd5]">{visibleRecentVideos.length}</Badge>
+            <h2 className="text-[13px] font-semibold text-[#f5f7fb]">Paises y ciudades</h2>
+            <Badge variant="outline" className="bg-white/[0.04] text-[11px] text-[#c6cdd5]">{countryBuckets.length}</Badge>
           </div>
 
           <ScrollArea className="mt-3 min-h-0 flex-1" data-map-scroll="true">
             <div className="space-y-2 pr-2">
-              {visibleRecentVideos.length > 0 ? (
-                visibleRecentVideos.map((video) => (
-                  <button
-                    key={`${video.youtube_video_id}-${video.published_at || "no-date"}`}
-                    type="button"
-                    onClick={() => openVideo(video)}
-                    className="group flex w-full gap-2 rounded-lg border border-white/10 bg-white/[0.035] p-2 text-left transition hover:bg-white/[0.07]"
-                  >
-                    <VideoThumb video={video} className="h-[56px] w-[78px] rounded-md" />
-                    <div className="min-w-0 flex-1">
-                      <p className="line-clamp-2 text-[12px] font-medium leading-4 text-[#f4f7fb]">{video.title}</p>
-                      <p className="mt-1 truncate text-[11px] text-[#9da5ae]">{formatPlace(video)}</p>
-                      <p className="mt-1 text-[10px] text-[#7f8994]">{formatDuration(video.duration_seconds)} · {formatDate(video.published_at)}</p>
-                    </div>
-                    <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#c91f18] text-white opacity-0 transition group-hover:opacity-100">
-                      <Play size={12} weight="fill" />
-                    </span>
-                  </button>
-                ))
+              {countryBuckets.length > 0 ? (
+                countryBuckets.map((bucket) => {
+                  const isActive = selectedCountryCode === bucket.country_code;
+                  return (
+                    <button
+                      key={bucket.country_code}
+                      type="button"
+                      onClick={() => selectCountry(bucket.country_code)}
+                      className={cn(
+                        "w-full rounded-lg border p-2 text-left transition",
+                        isActive ? "border-[#ff3f38]/60 bg-[rgba(201,31,24,0.12)]" : "border-white/10 bg-white/[0.035] hover:bg-white/[0.07]"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-[12px] font-semibold text-[#f4f7fb]">{bucket.country_name}</p>
+                        <Badge variant="outline" className="h-5 rounded-full border-white/15 bg-white/[0.04] px-2 text-[10px] leading-none text-[#d5dbe2]">
+                          {bucket.count}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-[10px] text-[#9da5ae]">
+                        {bucket.cities.length > 0 ? bucket.cities.join(", ") : "Sin ciudades detectadas"}
+                      </p>
+                    </button>
+                  );
+                })
               ) : (
-                <EmptyPanel title="Sin videos visibles" body="Ajusta la busqueda o vuelve a todos los destinos." />
+                <EmptyPanel title="Sin paises detectados" body="Ajusta la busqueda o vuelve a todos los destinos." />
               )}
             </div>
           </ScrollArea>
-
-          <Button asChild variant="outline" className="mt-3 w-full">
-            <Link href={buildMapHref(channel)}>Ver todos los videos</Link>
-          </Button>
         </CardContent>
       </Card>
     </aside>
@@ -1545,26 +1662,27 @@ function MapOverviewRail({
 }
 
 function MapCenterStage({
-  channel,
-  countryBuckets,
   selectedCountryCode,
   selectedCountryName,
   windowFilter,
   setWindowFilter,
-  setDesktopMapTab,
   mapVideos,
+  visibleRecentVideos,
   pinnedVideo,
   videoActivity,
   closePinnedVideo,
   changePinnedVideo,
   selectCountry,
-  destinationCandidates,
-  viewer,
-  channelId,
-  pollState,
-  sponsors,
   issueGlobeCommand,
 }: MapShellProps) {
+  const relatedCountryCode = String(pinnedVideo?.country_code || selectedCountryCode || "").toUpperCase();
+  const suggestedVideos = relatedCountryCode
+    ? mapVideos
+        .filter((video) => String(video.country_code || "").toUpperCase() === relatedCountryCode)
+        .sort(sortRecentVideos)
+        .slice(0, 6)
+    : visibleRecentVideos;
+
   return (
     <section className="pointer-events-none relative order-1 min-h-[520px] overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] lg:order-none lg:min-h-0">
       <div className="pointer-events-auto absolute left-1/2 top-3 z-[340] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-xl border border-white/10 bg-[#07101a]/88 p-1.5 backdrop-blur-2xl">
@@ -1585,11 +1703,11 @@ function MapCenterStage({
         <button type="button" className="flex h-10 w-10 items-center justify-center text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => { selectCountry(null); issueGlobeCommand("reset_view"); }} aria-label="Mostrar mapa completo">
           <House size={16} />
         </button>
-        <button type="button" className="flex h-10 w-10 items-center justify-center border-t border-white/10 text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => selectCountry(countryBuckets[0]?.country_code || null)} aria-label="Enfocar destino principal">
+        <button type="button" className="flex h-10 w-10 items-center justify-center border-t border-white/10 text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => issueGlobeCommand("zoom_in")} aria-label="Acercar mapa">
           <Plus size={16} />
         </button>
         <button type="button" className="flex h-10 w-10 items-center justify-center border-t border-white/10 text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => issueGlobeCommand("zoom_out")} aria-label="Alejar mapa">
-          <MagnifyingGlass size={16} />
+          <Minus size={16} />
         </button>
         <button type="button" className="flex h-10 w-10 items-center justify-center border-t border-white/10 text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => issueGlobeCommand("toggle_rotation")} aria-label="Rotar mapa">
           <Play size={16} weight="fill" />
@@ -1623,15 +1741,10 @@ function MapCenterStage({
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[330] px-2 pb-2 md:px-3 md:pb-3 lg:px-4 lg:pb-4">
         <SuggestedDestinations
-          candidates={destinationCandidates}
-          onSelect={selectCountry}
-          viewer={viewer}
-          channelId={channelId}
-          channelName={channel.channel_name}
-          mapUrl={viewer.shareUrl}
-          pollState={pollState}
-          sponsors={sponsors}
-          setDesktopMapTab={setDesktopMapTab}
+          videos={suggestedVideos}
+          relatedCountryCode={relatedCountryCode || null}
+          relatedCountryName={pinnedVideo?.country_name || selectedCountryName}
+          onOpenVideo={changePinnedVideo}
         />
       </div>
     </section>
@@ -1639,17 +1752,20 @@ function MapCenterStage({
 }
 
 function MapRightRail({
-  channel,
   channelId,
   viewer,
   pollState,
+  availablePollOptions,
+  setPollState,
   setDesktopMapTab,
   desktopMapTab,
   mapVideos,
   videoActivity,
   nextDestination,
   destinationCandidates,
+  hideLivePollMetrics,
   sponsors,
+  isDemoMode,
   syncState,
   syncError,
   lastSyncSummary,
@@ -1661,11 +1777,14 @@ function MapRightRail({
   setMissingVideosOpen,
   selectCountry,
   openVideo,
+  createSponsor,
+  deleteSponsor,
+  resetDemoSponsors,
   votesRailRef,
   sponsorsRailRef,
 }: MapShellProps) {
   const hasLivePoll = Boolean(pollState && pollState.status === "live");
-  const showDestinationWinner = Boolean(hasLivePoll && pollState && pollState.total_votes > 0);
+  const showDestinationWinner = Boolean(hasLivePoll && pollState && pollState.total_votes > 0 && !hideLivePollMetrics);
 
   return (
     <aside className="pointer-events-auto order-3 flex min-h-0 flex-col gap-3 lg:order-none lg:overflow-y-auto lg:pr-1" data-map-scroll="true">
@@ -1698,20 +1817,34 @@ function MapRightRail({
           allowRefresh={allowRefresh}
           syncState={syncState}
           onSelect={selectCountry}
+          hideVotes={hideLivePollMetrics}
         />
       ) : null}
 
-      {viewer.isOwner && channelId ? (
-        <div ref={votesRailRef}>
-          <Button type="button" variant="outline" className="w-full justify-center rounded-lg" onClick={() => setDesktopMapTab("saved")}>
-            <Trophy size={14} />
-            Crear votacion
-          </Button>
-        </div>
-      ) : null}
+      <div ref={votesRailRef}>
+        {channelId && (pollState || viewer.isOwner) ? (
+          <FanVoteCard
+            channelId={channelId}
+            viewer={viewer}
+            poll={pollState}
+            availableOptions={availablePollOptions}
+            isDemoMode={isDemoMode}
+            onPollChange={setPollState}
+          />
+        ) : (
+          <FanVoteSummary candidates={destinationCandidates} onSelect={selectCountry} />
+        )}
+      </div>
 
       <div ref={sponsorsRailRef}>
-        <SponsorsRail sponsors={sponsors} viewer={viewer} channelId={channelId} channelName={channel.channel_name} mapUrl={viewer.shareUrl} />
+        <SponsorsRail
+          sponsors={sponsors}
+          viewer={viewer}
+          isDemoMode={isDemoMode}
+          createSponsor={createSponsor}
+          deleteSponsor={deleteSponsor}
+          resetDemoSponsors={resetDemoSponsors}
+        />
       </div>
     </aside>
   );
@@ -1724,6 +1857,7 @@ function DestinationCard({
   allowRefresh,
   syncState,
   onSelect,
+  hideVotes = false,
 }: {
   destination: DestinationCandidate | null;
   fallbackCandidates: DestinationCandidate[];
@@ -1731,6 +1865,7 @@ function DestinationCard({
   allowRefresh: boolean;
   syncState: SyncState;
   onSelect?: (countryCode: string | null) => void;
+  hideVotes?: boolean;
 }) {
   const percent = destination?.percent || 0;
   return (
@@ -1756,7 +1891,11 @@ function DestinationCard({
                   <p className="truncate text-[16px] font-semibold uppercase tracking-wide text-[#f5f7fb]">{destination.country_name}</p>
                   <p className="mt-1 text-[12px] text-[#aab2bc]">{destination.cities.slice(0, 3).join(", ") || "Destino abierto"}</p>
                   <p className="mt-2 text-[12px] font-semibold text-[#ff4b42]">
-                    {destination.votes > 0 ? `${formatExactNumber(destination.votes)} votos` : `${formatExactNumber(fallbackCandidates.length)} sugerencias`}
+                    {hideVotes
+                      ? "Ranking activo"
+                      : destination.votes > 0
+                        ? `${formatExactNumber(destination.votes)} votos`
+                        : `${formatExactNumber(fallbackCandidates.length)} sugerencias`}
                   </p>
                 </div>
               </div>
@@ -1869,106 +2008,45 @@ function OperationsCard({
 }
 
 function SuggestedDestinations({
-  candidates,
-  onSelect,
-  viewer,
-  channelId,
-  channelName,
-  mapUrl,
-  pollState,
-  sponsors,
-  setDesktopMapTab,
+  videos,
+  relatedCountryCode,
+  relatedCountryName,
+  onOpenVideo,
 }: {
-  candidates: DestinationCandidate[];
-  onSelect: (countryCode: string | null) => void;
-  viewer: MapViewerContext;
-  channelId: string | null;
-  channelName: string;
-  mapUrl: string;
-  pollState: MapPollRecord | null;
-  sponsors: MapRailSponsor[];
-  setDesktopMapTab: Dispatch<SetStateAction<DesktopMapTab>>;
+  videos: TravelVideoLocation[];
+  relatedCountryCode: string | null;
+  relatedCountryName: string | null;
+  onOpenVideo: (video: TravelVideoLocation) => void;
 }) {
-  const hasLivePoll = Boolean(pollState && pollState.status === "live");
-  const shouldShowSponsors = !hasLivePoll;
-  if (!shouldShowSponsors && candidates.length === 0) return null;
+  const visibleVideos = videos.slice(0, 5);
+  if (!visibleVideos.length) return null;
 
   return (
     <div className="pointer-events-auto mx-auto hidden w-full max-w-[700px] rounded-xl border border-white/10 bg-[#07101a]/86 p-2 backdrop-blur-2xl md:block xl:p-3">
       <div className="mb-2 flex items-center justify-between gap-3 xl:mb-3">
-        <h2 className="truncate text-[12px] font-semibold text-[#f5f7fb] xl:text-[14px]">{shouldShowSponsors ? "Sponsors destacados" : "Proximos destinos sugeridos por la comunidad"}</h2>
-        {shouldShowSponsors ? (
-          <button type="button" className="h-8 shrink-0 rounded-full border border-white/10 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6] transition hover:bg-white/[0.1] xl:px-4 xl:text-[12px]">
-            Ver todos
-          </button>
-        ) : viewer.isOwner && channelId ? (
-          <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 px-2 text-[11px] xl:px-3 xl:text-[12px]" onClick={() => setDesktopMapTab("saved")}>
-            <Trophy size={13} />
-            Crear votacion
-          </Button>
-        ) : channelId ? (
-          <BrandInquiryCta
-            channelId={channelId}
-            channelName={channelName}
-            mapUrl={mapUrl}
-            size="sm"
-            variant="outline"
-            className="h-8 shrink-0 px-2 text-[11px] xl:px-3 xl:text-[12px]"
-          />
-        ) : (
-          <span className="text-[11px] text-[#aab2bc]">Ver todas las votaciones</span>
-        )}
+        <h2 className="truncate text-[12px] font-semibold text-[#f5f7fb] xl:text-[14px]">
+          {relatedCountryCode ? `Videos relacionados en ${relatedCountryName || relatedCountryCode}` : "Ultimos videos del canal"}
+        </h2>
+        <Badge variant="outline" className="h-7 shrink-0 rounded-full border-white/15 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6]">
+          {visibleVideos.length}
+        </Badge>
       </div>
-      {shouldShowSponsors ? (
-        <div className="grid grid-cols-5 gap-2 xl:gap-3">
-          {sponsors.slice(0, 4).map((sponsor) => (
-            <a key={sponsor.id} href={sponsor.affiliate_url || sponsor.logo_url || "#"} target={sponsor.affiliate_url ? "_blank" : undefined} rel={sponsor.affiliate_url ? "noreferrer" : undefined} className="group min-w-0 text-center">
-              <span className="mx-auto flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white text-[12px] font-semibold text-[#07101a] transition group-hover:scale-[1.04] xl:h-[72px] xl:w-[72px]">
-                {sponsor.logo_url ? (
-                  <Image src={sponsor.logo_url} alt={sponsor.brand_name} width={72} height={72} className="h-full w-full object-contain p-2.5" />
-                ) : (
-                  getInitials(sponsor.brand_name)
-                )}
-              </span>
-              <span className="mt-2 block truncate text-[11px] font-medium text-[#d9e0e7]">{sponsor.brand_name}</span>
-              <span className={cn("block truncate text-[10px] font-medium", sponsor.isExample ? "text-[#e0a193]" : "text-[#59d67e]")}>{sponsor.isExample ? "Pendiente" : "Activo"}</span>
-            </a>
-          ))}
-          {viewer.isOwner ? (
-            <button type="button" className="group min-w-0 text-center">
-              <span className="mx-auto flex h-[62px] w-[62px] items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[0.02] text-[#c6cdd5] transition group-hover:border-white/30 group-hover:bg-white/[0.05] group-hover:text-[#eef2f6] xl:h-[72px] xl:w-[72px]">
-                <Plus size={24} />
-              </span>
-              <span className="mt-2 block truncate text-[11px] text-[#aeb6bf]">Agregar</span>
-            </button>
-          ) : channelId ? (
-            <BrandInquiryCta
-              channelId={channelId}
-              channelName={channelName}
-              mapUrl={mapUrl}
-              triggerLabel="Agregar"
-              triggerVariant="tile"
-              className="pt-0"
-            />
-          ) : null}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-          {candidates.slice(0, 4).map((candidate) => (
-            <button key={candidate.country_code} type="button" onClick={() => onSelect(candidate.country_code)} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]">
-              <div className="h-9 bg-[linear-gradient(135deg,rgba(255,0,0,0.42),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover xl:h-12" />
-              <div className="p-2">
-                <p className="truncate text-[11px] font-semibold text-[#f5f7fb]">{candidate.country_name}</p>
-                <p className="truncate text-[10px] text-[#9da5ae]">{candidate.cities[0] || candidate.country_code}</p>
-                <p className="mt-1 flex items-center gap-1 text-[10px] text-[#ff6a61]">
-                  <Target size={10} weight="fill" />
-                  {candidate.votes > 0 ? `${formatExactNumber(candidate.votes)} votos` : `${candidate.percent}% score`}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-5 gap-2 xl:gap-3">
+        {visibleVideos.map((video) => (
+          <button
+            key={`${video.youtube_video_id}-${video.published_at || "suggested-video"}`}
+            type="button"
+            onClick={() => onOpenVideo(video)}
+            className="group min-w-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]"
+          >
+            <VideoThumb video={video} className="h-[64px] w-full rounded-none object-cover" />
+            <div className="p-2">
+              <p className="line-clamp-2 text-[10px] font-semibold leading-4 text-[#f5f7fb]">{video.title}</p>
+              <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{formatPlace(video)}</p>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -2095,7 +2173,7 @@ function BrandInquiryCta({
                 <Input name="whatsapp" maxLength={40} placeholder="+54 9 ..." className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
               </label>
               <label className="space-y-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Presupuesto estimado (USD)</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Presupuesto mensual estimado (USD)</span>
                 <Input type="number" name="proposed_budget_usd" min={1} step={1} placeholder="1500" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
               </label>
             </div>
@@ -2131,28 +2209,65 @@ function BrandInquiryCta({
 function SponsorsRail({
   sponsors,
   viewer,
-  channelId,
-  channelName,
-  mapUrl,
+  isDemoMode,
+  createSponsor,
+  deleteSponsor,
+  resetDemoSponsors,
 }: {
   sponsors: MapRailSponsor[];
   viewer: MapViewerContext;
-  channelId: string | null;
-  channelName: string;
-  mapUrl: string;
+  isDemoMode: boolean;
+  createSponsor: (input: SponsorInput) => Promise<void>;
+  deleteSponsor: (sponsorId: string) => Promise<void>;
+  resetDemoSponsors: () => void;
 }) {
-  const visibleSponsors = sponsors.slice(0, 4);
+  const [startIndex, setStartIndex] = useState(0);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const maxStartIndex = Math.max(0, sponsors.length - 3);
+  const clampedStart = Math.min(startIndex, maxStartIndex);
+  const visibleSponsors = sponsors.slice(clampedStart, clampedStart + 3);
+  const canMoveLeft = clampedStart > 0;
+  const canMoveRight = clampedStart < maxStartIndex;
 
   return (
     <Card className="tm-surface-strong rounded-xl border-white/10">
-      <CardHeader className="flex-row items-center justify-between border-b border-white/10 px-3 pb-3 pt-3">
+      <CardHeader className="flex-row items-center justify-between px-3 pb-2 pt-3">
         <CardTitle className="text-[14px] font-semibold text-[#f5f7fb]">Sponsors</CardTitle>
-        <button type="button" className="h-8 rounded-full border border-white/10 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6] transition hover:bg-white/[0.1]">
-          Ver todos
-        </button>
       </CardHeader>
-      <CardContent className="px-3 pb-3 pt-3">
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-5">
+      <CardContent className="space-y-2 px-3 pb-3 pt-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setStartIndex((current) => Math.max(0, current - 1))}
+              disabled={!canMoveLeft}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[#d8dee6] transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Sponsors anteriores"
+            >
+              <CaretLeft size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setStartIndex((current) => Math.min(maxStartIndex, current + 1))}
+              disabled={!canMoveRight}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[#d8dee6] transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Sponsors siguientes"
+            >
+              <CaretRight size={13} />
+            </button>
+          </div>
+          {viewer.isOwner ? (
+            <button
+              type="button"
+              onClick={() => setManagerOpen(true)}
+              className="h-7 rounded-full border border-white/10 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6] transition hover:bg-white/[0.1]"
+            >
+              Agregar
+            </button>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
           {visibleSponsors.map((sponsor) => (
             <a
               key={sponsor.id}
@@ -2161,37 +2276,147 @@ function SponsorsRail({
               rel={sponsor.affiliate_url ? "noreferrer" : undefined}
               className="group min-w-0 text-center"
             >
-              <span className="mx-auto flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white text-[13px] font-semibold text-[#07101a] transition group-hover:scale-[1.04]">
+              <span className="mx-auto flex h-[44px] w-[44px] items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white text-[10px] font-semibold text-[#07101a] transition group-hover:scale-[1.04]">
                 {sponsor.logo_url ? (
-                  <Image src={sponsor.logo_url} alt={sponsor.brand_name} width={72} height={72} className="h-full w-full object-contain p-2.5" />
+                  <Image src={sponsor.logo_url} alt={sponsor.brand_name} width={44} height={44} className="h-full w-full object-contain p-1.5" />
                 ) : (
                   getInitials(sponsor.brand_name)
                 )}
               </span>
-              <span className="mt-2 block truncate text-[11px] font-medium text-[#d9e0e7]">{sponsor.brand_name}</span>
-              <span className={cn("block truncate text-[10px] font-medium", sponsor.isExample ? "text-[#e0a193]" : "text-[#59d67e]")}>{sponsor.isExample ? "Pendiente" : "Activo"}</span>
+              <span className="mt-1 block truncate text-[10px] font-medium text-[#d9e0e7]">{sponsor.brand_name}</span>
+              <span className={cn("block truncate text-[9px] font-medium", sponsor.isExample ? "text-[#e0a193]" : "text-[#59d67e]")}>{sponsor.isExample ? "Pendiente" : "Activo"}</span>
             </a>
           ))}
-          {viewer.isOwner ? (
-            <button type="button" className="group min-w-0 text-center">
-              <span className="mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[0.02] text-[#c6cdd5] transition group-hover:border-white/30 group-hover:bg-white/[0.05] group-hover:text-[#eef2f6]">
-                <Plus size={25} />
-              </span>
-              <span className="mt-2 block truncate text-[11px] text-[#aeb6bf]">Agregar</span>
-            </button>
-          ) : channelId ? (
-            <BrandInquiryCta
-              channelId={channelId}
-              channelName={channelName}
-              mapUrl={mapUrl}
-              triggerLabel="Agregar"
-              triggerVariant="tile"
-            />
-          ) : null}
         </div>
         {!visibleSponsors.length ? <p className="mt-3 text-[12px] leading-5 text-[#9da5ae]">Este mapa todavia no tiene sponsors activos.</p> : null}
       </CardContent>
+
+      <SponsorManagerDialog
+        open={managerOpen}
+        onOpenChange={setManagerOpen}
+        sponsors={sponsors}
+        isDemoMode={isDemoMode}
+        onCreateSponsor={createSponsor}
+        onDeleteSponsor={deleteSponsor}
+        onResetDemo={resetDemoSponsors}
+      />
     </Card>
+  );
+}
+
+function SponsorManagerDialog({
+  open,
+  onOpenChange,
+  sponsors,
+  isDemoMode,
+  onCreateSponsor,
+  onDeleteSponsor,
+  onResetDemo,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  sponsors: MapRailSponsor[];
+  isDemoMode: boolean;
+  onCreateSponsor: (input: SponsorInput) => Promise<void>;
+  onDeleteSponsor: (sponsorId: string) => Promise<void>;
+  onResetDemo: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const input: SponsorInput = {
+      brand_name: String(formData.get("brand_name") || "").trim(),
+      logo_url: String(formData.get("logo_url") || "").trim() || null,
+      affiliate_url: String(formData.get("affiliate_url") || "").trim() || null,
+      description: String(formData.get("description") || "").trim() || null,
+      country_code: String(formData.get("country_code") || "").trim().toUpperCase() || null,
+    };
+
+    if (!input.brand_name) {
+      setError("La marca es obligatoria.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      await onCreateSponsor(input);
+      event.currentTarget.reset();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "No se pudo guardar el sponsor.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteSponsor(sponsorId: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      await onDeleteSponsor(sponsorId);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "No se pudo eliminar el sponsor.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="tm-surface-strong max-w-[min(760px,calc(100%-1.5rem))] border-white/10 bg-[#07101a]/95 p-5 text-[#f5f7fb] sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-[18px] font-semibold text-[#f5f7fb]">Administrar sponsors</DialogTitle>
+          <DialogDescription className="text-[12px] leading-5 text-[#aab2bc]">
+            {isDemoMode ? "Modo demo: puedes editar y resetear sponsors sin tocar datos reales." : "Modo creator: los cambios se guardan para tu canal."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <form className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3" onSubmit={handleSubmit}>
+            <p className="text-[12px] font-semibold text-[#f5f7fb]">Agregar sponsor</p>
+            <Input name="brand_name" required placeholder="Marca" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+            <Input name="logo_url" placeholder="Logo URL (opcional)" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+            <Input name="affiliate_url" placeholder="URL del sponsor" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+            <Input name="country_code" maxLength={2} placeholder="Pais ISO (ej: JP)" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+            <Input name="description" placeholder="Descripcion breve" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+            <div className="flex items-center gap-2">
+              <Button type="submit" size="sm" disabled={saving}>
+                {saving ? "Guardando..." : "Guardar sponsor"}
+              </Button>
+              {isDemoMode ? (
+                <Button type="button" size="sm" variant="outline" onClick={onResetDemo} disabled={saving}>
+                  Reset demo
+                </Button>
+              ) : null}
+            </div>
+            {error ? <p className="text-[12px] text-[#ff9893]">{error}</p> : null}
+          </form>
+
+          <div className="min-h-0 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="mb-2 text-[12px] font-semibold text-[#f5f7fb]">Sponsors activos ({sponsors.length})</p>
+            <ScrollArea className="h-[220px]" data-map-scroll="true">
+              <div className="space-y-2 pr-2">
+                {sponsors.map((sponsor) => (
+                  <div key={sponsor.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[12px] font-semibold text-[#f5f7fb]">{sponsor.brand_name}</p>
+                      <p className="truncate text-[10px] text-[#9da5ae]">{sponsor.country_codes?.join(", ") || "GLOBAL"}</p>
+                    </div>
+                    <Button type="button" size="icon-sm" variant="outline" className="h-7 w-7 shrink-0" onClick={() => handleDeleteSponsor(sponsor.id)} disabled={saving}>
+                      <Trash size={12} />
+                    </Button>
+                  </div>
+                ))}
+                {!sponsors.length ? <p className="text-[12px] text-[#9da5ae]">No hay sponsors cargados.</p> : null}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2376,10 +2601,6 @@ function buildChannelUrl(channel: TravelChannel) {
   return `https://www.youtube.com/@${handle}`;
 }
 
-function buildMapHref(channel: TravelChannel) {
-  return `/map?channelId=${encodeURIComponent(channel.id)}`;
-}
-
 function formatPlace(video: TravelVideoLocation) {
   return [video.city, video.country_name || video.country_code].filter(Boolean).join(", ") || "Ubicacion mapeada";
 }
@@ -2406,13 +2627,6 @@ function formatNumber(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
   return String(value);
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "Sin fecha";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Sin fecha";
-  return date.toLocaleDateString("es-ES", { year: "numeric", month: "short", day: "numeric" });
 }
 
 function formatDuration(value?: number | null) {

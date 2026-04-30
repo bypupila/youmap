@@ -40,7 +40,8 @@ Use the demo route to inspect the product without external credentials:
 4. Set `YOUTUBE_API_KEY`, one Gemini key (`GOOGLE_GENAI_API_KEY` or `GEMINI_API_KEY` or `GOOGLE_API_KEY`), `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET`.
 5. (Optional but recommended for cron worker) set `YOUTUBE_IMPORT_WORKER_TOKEN`.
 6. (Optional tuning) set `YOUTUBE_IMPORT_CONCURRENCY` and `YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN`.
-7. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
+7. (Optional for poll auto-close hardening) set `MAP_POLLS_CRON_TOKEN`.
+8. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
 
 No external CLI or linked project is required for local bootstrap anymore.
 
@@ -92,3 +93,12 @@ For stable deploys, configure this in Vercel Project Settings:
    - `YOUTUBE_IMPORT_WORKER_TOKEN`
    - `YOUTUBE_IMPORT_CONCURRENCY`
    - `YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN`
+6. Optional poll worker env:
+   - `MAP_POLLS_CRON_TOKEN`
+
+## Poll close cron
+
+- Cron route: `GET /api/map/polls/close-expired`.
+- `vercel.json` already schedules this every 5 minutes.
+- Route accepts Vercel Cron user-agent in production (cron interno).
+- If `MAP_POLLS_CRON_TOKEN` is set, manual/externals can auth via query `?token=...`, `x-cron-token`, or `Authorization: Bearer ...`.

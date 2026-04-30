@@ -3,6 +3,7 @@ import { z } from "zod";
 import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
 import { verifyPassword } from "@/lib/auth-password";
 import { setSessionCookie } from "@/lib/auth-session";
+import { normalizeAppUserRole } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 import { getPostHogClient } from "@/lib/posthog-server";
 
@@ -22,17 +23,17 @@ export async function POST(request: Request) {
 
     const userRows = isEmail
       ? await sql<
-          Array<{ id: string; email: string; username: string; display_name: string }>
+          Array<{ id: string; email: string; username: string; display_name: string; role: string | null }>
         >`
-          select id, email, username, display_name
+          select id, email, username, display_name, role::text as role
           from public.users
           where email = ${normalizeEmail(identifier)}
           limit 1
         `
       : await sql<
-          Array<{ id: string; email: string; username: string; display_name: string }>
+          Array<{ id: string; email: string; username: string; display_name: string; role: string | null }>
         >`
-          select id, email, username, display_name
+          select id, email, username, display_name, role::text as role
           from public.users
           where username = ${normalizeUsername(identifier)}
           limit 1
@@ -79,6 +80,7 @@ export async function POST(request: Request) {
         email: user.email,
         username: user.username,
         display_name: user.display_name,
+        role: normalizeAppUserRole(user.role),
       },
     });
     setSessionCookie(response, user.id);

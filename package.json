@@ -14,7 +14,8 @@
     "security:install-hooks": "./scripts/install-git-hooks.sh",
     "security:rotate-auth": "node scripts/rotate-auth-session-secret.mjs",
     "validate:env": "node scripts/validate-env.mjs",
-    "polar:bootstrap": "node scripts/polar-bootstrap-travel.mjs"
+    "polar:bootstrap": "node scripts/polar-bootstrap-travel.mjs",
+    "user:set-role": "node scripts/set-user-role.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.13.0",

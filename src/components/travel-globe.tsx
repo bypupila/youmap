@@ -42,7 +42,7 @@ interface TravelGlobeProps {
   onActiveVideoChange?: (video: TravelVideoLocation | null) => void;
   onPinnedVideoChange?: (video: TravelVideoLocation | null) => void;
   onCountrySelect?: (countryCode: string | null) => void;
-  command?: { id: number; action: "reset_view" | "zoom_out" | "toggle_rotation" } | null;
+  command?: { id: number; action: "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation" } | null;
 }
 
 export function TravelGlobe({
@@ -189,6 +189,19 @@ export function TravelGlobe({
           lat: Number(current?.lat ?? 20),
           lng: Number(current?.lng ?? -10),
           altitude: Math.min(4.2, Math.max(0.6, Number(current?.altitude ?? 2.3) * 1.22)),
+        },
+        450
+      );
+      return;
+    }
+
+    if (command.action === "zoom_in") {
+      setRotationEnabled(false);
+      globeRef.current.pointOfView(
+        {
+          lat: Number(current?.lat ?? 20),
+          lng: Number(current?.lng ?? -10),
+          altitude: Math.max(0.45, Math.min(4.2, Number(current?.altitude ?? 2.3) * 0.82)),
         },
         450
       );

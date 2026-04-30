@@ -152,8 +152,8 @@ export async function POST(request: Request) {
     const passwordHash = hashPassword(payload.password);
 
     await sql`
-      insert into public.users (id, email, username, display_name, updated_at)
-      values (${userId}, ${email}, ${username}, ${displayName}, ${nowIso})
+      insert into public.users (id, email, username, display_name, role, updated_at)
+      values (${userId}, ${email}, ${username}, ${displayName}, 'creator', ${nowIso})
       on conflict (id)
       do update set
         email = excluded.email,

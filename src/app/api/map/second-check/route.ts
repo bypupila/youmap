@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getChannelAccessForUser, getSessionUserFromRequest } from "@/lib/current-user";
 import { secondCheckManualQueue } from "@/lib/map-sync";
-import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
@@ -13,19 +12,13 @@ const payloadSchema = z.object({
 export async function POST(request: Request) {
   try {
     const payload = payloadSchema.parse(await request.json());
-    const userId = getSessionUserIdFromRequest(request);
-    if (!userId) {
+    const sessionUser = await getSessionUserFromRequest(request);
+    if (!sessionUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const channelRows = await sql<Array<{ id: string }>>`
-      select id
-      from public.channels
-      where id = ${payload.channelId}
-        and user_id = ${userId}
-      limit 1
-    `;
-    if (!channelRows[0]?.id) {
+    const access = await getChannelAccessForUser(payload.channelId, sessionUser.id);
+    if (!access.canManage) {
       return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });
     }
 

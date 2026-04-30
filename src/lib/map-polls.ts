@@ -4,8 +4,11 @@ import type { TravelVideoLocation } from "@/lib/types";
 import { sql } from "@/lib/neon";
 
 export const MAP_VOTER_COOKIE = "travelmap_voter";
+export const MAP_POLL_COUNTRY_VOTE_CITY = "__country__";
+export const MAP_POLL_DEFAULT_MODE: MapPollMode = "country_city";
 
 export type MapPollStatus = "draft" | "live" | "closed";
+export type MapPollMode = "country" | "country_city";
 
 export interface MapPollCityOption {
   country_code: string;
@@ -28,6 +31,7 @@ export interface MapPollRecord {
   title: string;
   prompt: string;
   status: MapPollStatus;
+  poll_mode: MapPollMode;
   show_popup: boolean;
   published_at: string | null;
   closes_at: string | null;
@@ -43,6 +47,7 @@ export interface MapPollUpsertInput {
   userId: string;
   title: string;
   prompt: string;
+  pollMode: MapPollMode;
   showPopup: boolean;
   status: MapPollStatus;
   closesAt?: string | null;
@@ -60,6 +65,7 @@ interface PollRow {
   title: string;
   prompt: string;
   status: MapPollStatus;
+  poll_mode: string | null;
   show_popup: boolean;
   published_at: string | null;
   closes_at: string | null;
@@ -83,12 +89,30 @@ interface PollVoteRow {
   votes: number | string;
 }
 
+export class MapPollVoteError extends Error {
+  status: number;
+
+  constructor(message: string, status = 400) {
+    super(message);
+    this.name = "MapPollVoteError";
+    this.status = status;
+  }
+}
+
 export function normalizeCountryCode(value: string) {
   return String(value || "").trim().toUpperCase();
 }
 
 export function normalizeCity(value: string) {
   return String(value || "").trim();
+}
+
+export function normalizePollMode(value: string | null | undefined): MapPollMode {
+  return value === "country" ? "country" : "country_city";
+}
+
+function resolvePollMode(value: string | null | undefined): MapPollMode {
+  return normalizePollMode(value);
 }
 
 export function buildPollOptionsFromVideos(videoLocations: TravelVideoLocation[]) {
@@ -122,49 +146,83 @@ export function buildPollOptionsFromVideos(videoLocations: TravelVideoLocation[]
 
 export function normalizePollOptions(
   options: MapPollUpsertInput["countryOptions"],
-  available: ReturnType<typeof buildPollOptionsFromVideos>
+  available: ReturnType<typeof buildPollOptionsFromVideos>,
+  pollMode: MapPollMode
 ) {
   const availableByCountry = new Map(
     available.map((country) => [country.country_code, new Set(country.cities.map((city) => city.city))])
   );
   const availableNames = new Map(available.map((country) => [country.country_code, country.country_name]));
 
-  return options
-    .map((country, index) => {
-      const countryCode = normalizeCountryCode(country.country_code);
-      if (!countryCode || !availableByCountry.has(countryCode)) return null;
+  const seenCountries = new Set<string>();
 
-      const seenCities = new Set<string>();
-      const cities = country.cities
-        .map((city, cityIndex) => {
-          const normalizedCity = normalizeCity(city.city);
-          if (!normalizedCity) return null;
-          if (!availableByCountry.get(countryCode)?.has(normalizedCity)) return null;
-          const dedupeKey = normalizedCity.toLowerCase();
-          if (seenCities.has(dedupeKey)) return null;
-          seenCities.add(dedupeKey);
-          return {
-            city: normalizedCity,
-            sort_order: Number.isFinite(Number(city.sort_order)) ? Number(city.sort_order) : cityIndex,
-          };
-        })
-        .filter(Boolean) as Array<{ city: string; sort_order: number }>;
+  const normalized = options.map((country, index) => {
+    const countryCode = normalizeCountryCode(country.country_code);
+    if (!countryCode) {
+      throw new Error("Cada opcion debe incluir un pais valido.");
+    }
+    if (!availableByCountry.has(countryCode)) {
+      throw new Error(`El pais ${countryCode} no existe en el mapa para esta votacion.`);
+    }
+    if (seenCountries.has(countryCode)) {
+      throw new Error(`El pais ${countryCode} esta repetido.`);
+    }
+    seenCountries.add(countryCode);
 
-      if (!cities.length) return null;
+    const countrySortOrder = Number.isFinite(Number(country.sort_order)) ? Number(country.sort_order) : index;
+    const countryName = country.country_name || availableNames.get(countryCode) || countryCode;
 
+    if (pollMode === "country") {
       return {
         country_code: countryCode,
-        country_name: country.country_name || availableNames.get(countryCode) || countryCode,
-        sort_order: Number.isFinite(Number(country.sort_order)) ? Number(country.sort_order) : index,
-        cities,
+        country_name: countryName,
+        sort_order: countrySortOrder,
+        cities: [] as Array<{ city: string; sort_order: number }> ,
       };
-    })
-    .filter(Boolean) as Array<{
-    country_code: string;
-    country_name: string;
-    sort_order: number;
-    cities: Array<{ city: string; sort_order: number }>;
-  }>;
+    }
+
+    const availableCities = availableByCountry.get(countryCode) || new Set<string>();
+    const seenCities = new Set<string>();
+
+    const normalizedCities = country.cities.map((city, cityIndex) => {
+      const normalizedCity = normalizeCity(city.city);
+      if (!normalizedCity) {
+        throw new Error(`El pais ${countryCode} tiene una ciudad vacia.`);
+      }
+
+      if (!availableCities.has(normalizedCity)) {
+        throw new Error(`La ciudad ${normalizedCity} no existe en ${countryCode} para esta votacion.`);
+      }
+
+      const cityKey = normalizedCity.toLowerCase();
+      if (seenCities.has(cityKey)) {
+        throw new Error(`La ciudad ${normalizedCity} esta repetida en ${countryCode}.`);
+      }
+      seenCities.add(cityKey);
+
+      return {
+        city: normalizedCity,
+        sort_order: Number.isFinite(Number(city.sort_order)) ? Number(city.sort_order) : cityIndex,
+      };
+    });
+
+    if (!normalizedCities.length) {
+      throw new Error(`En modo pais + ciudad, ${countryCode} debe tener al menos una ciudad.`);
+    }
+
+    return {
+      country_code: countryCode,
+      country_name: countryName,
+      sort_order: countrySortOrder,
+      cities: normalizedCities,
+    };
+  });
+
+  if (!normalized.length) {
+    throw new Error("Selecciona al menos un pais para la votacion.");
+  }
+
+  return normalized;
 }
 
 export function hashValue(value: string) {
@@ -194,6 +252,58 @@ export async function getRequestHashes() {
   };
 }
 
+async function ensurePollFreshState(poll: PollRow | null) {
+  if (!poll) return null;
+  const closesAtMs = poll.closes_at ? new Date(poll.closes_at).getTime() : Number.NaN;
+  const expired = poll.status === "live" && Number.isFinite(closesAtMs) && closesAtMs <= Date.now();
+
+  if (!expired) return poll;
+
+  const closedRows = await sql<PollRow[]>`
+    update public.map_polls
+    set status = 'closed', show_popup = false, updated_at = ${new Date().toISOString()}
+    where id = ${poll.id}
+      and status = 'live'
+      and closes_at is not null
+      and closes_at <= now()
+    returning id, channel_id, title, prompt, status::text as status, poll_mode, show_popup, published_at, closes_at, created_by_user_id
+  `;
+
+  if (closedRows[0]) return closedRows[0];
+
+  const fallbackRows = await sql<PollRow[]>`
+    select id, channel_id, title, prompt, status::text as status, poll_mode, show_popup, published_at, closes_at, created_by_user_id
+    from public.map_polls
+    where id = ${poll.id}
+    limit 1
+  `;
+
+  return fallbackRows[0] || null;
+}
+
+export async function closeExpiredMapPolls(channelId?: string | null) {
+  const rows = channelId
+    ? await sql<Array<{ id: string }>>`
+        update public.map_polls
+        set status = 'closed', show_popup = false, updated_at = ${new Date().toISOString()}
+        where status = 'live'
+          and channel_id = ${channelId}
+          and closes_at is not null
+          and closes_at <= now()
+        returning id
+      `
+    : await sql<Array<{ id: string }>>`
+        update public.map_polls
+        set status = 'closed', show_popup = false, updated_at = ${new Date().toISOString()}
+        where status = 'live'
+          and closes_at is not null
+          and closes_at <= now()
+        returning id
+      `;
+
+  return rows.length;
+}
+
 export async function loadMapPoll(
   channelId: string,
   {
@@ -202,7 +312,7 @@ export async function loadMapPoll(
   }: { includeDraft?: boolean; voterFingerprint?: string | null } = {}
 ): Promise<MapPollRecord | null> {
   const pollRows = await sql<PollRow[]>`
-    select id, channel_id, title, prompt, status, show_popup, published_at, closes_at, created_by_user_id
+    select id, channel_id, title, prompt, status::text as status, poll_mode, show_popup, published_at, closes_at, created_by_user_id
     from public.map_polls
     where channel_id = ${channelId}
       and (${includeDraft} = true or status = 'live')
@@ -212,7 +322,7 @@ export async function loadMapPoll(
     limit 1
   `;
 
-  const poll = pollRows[0] || null;
+  const poll = await ensurePollFreshState(pollRows[0] || null);
   if (!poll) return null;
 
   return hydratePollRecord(poll, voterFingerprint || null);
@@ -220,17 +330,19 @@ export async function loadMapPoll(
 
 export async function loadMapPollById(pollId: string, voterFingerprint?: string | null) {
   const pollRows = await sql<PollRow[]>`
-    select id, channel_id, title, prompt, status, show_popup, published_at, closes_at, created_by_user_id
+    select id, channel_id, title, prompt, status::text as status, poll_mode, show_popup, published_at, closes_at, created_by_user_id
     from public.map_polls
     where id = ${pollId}
     limit 1
   `;
-  const poll = pollRows[0] || null;
+  const poll = await ensurePollFreshState(pollRows[0] || null);
   if (!poll) return null;
   return hydratePollRecord(poll, voterFingerprint || null);
 }
 
 async function hydratePollRecord(poll: PollRow, voterFingerprint: string | null) {
+  const pollMode = resolvePollMode(poll.poll_mode);
+
   const [countryRows, cityRows, voteRows, existingVoteRows] = await Promise.all([
     sql<PollCountryRow[]>`
       select country_code, sort_order
@@ -261,12 +373,17 @@ async function hydratePollRecord(poll: PollRow, voterFingerprint: string | null)
       : Promise.resolve([] as Array<{ id: string }>),
   ]);
 
-  const voteMap = new Map<string, number>();
+  const cityVoteMap = new Map<string, number>();
+  const countryVoteMap = new Map<string, number>();
   let totalVotes = 0;
+
   for (const row of voteRows || []) {
-    const key = `${normalizeCountryCode(row.country_code)}::${normalizeCity(row.city).toLowerCase()}`;
+    const countryCode = normalizeCountryCode(row.country_code);
+    const city = normalizeCity(row.city);
+    const key = `${countryCode}::${city.toLowerCase()}`;
     const count = Number(row.votes || 0);
-    voteMap.set(key, count);
+    cityVoteMap.set(key, count);
+    countryVoteMap.set(countryCode, (countryVoteMap.get(countryCode) || 0) + count);
     totalVotes += count;
   }
 
@@ -280,25 +397,29 @@ async function hydratePollRecord(poll: PollRow, voterFingerprint: string | null)
       country_code: countryCode,
       city,
       sort_order: Number(row.sort_order || 0),
-      votes: voteMap.get(key) || 0,
+      votes: cityVoteMap.get(key) || 0,
     });
     cityGroups.set(countryCode, bucket);
   }
 
   const countryOptions = (countryRows || []).map((row) => {
     const countryCode = normalizeCountryCode(row.country_code);
-    const cities = (cityGroups.get(countryCode) || []).sort((a, b) => b.votes - a.votes || a.sort_order - b.sort_order || a.city.localeCompare(b.city));
+    const cities = (cityGroups.get(countryCode) || []).sort(
+      (a, b) => b.votes - a.votes || a.sort_order - b.sort_order || a.city.localeCompare(b.city)
+    );
+
     return {
       country_code: countryCode,
       country_name: countryCode,
       sort_order: Number(row.sort_order || 0),
-      votes: cities.reduce((sum, city) => sum + city.votes, 0),
-      cities,
+      votes: countryVoteMap.get(countryCode) || 0,
+      cities: pollMode === "country" ? [] : cities,
     } satisfies MapPollCountryOption;
   });
 
   return {
     ...poll,
+    poll_mode: pollMode,
     total_votes: totalVotes,
     has_voted: Boolean(existingVoteRows[0]?.id),
     country_options: countryOptions,
@@ -307,16 +428,17 @@ async function hydratePollRecord(poll: PollRow, voterFingerprint: string | null)
 
 export async function upsertMapPoll(input: MapPollUpsertInput) {
   const now = new Date().toISOString();
+
   const existingRows = input.pollId
     ? await sql<Array<{ id: string; status: MapPollStatus }>>`
-        select id, status
+        select id, status::text as status
         from public.map_polls
         where id = ${input.pollId}
           and channel_id = ${input.channelId}
         limit 1
       `
     : await sql<Array<{ id: string; status: MapPollStatus }>>`
-        select id, status
+        select id, status::text as status
         from public.map_polls
         where channel_id = ${input.channelId}
           and status in ('draft', 'live')
@@ -328,13 +450,22 @@ export async function upsertMapPoll(input: MapPollUpsertInput) {
   let pollId = existing?.id || null;
 
   if (input.status === "live") {
-    await sql`
-      update public.map_polls
-      set status = 'closed', updated_at = ${now}
-      where channel_id = ${input.channelId}
-        and status = 'live'
-        and (${existing?.id || null} is null or id <> ${existing?.id || null})
-    `;
+    if (existing?.id) {
+      await sql`
+        update public.map_polls
+        set status = 'closed', show_popup = false, updated_at = ${now}
+        where channel_id = ${input.channelId}
+          and status = 'live'
+          and id <> ${existing.id}
+      `;
+    } else {
+      await sql`
+        update public.map_polls
+        set status = 'closed', show_popup = false, updated_at = ${now}
+        where channel_id = ${input.channelId}
+          and status = 'live'
+      `;
+    }
   }
 
   if (pollId) {
@@ -343,6 +474,7 @@ export async function upsertMapPoll(input: MapPollUpsertInput) {
       set
         title = ${input.title},
         prompt = ${input.prompt},
+        poll_mode = ${input.pollMode},
         status = ${input.status},
         show_popup = ${input.showPopup},
         closes_at = ${input.closesAt || null},
@@ -356,6 +488,7 @@ export async function upsertMapPoll(input: MapPollUpsertInput) {
         channel_id,
         title,
         prompt,
+        poll_mode,
         status,
         show_popup,
         published_at,
@@ -368,6 +501,7 @@ export async function upsertMapPoll(input: MapPollUpsertInput) {
         ${input.channelId},
         ${input.title},
         ${input.prompt},
+        ${input.pollMode},
         ${input.status},
         ${input.showPopup},
         ${input.status === "live" ? now : null},
@@ -425,18 +559,18 @@ export async function recordMapPollVote({
 }: {
   pollId: string;
   countryCode: string;
-  city: string;
+  city?: string | null;
   voterFingerprint: string;
   ipHash: string | null;
   userAgentHash: string | null;
 }) {
   const now = new Date().toISOString();
   const normalizedCountry = normalizeCountryCode(countryCode);
-  const normalizedCity = normalizeCity(city);
+  const normalizedCity = normalizeCity(city || "");
 
-  const [poll, countryRows, cityRows, existingVoteRows] = await Promise.all([
+  const [pollRows, countryRows, existingVoteRows] = await Promise.all([
     sql<PollRow[]>`
-      select id, channel_id, title, prompt, status, show_popup, published_at, closes_at, created_by_user_id
+      select id, channel_id, title, prompt, status::text as status, poll_mode, show_popup, published_at, closes_at, created_by_user_id
       from public.map_polls
       where id = ${pollId}
       limit 1
@@ -448,14 +582,6 @@ export async function recordMapPollVote({
         and country_code = ${normalizedCountry}
       limit 1
     `,
-    sql<PollCityRow[]>`
-      select country_code, city, sort_order
-      from public.map_poll_city_options
-      where poll_id = ${pollId}
-        and country_code = ${normalizedCountry}
-        and lower(city) = lower(${normalizedCity})
-      limit 1
-    `,
     sql<Array<{ id: string }>>`
       select id
       from public.map_poll_votes
@@ -465,14 +591,62 @@ export async function recordMapPollVote({
     `,
   ]);
 
-  if (!poll[0] || poll[0].status !== "live") {
-    throw new Error("La votacion no esta disponible.");
+  const poll = await ensurePollFreshState(pollRows[0] || null);
+
+  if (!poll || poll.status !== "live") {
+    throw new MapPollVoteError("La votacion no esta disponible.", 400);
   }
-  if (!countryRows[0] || !cityRows[0]) {
-    throw new Error("La opcion elegida no es valida.");
+
+  if (!countryRows[0]) {
+    throw new MapPollVoteError("El pais elegido no es valido.", 400);
   }
+
   if (existingVoteRows[0]?.id) {
-    throw new Error("Este dispositivo ya voto en esta encuesta.");
+    throw new MapPollVoteError("Este dispositivo ya voto en esta encuesta.", 400);
+  }
+
+  const pollMode = resolvePollMode(poll.poll_mode);
+
+  let voteCity = MAP_POLL_COUNTRY_VOTE_CITY;
+  if (pollMode === "country_city") {
+    if (!normalizedCity) {
+      throw new MapPollVoteError("Debes elegir una ciudad valida.", 400);
+    }
+
+    const cityRows = await sql<PollCityRow[]>`
+      select country_code, city, sort_order
+      from public.map_poll_city_options
+      where poll_id = ${pollId}
+        and country_code = ${normalizedCountry}
+        and lower(city) = lower(${normalizedCity})
+      limit 1
+    `;
+
+    if (!cityRows[0]) {
+      throw new MapPollVoteError("La ciudad elegida no es valida.", 400);
+    }
+
+    voteCity = normalizeCity(cityRows[0].city);
+  }
+
+  const rateWindowRows = ipHash
+    ? await sql<Array<{ attempts: number }>>`
+        select count(*)::int as attempts
+        from public.map_poll_votes
+        where poll_id = ${pollId}
+          and ip_hash = ${ipHash}
+          and created_at >= now() - interval '1 minute'
+      `
+    : await sql<Array<{ attempts: number }>>`
+        select count(*)::int as attempts
+        from public.map_poll_votes
+        where poll_id = ${pollId}
+          and voter_fingerprint = ${voterFingerprint}
+          and created_at >= now() - interval '1 minute'
+      `;
+
+  if ((rateWindowRows[0]?.attempts || 0) >= 10) {
+    throw new MapPollVoteError("Demasiados intentos de voto. Reintenta en un minuto.", 429);
   }
 
   await sql`
@@ -488,7 +662,7 @@ export async function recordMapPollVote({
     values (
       ${pollId},
       ${normalizedCountry},
-      ${normalizedCity},
+      ${voteCity},
       ${voterFingerprint},
       ${ipHash},
       ${userAgentHash},

@@ -4,7 +4,7 @@ import { buildPublicShareUrl, loadPublicMapPayload, loadPublicMapPayloadByChanne
 import { DEMO_CHANNEL_SLUG, DEMO_USER, DEMO_USERNAME } from "@/lib/demo-data";
 import type { MapDataPayload } from "@/lib/map-data";
 import { readPreviewSession } from "@/lib/preview-session";
-import { getSessionUserIdFromServerCookies } from "@/lib/current-user";
+import { getSessionUserById, getSessionUserIdFromServerCookies, userIsSuperAdmin } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 import { resolveCheckoutPlanSlug } from "@/lib/plans";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
@@ -26,14 +26,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const previewSession = previewId ? await readPreviewSession(previewId) : null;
   let fallbackChannelId = "";
   let sessionUserId = "";
+  let sessionUserRole: "viewer" | "creator" | "superadmin" = "creator";
 
   if (isDemoMode) {
     fallbackChannelId = DEMO_CHANNEL_SLUG;
   } else if (!previewSession) {
     sessionUserId = (await getSessionUserIdFromServerCookies()) || "";
     if (!sessionUserId) redirect("/auth");
-    const hasSubscription = await userHasActiveSubscription(sessionUserId);
-    if (!hasSubscription) redirect(await resolveCheckoutRedirectPath(sessionUserId));
+    const sessionUser = await getSessionUserById(sessionUserId);
+    if (!sessionUser) redirect("/auth");
+    sessionUserRole = sessionUser.role;
+    const isSuperAdmin = userIsSuperAdmin(sessionUser.role);
+    if (!isSuperAdmin) {
+      const hasSubscription = await userHasActiveSubscription(sessionUserId);
+      if (!hasSubscription) redirect(await resolveCheckoutRedirectPath(sessionUserId));
+    }
     fallbackChannelId = await resolveUserChannelId(sessionUserId);
   }
 
@@ -75,6 +82,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           viewer={
             experiencePayload?.viewer || {
               isOwner: true,
+              isAuthenticated: true,
+              role: sessionUserRole,
+              isSuperAdmin: sessionUserRole === "superadmin",
               shareUrl: buildPublicShareUrl(payload.channel.channel_handle || payload.channel.canonicalHandle),
               adminUrl: "/dashboard",
             }

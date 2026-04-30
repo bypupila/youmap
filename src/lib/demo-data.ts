@@ -234,33 +234,33 @@ type DemoSponsor = {
 
 const DEMO_SPONSOR_GLOBAL: DemoSponsor = {
   id: "22222222-2222-4222-8222-222222222222",
-  brand_name: "Nomad Gear",
-  description: "Mochilas técnicas y kits ultralight para viajes largos.",
-  discount_code: "PUPILA10",
-  affiliate_url: "https://example.com/nomad-gear",
+  brand_name: "Booking.com",
+  description: "Plataforma global de alojamiento para creators y audiencias viajeras.",
+  discount_code: null,
+  affiliate_url: "https://www.booking.com",
 };
 
 const DEMO_SPONSOR_BY_COUNTRY: Record<string, DemoSponsor> = {
   JP: {
     id: "33333333-3333-4333-8333-333333333333",
-    brand_name: "RailPass Japan",
-    description: "Pases de tren y eSIM para rutas por Japón.",
-    discount_code: "TOKYO5",
-    affiliate_url: "https://example.com/railpass-japan",
+    brand_name: "GetYourGuide",
+    description: "Tours y experiencias para creadores de viajes en rutas urbanas y culturales.",
+    discount_code: null,
+    affiliate_url: "https://www.getyourguide.com",
   },
   AR: {
     id: "44444444-4444-4444-8444-444444444444",
-    brand_name: "Andes Outdoor",
-    description: "Equipamiento de trekking para Mendoza y Patagonia.",
-    discount_code: "ANDES12",
-    affiliate_url: "https://example.com/andes-outdoor",
+    brand_name: "IATI Seguros",
+    description: "Seguro de viaje usado frecuentemente por creadores hispanohablantes.",
+    discount_code: null,
+    affiliate_url: "https://www.iatiseguros.com",
   },
   MA: {
     id: "55555555-5555-4555-8555-555555555555",
-    brand_name: "Desert Stay",
-    description: "Alojamientos boutique y experiencias en Marruecos.",
+    brand_name: "Airbnb",
+    description: "Alojamientos y experiencias para contenido de viajes auténtico.",
     discount_code: null,
-    affiliate_url: "https://example.com/desert-stay",
+    affiliate_url: "https://www.airbnb.com",
   },
 };
 
