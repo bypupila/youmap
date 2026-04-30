@@ -197,6 +197,7 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 - `GET /api/map/sync/:runId`
 - `GET /api/map/manual-verify?channelId=<id>`
 - `POST /api/map/manual-verify`
+- `POST /api/sponsors/inquiry`
 
 ## Riesgos operativos conocidos (actual)
 
@@ -217,6 +218,12 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 
 ### 2026-04-29
 
+- Se rediseña el rail de sponsors para creator/viewer con layout unificado tipo carrusel de logos circulares: titulo + accion `Ver todos`, chips de marca con estado bajo cada logo y tile final de `Agregar`.
+- En viewer, el tile `Agregar` abre el recibo comercial (`BrandInquiryCta`) sin romper el layout visual del rail; en creator mantiene el slot de alta visual para sponsors.
+- Se reemplaza el fallback de estado vacio por el mismo rail unificado para mantener consistencia de UX entre mapa desktop y vistas mobile de comunidad/mas.
+- En modo viewer del mapa se reemplaza el texto pasivo de votaciones por un CTA real `Quiero mi marca aqui`, disponible en desktop y mobile community, que abre un formulario de recibo comercial para negociar sponsors con el creador.
+- Se implementa `POST /api/sponsors/inquiry` con validacion `zod` y persistencia en Neon, registrando marca, contacto, presupuesto, brief y hashes de IP/user-agent para trazabilidad basica sin guardar IP cruda.
+- Se agrega la migracion `neon/migrations/0004_sponsor_inquiries.sql` con la tabla `public.sponsor_inquiries`, indices operativos y trigger `updated_at` para seguimiento del pipeline comercial.
 - Se reemplaza el modal centrado de videos del mapa por `VideoSelectionSheet`, un panel overlay basado en `Sheet` que mantiene el mapa visible y evita cortes de contenido al abrir un video desde una banderita.
 - El nuevo visor conserva el video seleccionado visible, mueve los videos relacionados a una lista con scroll propio y mantiene tracking de `map_video_opened` / `video_youtube_opened`.
 - En desktop/tablet, el visor de video deja de montarse como `Sheet` y pasa a ser una tarjeta flotante centrada dentro del area real del mapa, con sponsors en el bottom del mapa y actividad/estadisticas en el rail derecho.

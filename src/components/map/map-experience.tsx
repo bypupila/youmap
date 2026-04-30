@@ -11,6 +11,7 @@ import {
   Clock,
   Copy,
   DotsThree,
+  EnvelopeSimple,
   GearSix,
   House,
   LinkSimple,
@@ -31,7 +32,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import posthog from "posthog-js";
 import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
@@ -44,6 +45,7 @@ import { TravelGlobe } from "@/components/travel-globe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ManualVerificationItem, MapSummary } from "@/lib/map-data";
@@ -1030,6 +1032,11 @@ function MobileCommunityView(props: MapShellProps) {
   return (
     <div className="mx-auto w-full max-w-[430px]">
       <MobileActionBar {...props} />
+      {!props.viewer.isOwner && props.channelId ? (
+        <div className="mt-4">
+          <BrandInquiryCta channelId={props.channelId} channelName={props.channel.channel_name} mapUrl={props.mapUrl} className="h-10 w-full rounded-xl text-[12px] font-semibold" />
+        </div>
+      ) : null}
       <div className="mt-4 space-y-3">
         <DestinationCard
           destination={props.nextDestination}
@@ -1050,7 +1057,13 @@ function MobileCommunityView(props: MapShellProps) {
         ) : (
           <FanVoteSummary candidates={props.destinationCandidates} onSelect={props.selectCountry} />
         )}
-        {props.sponsors.length > 0 ? <SponsorsRail sponsors={props.sponsors} /> : <SponsorEmptyState />}
+        <SponsorsRail
+          sponsors={props.sponsors}
+          viewer={props.viewer}
+          channelId={props.channelId}
+          channelName={props.channel.channel_name}
+          mapUrl={props.mapUrl}
+        />
       </div>
     </div>
   );
@@ -1072,7 +1085,13 @@ function MobileMoreView(props: MapShellProps) {
             onMissing={() => props.setMissingVideosOpen(true)}
           />
         ) : null}
-        {props.sponsors.length > 0 ? <SponsorsRail sponsors={props.sponsors} /> : <SponsorEmptyState />}
+        <SponsorsRail
+          sponsors={props.sponsors}
+          viewer={props.viewer}
+          channelId={props.channelId}
+          channelName={props.channel.channel_name}
+          mapUrl={props.mapUrl}
+        />
       </div>
     </div>
   );
@@ -1526,6 +1545,7 @@ function MapOverviewRail({
 }
 
 function MapCenterStage({
+  channel,
   countryBuckets,
   selectedCountryCode,
   selectedCountryName,
@@ -1602,13 +1622,24 @@ function MapCenterStage({
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[330] px-2 pb-2 md:px-3 md:pb-3 lg:px-4 lg:pb-4">
-        <SuggestedDestinations candidates={destinationCandidates} onSelect={selectCountry} viewer={viewer} channelId={channelId} pollState={pollState} sponsors={sponsors} setDesktopMapTab={setDesktopMapTab} />
+        <SuggestedDestinations
+          candidates={destinationCandidates}
+          onSelect={selectCountry}
+          viewer={viewer}
+          channelId={channelId}
+          channelName={channel.channel_name}
+          mapUrl={viewer.shareUrl}
+          pollState={pollState}
+          sponsors={sponsors}
+          setDesktopMapTab={setDesktopMapTab}
+        />
       </div>
     </section>
   );
 }
 
 function MapRightRail({
+  channel,
   channelId,
   viewer,
   pollState,
@@ -1635,7 +1666,6 @@ function MapRightRail({
 }: MapShellProps) {
   const hasLivePoll = Boolean(pollState && pollState.status === "live");
   const showDestinationWinner = Boolean(hasLivePoll && pollState && pollState.total_votes > 0);
-  const showSponsorOnRail = hasLivePoll;
 
   return (
     <aside className="pointer-events-auto order-3 flex min-h-0 flex-col gap-3 lg:order-none lg:overflow-y-auto lg:pr-1" data-map-scroll="true">
@@ -1681,7 +1711,7 @@ function MapRightRail({
       ) : null}
 
       <div ref={sponsorsRailRef}>
-        {showSponsorOnRail ? (sponsors.length > 0 ? <SponsorsRail sponsors={sponsors} /> : <SponsorEmptyState />) : null}
+        <SponsorsRail sponsors={sponsors} viewer={viewer} channelId={channelId} channelName={channel.channel_name} mapUrl={viewer.shareUrl} />
       </div>
     </aside>
   );
@@ -1843,6 +1873,8 @@ function SuggestedDestinations({
   onSelect,
   viewer,
   channelId,
+  channelName,
+  mapUrl,
   pollState,
   sponsors,
   setDesktopMapTab,
@@ -1851,6 +1883,8 @@ function SuggestedDestinations({
   onSelect: (countryCode: string | null) => void;
   viewer: MapViewerContext;
   channelId: string | null;
+  channelName: string;
+  mapUrl: string;
   pollState: MapPollRecord | null;
   sponsors: MapRailSponsor[];
   setDesktopMapTab: Dispatch<SetStateAction<DesktopMapTab>>;
@@ -1863,23 +1897,60 @@ function SuggestedDestinations({
     <div className="pointer-events-auto mx-auto hidden w-full max-w-[700px] rounded-xl border border-white/10 bg-[#07101a]/86 p-2 backdrop-blur-2xl md:block xl:p-3">
       <div className="mb-2 flex items-center justify-between gap-3 xl:mb-3">
         <h2 className="truncate text-[12px] font-semibold text-[#f5f7fb] xl:text-[14px]">{shouldShowSponsors ? "Sponsors destacados" : "Proximos destinos sugeridos por la comunidad"}</h2>
-        {viewer.isOwner && channelId ? (
+        {shouldShowSponsors ? (
+          <button type="button" className="h-8 shrink-0 rounded-full border border-white/10 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6] transition hover:bg-white/[0.1] xl:px-4 xl:text-[12px]">
+            Ver todos
+          </button>
+        ) : viewer.isOwner && channelId ? (
           <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 px-2 text-[11px] xl:px-3 xl:text-[12px]" onClick={() => setDesktopMapTab("saved")}>
             <Trophy size={13} />
             Crear votacion
           </Button>
+        ) : channelId ? (
+          <BrandInquiryCta
+            channelId={channelId}
+            channelName={channelName}
+            mapUrl={mapUrl}
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 px-2 text-[11px] xl:px-3 xl:text-[12px]"
+          />
         ) : (
           <span className="text-[11px] text-[#aab2bc]">Ver todas las votaciones</span>
         )}
       </div>
       {shouldShowSponsors ? (
-        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        <div className="grid grid-cols-5 gap-2 xl:gap-3">
           {sponsors.slice(0, 4).map((sponsor) => (
-            <a key={sponsor.id} href={sponsor.affiliate_url || "#"} target={sponsor.affiliate_url ? "_blank" : undefined} rel={sponsor.affiliate_url ? "noreferrer" : undefined} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-2 text-left transition hover:bg-white/[0.08] xl:p-3">
-              <p className="truncate text-[12px] font-semibold text-[#f5f7fb]">{sponsor.brand_name}</p>
-              <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{sponsor.description || "Sponsor activo"}</p>
+            <a key={sponsor.id} href={sponsor.affiliate_url || sponsor.logo_url || "#"} target={sponsor.affiliate_url ? "_blank" : undefined} rel={sponsor.affiliate_url ? "noreferrer" : undefined} className="group min-w-0 text-center">
+              <span className="mx-auto flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white text-[12px] font-semibold text-[#07101a] transition group-hover:scale-[1.04] xl:h-[72px] xl:w-[72px]">
+                {sponsor.logo_url ? (
+                  <Image src={sponsor.logo_url} alt={sponsor.brand_name} width={72} height={72} className="h-full w-full object-contain p-2.5" />
+                ) : (
+                  getInitials(sponsor.brand_name)
+                )}
+              </span>
+              <span className="mt-2 block truncate text-[11px] font-medium text-[#d9e0e7]">{sponsor.brand_name}</span>
+              <span className={cn("block truncate text-[10px] font-medium", sponsor.isExample ? "text-[#e0a193]" : "text-[#59d67e]")}>{sponsor.isExample ? "Pendiente" : "Activo"}</span>
             </a>
           ))}
+          {viewer.isOwner ? (
+            <button type="button" className="group min-w-0 text-center">
+              <span className="mx-auto flex h-[62px] w-[62px] items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[0.02] text-[#c6cdd5] transition group-hover:border-white/30 group-hover:bg-white/[0.05] group-hover:text-[#eef2f6] xl:h-[72px] xl:w-[72px]">
+                <Plus size={24} />
+              </span>
+              <span className="mt-2 block truncate text-[11px] text-[#aeb6bf]">Agregar</span>
+            </button>
+          ) : channelId ? (
+            <BrandInquiryCta
+              channelId={channelId}
+              channelName={channelName}
+              mapUrl={mapUrl}
+              triggerLabel="Agregar"
+              triggerVariant="tile"
+              className="pt-0"
+            />
+          ) : null}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
@@ -1902,16 +1973,187 @@ function SuggestedDestinations({
   );
 }
 
-function SponsorsRail({ sponsors }: { sponsors: MapRailSponsor[] }) {
+function BrandInquiryCta({
+  channelId,
+  channelName,
+  mapUrl,
+  className,
+  size = "default",
+  variant = "default",
+  triggerLabel = "Quiero mi marca aqui",
+  triggerVariant = "button",
+}: {
+  channelId: string;
+  channelName: string;
+  mapUrl: string;
+  className?: string;
+  size?: "default" | "sm";
+  variant?: "default" | "outline";
+  triggerLabel?: string;
+  triggerVariant?: "button" | "tile";
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    const proposedBudgetRaw = String(formData.get("proposed_budget_usd") || "").trim();
+    const proposedBudgetUsd = proposedBudgetRaw.length > 0 ? Number(proposedBudgetRaw) : null;
+    const hasInvalidBudget = proposedBudgetRaw.length > 0 && (!Number.isFinite(proposedBudgetUsd ?? Number.NaN) || (proposedBudgetUsd ?? 0) <= 0);
+
+    if (hasInvalidBudget) {
+      setError("Ingresa un presupuesto valido en USD.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch("/api/sponsors/inquiry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId,
+          brandName: String(formData.get("brand_name") || "").trim(),
+          contactName: String(formData.get("contact_name") || "").trim(),
+          contactEmail: String(formData.get("contact_email") || "").trim(),
+          websiteUrl: String(formData.get("website_url") || "").trim(),
+          whatsapp: String(formData.get("whatsapp") || "").trim(),
+          proposedBudgetUsd: proposedBudgetUsd ? Math.round(proposedBudgetUsd) : null,
+          brief: String(formData.get("brief") || "").trim(),
+          mapUrl,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(typeof payload?.error === "string" ? payload.error : "No se pudo enviar la solicitud.");
+        return;
+      }
+
+      form.reset();
+      setSuccess("Recibido. El creador del mapa revisara tu propuesta y te contactara por email.");
+    } catch {
+      setError("No se pudo enviar la solicitud. Reintenta en unos minutos.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {triggerVariant === "tile" ? (
+        <button type="button" className={cn("group min-w-0 text-center", className)} onClick={() => setOpen(true)}>
+          <span className="mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[0.02] text-[#c6cdd5] transition group-hover:border-white/30 group-hover:bg-white/[0.05] group-hover:text-[#eef2f6]">
+            <Plus size={25} />
+          </span>
+          <span className="mt-2 block truncate text-[11px] text-[#aeb6bf]">{triggerLabel}</span>
+        </button>
+      ) : (
+        <Button type="button" size={size} variant={variant} className={className} onClick={() => setOpen(true)}>
+          <EnvelopeSimple size={13} />
+          {triggerLabel}
+        </Button>
+      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="tm-surface-strong max-w-[min(640px,calc(100%-1.5rem))] border-white/10 bg-[#07101a]/95 p-5 text-[#f5f7fb] sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-[18px] font-semibold text-[#f5f7fb]">Quiero mi marca aqui</DialogTitle>
+            <DialogDescription className="text-[12px] leading-5 text-[#aab2bc]">
+              Completa este recibo comercial para contactar al creador de <span className="font-semibold text-[#f1f1f1]">{channelName}</span> y negociar una colaboracion.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="mt-2 space-y-3" onSubmit={handleSubmit}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Marca</span>
+                <Input name="brand_name" required minLength={2} maxLength={120} placeholder="Ej: Nomad Gear" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Nombre de contacto</span>
+                <Input name="contact_name" required minLength={2} maxLength={120} placeholder="Nombre y apellido" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Email</span>
+                <Input type="email" name="contact_email" required maxLength={180} placeholder="marca@empresa.com" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Web o landing</span>
+                <Input type="url" name="website_url" maxLength={240} placeholder="https://..." className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">WhatsApp (opcional)</span>
+                <Input name="whatsapp" maxLength={40} placeholder="+54 9 ..." className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Presupuesto estimado (USD)</span>
+                <Input type="number" name="proposed_budget_usd" min={1} step={1} placeholder="1500" className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+              </label>
+            </div>
+
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Objetivo de la colaboracion</span>
+              <textarea
+                name="brief"
+                required
+                minLength={20}
+                maxLength={1200}
+                placeholder="Producto a promocionar, destino, formato esperado, fechas y cualquier condicion comercial."
+                className="h-28 w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[13px] text-[#f5f7fb] outline-none ring-red-500/45 placeholder:text-[#7e8792] focus-visible:ring-2"
+              />
+            </label>
+
+            {error ? <p className="rounded-lg border border-[rgba(255,82,82,0.35)] bg-[rgba(255,82,82,0.14)] px-3 py-2 text-[12px] text-[#ffc5c5]">{error}</p> : null}
+            {success ? <p className="rounded-lg border border-[rgba(85,200,123,0.35)] bg-[rgba(85,200,123,0.14)] px-3 py-2 text-[12px] text-[#c8f3d6]">{success}</p> : null}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
+              <p className="text-[11px] text-[#90a0b1]">Tu propuesta queda registrada y se envia al owner de este mapa.</p>
+              <Button type="submit" size="sm" className="min-w-[176px]" disabled={busy}>
+                {busy ? "Enviando..." : "Enviar recibo"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function SponsorsRail({
+  sponsors,
+  viewer,
+  channelId,
+  channelName,
+  mapUrl,
+}: {
+  sponsors: MapRailSponsor[];
+  viewer: MapViewerContext;
+  channelId: string | null;
+  channelName: string;
+  mapUrl: string;
+}) {
+  const visibleSponsors = sponsors.slice(0, 4);
+
   return (
     <Card className="tm-surface-strong rounded-xl border-white/10">
       <CardHeader className="flex-row items-center justify-between border-b border-white/10 px-3 pb-3 pt-3">
         <CardTitle className="text-[14px] font-semibold text-[#f5f7fb]">Sponsors</CardTitle>
-        <Badge variant="outline" className="bg-white/[0.04] text-[11px]">Ver todos</Badge>
+        <button type="button" className="h-8 rounded-full border border-white/10 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6] transition hover:bg-white/[0.1]">
+          Ver todos
+        </button>
       </CardHeader>
       <CardContent className="px-3 pb-3 pt-3">
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-4">
-          {sponsors.slice(0, 5).map((sponsor) => (
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-5">
+          {visibleSponsors.map((sponsor) => (
             <a
               key={sponsor.id}
               href={sponsor.affiliate_url || sponsor.logo_url || "#"}
@@ -1919,35 +2161,35 @@ function SponsorsRail({ sponsors }: { sponsors: MapRailSponsor[] }) {
               rel={sponsor.affiliate_url ? "noreferrer" : undefined}
               className="group min-w-0 text-center"
             >
-              <span className="mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white text-[11px] font-semibold text-[#07101a] transition group-hover:scale-[1.04]">
+              <span className="mx-auto flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white text-[13px] font-semibold text-[#07101a] transition group-hover:scale-[1.04]">
                 {sponsor.logo_url ? (
-                  <Image src={sponsor.logo_url} alt={sponsor.brand_name} width={48} height={48} className="h-full w-full object-contain p-2" />
+                  <Image src={sponsor.logo_url} alt={sponsor.brand_name} width={72} height={72} className="h-full w-full object-contain p-2.5" />
                 ) : (
                   getInitials(sponsor.brand_name)
                 )}
               </span>
-              <span className="mt-2 block truncate text-[11px] text-[#d9e0e7]">{sponsor.brand_name}</span>
-              <span className={cn("block truncate text-[10px]", sponsor.isExample ? "text-[#f0a09a]" : "text-[#49c47a]")}>{sponsor.isExample ? "Ejemplo" : "Activo"}</span>
+              <span className="mt-2 block truncate text-[11px] font-medium text-[#d9e0e7]">{sponsor.brand_name}</span>
+              <span className={cn("block truncate text-[10px] font-medium", sponsor.isExample ? "text-[#e0a193]" : "text-[#59d67e]")}>{sponsor.isExample ? "Pendiente" : "Activo"}</span>
             </a>
           ))}
-          <span className="min-w-0 text-center">
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[0.03] text-[#c6cdd5]">
-              <Plus size={18} />
-            </span>
-            <span className="mt-2 block truncate text-[11px] text-[#9da5ae]">Agregar</span>
-          </span>
+          {viewer.isOwner ? (
+            <button type="button" className="group min-w-0 text-center">
+              <span className="mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[0.02] text-[#c6cdd5] transition group-hover:border-white/30 group-hover:bg-white/[0.05] group-hover:text-[#eef2f6]">
+                <Plus size={25} />
+              </span>
+              <span className="mt-2 block truncate text-[11px] text-[#aeb6bf]">Agregar</span>
+            </button>
+          ) : channelId ? (
+            <BrandInquiryCta
+              channelId={channelId}
+              channelName={channelName}
+              mapUrl={mapUrl}
+              triggerLabel="Agregar"
+              triggerVariant="tile"
+            />
+          ) : null}
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SponsorEmptyState() {
-  return (
-    <Card className="tm-surface-strong rounded-xl border-white/10">
-      <CardContent className="px-3 py-3">
-        <p className="text-[14px] font-semibold text-[#f5f7fb]">Sponsors</p>
-        <p className="mt-1 text-[12px] leading-5 text-[#9da5ae]">Este mapa todavia no tiene sponsors activos.</p>
+        {!visibleSponsors.length ? <p className="mt-3 text-[12px] leading-5 text-[#9da5ae]">Este mapa todavia no tiene sponsors activos.</p> : null}
       </CardContent>
     </Card>
   );
