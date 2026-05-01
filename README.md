@@ -165,6 +165,9 @@ Procedimiento de remediacion y rotacion: `docs/SECURITY_SECRETS.md`.
 
 - Roles persistidos en `public.users.role`: `viewer`, `creator`, `superadmin`.
 - `creator` y `superadmin` pueden gestionar mapas de su contexto; `superadmin` tiene acceso global operativo.
+- Si inicias sesión como `superadmin`, el dashboard muestra un panel mínimo para cambiar roles sin salir de la app.
+- El panel global completo vive en `/admin` y muestra el directorio de usuarios con cambios de rol directos.
+- Los cambios de rol se guardan en `public.user_role_audit` y el panel global muestra el historial reciente.
 - Para cambiar rol desde CLI:
 
 ```bash

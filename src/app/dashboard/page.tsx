@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { RoleManagementCard } from "@/components/admin/role-management-card";
 import { MapExperience } from "@/components/map/map-experience";
 import { buildPublicShareUrl, loadPublicMapPayload, loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 import { DEMO_CHANNEL_SLUG, DEMO_USER, DEMO_USERNAME } from "@/lib/demo-data";
@@ -57,6 +59,45 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         : null;
   const payload = experiencePayload || previewPayload;
 
+  if (!payload && sessionUserRole === "superadmin" && !previewSession && !isDemoMode) {
+    return (
+      <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(201,31,24,0.18),transparent_40%),linear-gradient(180deg,rgba(17,20,22,0.98),rgba(11,13,15,0.94))]" />
+        <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl items-center justify-center px-4 py-8">
+          <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_minmax(340px,380px)]">
+            <section className="tm-surface-strong rounded-[2rem] border border-white/10 p-6 shadow-[0_30px_120px_-60px_rgba(0,0,0,0.9)]">
+              <p className="yt-overline text-[#8ff0ff]">Superadmin</p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#f5f7fb]">Panel global de control</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#b8c0cb]">
+                No necesitas abrir un mapa para cambiar roles. Desde aquí puedes administrar usuarios por email,
+                username o UUID sin salir de la app.
+              </p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-[#9aa3af]">Acceso</p>
+                  <p className="mt-2 text-sm text-[#f5f7fb]">Solo visible para superadmin autenticado.</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-[#9aa3af]">Alcance</p>
+                  <p className="mt-2 text-sm text-[#f5f7fb]">Cambios directos sobre `public.users.role`.</p>
+                </div>
+              </div>
+            </section>
+
+            <div className="lg:self-start">
+              <RoleManagementCard />
+              <div className="mt-4">
+                <Link href="/admin" className="yt-btn-secondary inline-flex w-full items-center justify-center gap-2">
+                  Abrir panel global
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (!payload || (!channelId && !previewSession && !isDemoMode)) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center text-foreground">
@@ -96,6 +137,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           viewMode={isDemoMode ? "demo" : "creator"}
         />
       </div>
+
+      {sessionUserRole === "superadmin" ? (
+        <div className="pointer-events-none absolute right-4 top-4 z-[520] hidden md:block">
+          <div className="pointer-events-auto">
+            <RoleManagementCard />
+            <div className="mt-3">
+              <Link href="/admin" className="yt-btn-secondary inline-flex w-full items-center justify-center gap-2">
+                Abrir panel global
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
     </main>

@@ -26,8 +26,12 @@ async function handle(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const closedCount = await closeExpiredMapPolls();
-  return NextResponse.json({ ok: true, closed_count: closedCount });
+  const closedPolls = await closeExpiredMapPolls();
+  console.info("[api/map/polls/close-expired]", {
+    closedCount: closedPolls.length,
+    pollIds: closedPolls.map((poll) => poll.id),
+  });
+  return NextResponse.json({ ok: true, closed_count: closedPolls.length, poll_ids: closedPolls.map((poll) => poll.id) });
 }
 
 export async function GET(request: Request) {

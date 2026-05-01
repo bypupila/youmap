@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "crypto";
 import { cookies, headers } from "next/headers";
 import type { TravelVideoLocation } from "@/lib/types";
 import { sql } from "@/lib/neon";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const MAP_VOTER_COOKIE = "travelmap_voter";
 export const MAP_POLL_COUNTRY_VOTE_CITY = "__country__";
@@ -71,6 +72,9 @@ interface PollRow {
   closes_at: string | null;
   created_by_user_id: string;
 }
+
+type PollClosureRow = Pick<PollRow, "id" | "channel_id" | "title" | "poll_mode" | "closes_at" | "created_by_user_id">;
+type PollCloseSource = "cron" | "lazy";
 
 interface PollCountryRow {
   country_code: string;
@@ -259,17 +263,17 @@ async function ensurePollFreshState(poll: PollRow | null) {
 
   if (!expired) return poll;
 
-  const closedRows = await sql<PollRow[]>`
+  const closedRows = await sql<PollClosureRow[]>`
     update public.map_polls
     set status = 'closed', show_popup = false, updated_at = ${new Date().toISOString()}
     where id = ${poll.id}
       and status = 'live'
       and closes_at is not null
       and closes_at <= now()
-    returning id, channel_id, title, prompt, status::text as status, poll_mode, show_popup, published_at, closes_at, created_by_user_id
+    returning id, channel_id, title, poll_mode, closes_at, created_by_user_id
   `;
 
-  if (closedRows[0]) return closedRows[0];
+  await recordPollClosure(closedRows, "lazy");
 
   const fallbackRows = await sql<PollRow[]>`
     select id, channel_id, title, prompt, status::text as status, poll_mode, show_popup, published_at, closes_at, created_by_user_id
@@ -283,25 +287,53 @@ async function ensurePollFreshState(poll: PollRow | null) {
 
 export async function closeExpiredMapPolls(channelId?: string | null) {
   const rows = channelId
-    ? await sql<Array<{ id: string }>>`
+    ? await sql<PollClosureRow[]>`
         update public.map_polls
         set status = 'closed', show_popup = false, updated_at = ${new Date().toISOString()}
         where status = 'live'
           and channel_id = ${channelId}
           and closes_at is not null
           and closes_at <= now()
-        returning id
+        returning id, channel_id, title, poll_mode, closes_at, created_by_user_id
       `
-    : await sql<Array<{ id: string }>>`
+    : await sql<PollClosureRow[]>`
         update public.map_polls
         set status = 'closed', show_popup = false, updated_at = ${new Date().toISOString()}
         where status = 'live'
           and closes_at is not null
           and closes_at <= now()
-        returning id
+        returning id, channel_id, title, poll_mode, closes_at, created_by_user_id
       `;
 
-  return rows.length;
+  await recordPollClosure(rows, "cron");
+  return rows;
+}
+
+async function recordPollClosure(rows: PollClosureRow[], source: PollCloseSource) {
+  if (!rows.length) return;
+
+  console.info("[map/polls] closed expired poll(s)", {
+    count: rows.length,
+    source,
+    pollIds: rows.map((row) => row.id),
+  });
+
+  const posthog = getPostHogClient();
+  for (const row of rows) {
+    posthog.capture({
+      distinctId: row.created_by_user_id || row.channel_id,
+      event: "poll_auto_closed",
+      properties: {
+        poll_id: row.id,
+        channel_id: row.channel_id,
+        poll_mode: resolvePollMode(row.poll_mode),
+        closes_at: row.closes_at,
+        source,
+      },
+    });
+  }
+
+  await posthog.flush();
 }
 
 export async function loadMapPoll(
@@ -315,9 +347,18 @@ export async function loadMapPoll(
     select id, channel_id, title, prompt, status::text as status, poll_mode, show_popup, published_at, closes_at, created_by_user_id
     from public.map_polls
     where channel_id = ${channelId}
-      and (${includeDraft} = true or status = 'live')
+      and (
+        status = 'live'
+        or (${includeDraft} = true and status = 'draft')
+        or status = 'closed'
+      )
     order by
-      case status when 'live' then 0 when 'draft' then 1 else 2 end,
+      case
+        when status = 'live' then 0
+        when status = 'draft' and ${includeDraft} = true then 1
+        when status = 'closed' then 2
+        else 3
+      end,
       updated_at desc
     limit 1
   `;
