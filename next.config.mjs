@@ -1,5 +1,7 @@
 import { withSentryConfig } from "@sentry/nextjs";
 const isDev = process.env.NODE_ENV !== "production";
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+const shouldUploadSentryArtifacts = Boolean(sentryAuthToken);
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -71,9 +73,13 @@ export default withSentryConfig(nextConfig, {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-  org: "by-pupila",
-
-  project: "javascript-nextjs",
+  ...(shouldUploadSentryArtifacts
+    ? {
+        org: "by-pupila",
+        project: "javascript-nextjs",
+        authToken: sentryAuthToken,
+      }
+    : {}),
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
@@ -82,7 +88,7 @@ export default withSentryConfig(nextConfig, {
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
 
   // Upload a larger set of source maps for prettier stack traces (increases build time)
-  widenClientFileUpload: true,
+  widenClientFileUpload: shouldUploadSentryArtifacts,
 
   // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
   // This can increase your server load as well as your hosting bill.

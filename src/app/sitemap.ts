@@ -17,16 +17,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/auth`, changeFrequency: "weekly", priority: 0.5 },
   ];
 
-  const profiles = await sql<PublicProfileRow[]>`
-    select
-      u.username,
-      c.updated_at
-    from public.channels c
-    inner join public.users u on u.id = c.user_id
-    where c.is_public = true
-    order by c.updated_at desc nulls last
-    limit 5000
-  `;
+  if (!process.env.DATABASE_URL) {
+    return staticRoutes;
+  }
+
+  let profiles: PublicProfileRow[] = [];
+  try {
+    profiles = await sql<PublicProfileRow[]>`
+      select
+        u.username,
+        c.updated_at
+      from public.channels c
+      inner join public.users u on u.id = c.user_id
+      where c.is_public = true
+      order by c.updated_at desc nulls last
+      limit 5000
+    `;
+  } catch (error) {
+    console.warn("sitemap: failed to load public profiles, returning static routes only", error);
+    return staticRoutes;
+  }
 
   const profileRoutes: MetadataRoute.Sitemap = profiles.map((row) => ({
     url: `${siteUrl}/u/${encodeURIComponent(row.username)}`,
