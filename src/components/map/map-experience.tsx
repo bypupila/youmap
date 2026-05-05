@@ -65,6 +65,8 @@ type DesktopMapTab = VideoActivityTab;
 type GlobeCommandAction = "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation";
 
 const EMPTY_MANUAL_QUEUE: ManualVerificationItem[] = [];
+const EMPTY_SPONSORS: MapRailSponsor[] = [];
+const EMPTY_POLL_OPTIONS: PollOptionInput[] = [];
 const DEFAULT_VIEWER: MapViewerContext = {
   isOwner: false,
   isAuthenticated: false,
@@ -221,9 +223,9 @@ export function MapExperience({
   interactive = true,
   showHeader = true,
   viewer = DEFAULT_VIEWER,
-  sponsors = [],
+  sponsors = EMPTY_SPONSORS,
   activePoll = null,
-  availablePollOptions = [],
+  availablePollOptions = EMPTY_POLL_OPTIONS,
   headerEyebrow,
   viewMode,
 }: MapExperienceProps) {
