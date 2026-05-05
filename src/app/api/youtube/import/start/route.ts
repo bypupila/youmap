@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ const STALE_RUNNING_RUN_MS = 5 * 60 * 1000;
 
 export async function POST(request: Request) {
   try {
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

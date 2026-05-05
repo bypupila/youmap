@@ -166,8 +166,11 @@ Procedimiento de remediacion y rotacion: `docs/SECURITY_SECRETS.md`.
 - Roles persistidos en `public.users.role`: `viewer`, `creator`, `superadmin`.
 - `creator` y `superadmin` pueden gestionar mapas de su contexto; `superadmin` tiene acceso global operativo.
 - Si inicias sesión como `superadmin`, el dashboard muestra un panel mínimo para cambiar roles sin salir de la app.
-- El panel global completo vive en `/admin` y muestra el directorio de usuarios con cambios de rol directos.
+- El panel global completo vive en `/admin` y muestra el directorio de usuarios con búsqueda/paginación server-side y cambios de rol directos.
 - Los cambios de rol se guardan en `public.user_role_audit` y el panel global muestra el historial reciente.
+- El historial de `public.user_role_audit` se puede exportar desde el panel como CSV.
+- Al cambiar un rol, las sesiones previas del usuario modificado se revocan mediante `public.user_session_revocations`.
+- Cierre del bloque Grill Me: `docs/GRILL_ME_COMPLETION_REPORT.md`.
 - Para cambiar rol desde CLI:
 
 ```bash
@@ -188,6 +191,8 @@ En Vercel, `Project Settings > Environment Variables`, configura las mismas clav
 
 Si quieres proteger el cron de cierre de votaciones:
 
+- En Vercel Hobby el cron corre diario (`0 6 * * *`); el cierre inmediato queda cubierto por lazy close al consultar/votar.
+- En Vercel Pro se puede subir la frecuencia a `*/5 * * * *`.
 - Define `MAP_POLLS_CRON_TOKEN`.
 - El cron de `vercel.json` sigue funcionando por `user-agent` de Vercel Cron.
 - Para ejecuciones manuales/externas, usa:

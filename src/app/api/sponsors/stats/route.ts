@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { DEMO_ANALYTICS } from "@/lib/demo-data";
 import { sql } from "@/lib/neon";
 
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

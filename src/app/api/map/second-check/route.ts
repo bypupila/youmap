@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getChannelAccessForUser, getSessionUserFromRequest } from "@/lib/current-user";
+import { getChannelAccessForUser, getValidSessionUserFromRequest } from "@/lib/current-user";
 import { secondCheckManualQueue } from "@/lib/map-sync";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ const payloadSchema = z.object({
 export async function POST(request: Request) {
   try {
     const payload = payloadSchema.parse(await request.json());
-    const sessionUser = await getSessionUserFromRequest(request);
+    const sessionUser = await getValidSessionUserFromRequest(request);
     if (!sessionUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

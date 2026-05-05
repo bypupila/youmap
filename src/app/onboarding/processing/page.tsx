@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { OnboardingProcessing } from "@/components/onboarding/onboarding-processing";
-import { getSessionUserById, getSessionUserIdFromServerCookies } from "@/lib/current-user";
+import { getSessionUserById, getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ interface OnboardingProcessingPageProps {
 
 export default async function OnboardingProcessingPage({ searchParams }: OnboardingProcessingPageProps) {
   const resolvedSearchParams = await searchParams;
-  const userId = await getSessionUserIdFromServerCookies();
+  const userId = await getValidSessionUserIdFromServerCookies();
   if (!userId) {
     redirect("/auth");
   }

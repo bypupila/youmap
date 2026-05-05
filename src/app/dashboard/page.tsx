@@ -6,7 +6,7 @@ import { buildPublicShareUrl, loadPublicMapPayload, loadPublicMapPayloadByChanne
 import { DEMO_CHANNEL_SLUG, DEMO_USER, DEMO_USERNAME } from "@/lib/demo-data";
 import type { MapDataPayload } from "@/lib/map-data";
 import { readPreviewSession } from "@/lib/preview-session";
-import { getSessionUserById, getSessionUserIdFromServerCookies, userIsSuperAdmin } from "@/lib/current-user";
+import { getSessionUserById, getValidSessionUserIdFromServerCookies, userIsSuperAdmin } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 import { resolveCheckoutPlanSlug } from "@/lib/plans";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
@@ -33,7 +33,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   if (isDemoMode) {
     fallbackChannelId = DEMO_CHANNEL_SLUG;
   } else if (!previewSession) {
-    sessionUserId = (await getSessionUserIdFromServerCookies()) || "";
+    sessionUserId = (await getValidSessionUserIdFromServerCookies()) || "";
     if (!sessionUserId) redirect("/auth");
     const sessionUser = await getSessionUserById(sessionUserId);
     if (!sessionUser) redirect("/auth");

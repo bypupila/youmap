@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createPolarCheckoutSession } from "@/lib/polar";
-import { getSessionUserById, getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getSessionUserById, getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 import { getPlanSlugCandidates } from "@/lib/plans";
 import { getPostHogClient } from "@/lib/posthog-server";
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       lang,
     });
 
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.redirect(buildOnboardingRedirect(url.origin, { lang, plan }));
     }

@@ -63,6 +63,10 @@ export function createSessionToken(userId: string, ttlSeconds = DEFAULT_SESSION_
 }
 
 export function getSessionUserIdFromToken(token: string | null | undefined) {
+  return getSessionPayloadFromToken(token)?.sub || null;
+}
+
+export function getSessionPayloadFromToken(token: string | null | undefined) {
   const raw = String(token || "");
   if (!raw) return null;
 
@@ -78,11 +82,16 @@ export function getSessionUserIdFromToken(token: string | null | undefined) {
   try {
     const payload = JSON.parse(decodeBase64Url(payloadB64).toString("utf8")) as {
       sub?: string;
+      iat?: number;
       exp?: number;
     };
     if (!payload?.sub || !payload?.exp) return null;
     if (payload.exp <= Math.floor(Date.now() / 1000)) return null;
-    return payload.sub;
+    return {
+      sub: payload.sub,
+      iat: Number(payload.iat || 0),
+      exp: payload.exp,
+    };
   } catch {
     return null;
   }

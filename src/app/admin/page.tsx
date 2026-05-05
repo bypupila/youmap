@@ -3,25 +3,24 @@ import { redirect } from "next/navigation";
 import { ExternalLink, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { RoleManagementCard } from "@/components/admin/role-management-card";
-import { AdminUsersPanel, type AdminUserEntry } from "@/components/admin/admin-users-panel";
+import { AdminUsersPanel } from "@/components/admin/admin-users-panel";
 import { RoleAuditPanel } from "@/components/admin/role-audit-panel";
 import { getRecentRoleChanges, ensureUserRoleAuditTable } from "@/lib/admin-role-audit";
-import { getSessionUserById, getSessionUserIdFromServerCookies, userIsSuperAdmin, type AppUserRole } from "@/lib/current-user";
-import { sql } from "@/lib/neon";
+import { getSessionUserById, getValidSessionUserIdFromServerCookies, userIsSuperAdmin } from "@/lib/current-user";
+import { loadAdminUsersPageData } from "@/lib/admin-users";
 
 export const dynamic = "force-dynamic";
 
-interface AdminUserRow {
-  id: string;
-  email: string;
-  username: string;
-  display_name: string;
-  role: string | null;
-  updated_at: string | null;
+interface AdminPageProps {
+  searchParams: Promise<{
+    q?: string;
+    page?: string;
+  }>;
 }
 
-export default async function AdminPage() {
-  const sessionUserId = (await getSessionUserIdFromServerCookies()) || "";
+export default async function AdminPage({ searchParams }: AdminPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const sessionUserId = (await getValidSessionUserIdFromServerCookies()) || "";
   if (!sessionUserId) redirect("/auth");
 
   const sessionUser = await getSessionUserById(sessionUserId);
@@ -29,31 +28,11 @@ export default async function AdminPage() {
 
   await ensureUserRoleAuditTable();
 
-  const rows = await sql<AdminUserRow[]>`
-    select id, email, username, display_name, role::text as role, updated_at
-    from public.users
-    order by updated_at desc nulls last, username asc
-    limit 200
-  `;
+  const pageSize = 20;
+  const query = String(resolvedSearchParams.q || "");
+  const requestedPage = Number.parseInt(String(resolvedSearchParams.page || "1"), 10) || 1;
+  const adminUsers = await loadAdminUsersPageData(query, requestedPage, pageSize);
   const recentRoleChanges = await getRecentRoleChanges(12);
-
-  const users: AdminUserEntry[] = rows.map((row) => ({
-    id: row.id,
-    email: row.email,
-    username: row.username,
-    display_name: row.display_name,
-    role: normalizeRole(row.role),
-    updated_at: row.updated_at,
-  }));
-
-  const counts = users.reduce(
-    (acc, user) => {
-      acc.total += 1;
-      acc[user.role] += 1;
-      return acc;
-    },
-    { total: 0, viewer: 0, creator: 0, superadmin: 0 }
-  );
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
@@ -81,14 +60,20 @@ export default async function AdminPage() {
         </header>
 
         <section className="mt-6 grid gap-4 lg:grid-cols-4">
-          <SummaryCard label="Usuarios" value={counts.total} />
-          <SummaryCard label="Creators" value={counts.creator} />
-          <SummaryCard label="Viewers" value={counts.viewer} />
-          <SummaryCard label="Superadmins" value={counts.superadmin} />
+          <SummaryCard label="Usuarios" value={adminUsers.summary.total} />
+          <SummaryCard label="Creators" value={adminUsers.summary.creator} />
+          <SummaryCard label="Viewers" value={adminUsers.summary.viewer} />
+          <SummaryCard label="Superadmins" value={adminUsers.summary.superadmin} />
         </section>
 
         <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)]">
-          <AdminUsersPanel users={users} />
+          <AdminUsersPanel
+            users={adminUsers.users}
+            query={adminUsers.query}
+            page={adminUsers.page}
+            totalPages={adminUsers.totalPages}
+            totalCount={adminUsers.totalCount}
+          />
 
           <div className="space-y-6">
             <RoleManagementCard />
@@ -97,10 +82,13 @@ export default async function AdminPage() {
               <p className="yt-overline text-[#8ff0ff]">Guía operativa</p>
               <div className="mt-3 space-y-3 text-sm leading-6 text-[#b8c0cb]">
                 <p>
-                  Usa el listado para ubicar usuarios por email o username y cambiales el rol directamente.
+                  Usa el listado para ubicar usuarios por email, username o rol. La búsqueda y la paginación se resuelven en el servidor.
                 </p>
                 <p>
                   El card mínimo sigue disponible para cambios rápidos por UUID cuando ya conoces el identificador.
+                </p>
+                <p>
+                  El historial de roles se puede exportar a CSV para auditorías externas o revisiones operativas.
                 </p>
                 <p>
                   Los cambios impactan sobre <code className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[#f5f7fb]">public.users.role</code>.
@@ -121,10 +109,4 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
       <p className="mt-2 text-3xl font-semibold tracking-tight text-[#f5f7fb]">{value}</p>
     </div>
   );
-}
-
-function normalizeRole(role: string | null): AppUserRole {
-  if (role === "viewer") return "viewer";
-  if (role === "superadmin") return "superadmin";
-  return "creator";
 }

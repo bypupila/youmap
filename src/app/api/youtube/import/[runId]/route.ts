@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   try {
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

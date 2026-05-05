@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { hashPassword } from "@/lib/auth-password";
 import { isValidUsername, normalizeUsername, toPublicMapPath } from "@/lib/auth-identifiers";
 import { sql } from "@/lib/neon";
@@ -16,7 +16,7 @@ const payloadSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

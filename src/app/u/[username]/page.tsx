@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { MapExperience } from "@/components/map/map-experience";
-import { getSessionUserIdFromServerCookies } from "@/lib/current-user";
+import { getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { MAP_VOTER_COOKIE, hashValue } from "@/lib/map-polls";
 import { loadPublicMapPayload } from "@/lib/map-public";
 import { DEMO_CHANNEL_ID, isDemoUsername } from "@/lib/demo-data";
@@ -65,7 +65,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
   const voterCookie = String(cookieStore.get(MAP_VOTER_COOKIE)?.value || "").trim();
   const payload = await loadPublicMapPayload({
     identifier: resolvedParams.username,
-    viewerUserId: await getSessionUserIdFromServerCookies(),
+    viewerUserId: await getValidSessionUserIdFromServerCookies(),
     voterFingerprint: voterCookie ? hashValue(voterCookie) : null,
   });
 

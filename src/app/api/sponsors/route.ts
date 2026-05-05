@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 
 const sponsorSchema = z.object({
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -100,7 +100,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ ok: true, id: sponsorId, demo: true });
     }
 
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
-import { getSessionUserById, getSessionUserIdFromRequest, normalizeAppUserRole, userIsSuperAdmin } from "@/lib/current-user";
+import { getSessionUserById, getValidSessionUserIdFromRequest, normalizeAppUserRole, userIsSuperAdmin } from "@/lib/current-user";
 import { ensureUserRoleAuditTable, logUserRoleChange } from "@/lib/admin-role-audit";
 import { sql } from "@/lib/neon";
+import { revokeUserSessions } from "@/lib/session-revocations";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,7 +36,7 @@ async function findTargetUser(identifier: string) {
 
 export async function POST(request: Request) {
   try {
-    const sessionUserId = getSessionUserIdFromRequest(request);
+    const sessionUserId = await getValidSessionUserIdFromRequest(request);
     if (!sessionUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -89,6 +90,8 @@ export async function POST(request: Request) {
       changed_by_username: sessionUser.username,
       changed_by_display_name: sessionUser.display_name,
     });
+
+    await revokeUserSessions(updatedUser.id, "role_changed");
 
     return NextResponse.json({
       ok: true,

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getSessionUserById, getSessionUserIdFromRequest, userIsSuperAdmin } from "@/lib/current-user";
+import { getSessionUserById, getValidSessionUserIdFromRequest, userIsSuperAdmin } from "@/lib/current-user";
 import { hashValue, loadMapPollById, MAP_VOTER_COOKIE, type MapPollRecord } from "@/lib/map-polls";
 import { sql } from "@/lib/neon";
 
@@ -36,7 +36,7 @@ function sanitizePollForAudience(poll: MapPollRecord, audience: Audience) {
 
 export async function GET(request: Request, { params }: { params: Promise<{ pollId: string }> }) {
   try {
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     const { pollId } = await params;
 
     const cookieStore = await cookies();

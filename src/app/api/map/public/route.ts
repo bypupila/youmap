@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { getOrCreateVoterFingerprint } from "@/lib/map-polls";
 import { loadPublicMapPayload, normalizeChannelHandle } from "@/lib/map-public";
 
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "username or handle is required" }, { status: 400 });
     }
 
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     const fingerprint = await getOrCreateVoterFingerprint();
     const payload = await loadPublicMapPayload({
       identifier,

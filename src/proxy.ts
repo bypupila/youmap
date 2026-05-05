@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const SESSION_COOKIE_NAME = "travelmap_session";
 const VANITY_HOSTS = new Set(["youmap.bypupila.com", "www.youmap.bypupila.com"]);
-const RESERVED_PATHS = new Set(["", "auth", "dashboard", "onboarding", "pricing", "explore", "map", "api", "_next", "monitoring"]);
+const RESERVED_PATHS = new Set(["", "admin", "auth", "dashboard", "onboarding", "pricing", "explore", "map", "api", "u", "_next", "monitoring"]);
 
 export async function proxy(request: NextRequest) {
   const host = String(request.headers.get("host") || "").split(":")[0].toLowerCase();

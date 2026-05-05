@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowLeftRight, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,11 @@ export function RoleAuditPanel({ items }: RoleAuditPanelProps) {
             <History className="h-3 w-3" />
             <span>Últimos {items.length}</span>
           </Badge>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href="/api/admin/user-role-audit/export" className="yt-btn-secondary inline-flex items-center gap-2 text-[12px]">
+            Exportar CSV
+          </Link>
         </div>
       </CardHeader>
 

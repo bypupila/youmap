@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { processNextQueuedYoutubeImportRun, processYoutubeImportRunById } from "@/lib/youtube-import";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ function hasInternalWorkerAccess(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     const internalAccess = hasInternalWorkerAccess(request);
     if (!userId && !internalAccess) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

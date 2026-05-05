@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
 import { CheckCircle, MagnifyingGlass, ShieldCheck, Sparkle, UserCircle } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,10 @@ export interface AdminUserEntry {
 
 interface AdminUsersPanelProps {
   users: AdminUserEntry[];
+  query: string;
+  page: number;
+  totalPages: number;
+  totalCount: number;
 }
 
 const ROLE_META: Record<AdminAppUserRole, { label: string; icon: typeof UserCircle; className: string }> = {
@@ -41,22 +46,11 @@ const ROLE_META: Record<AdminAppUserRole, { label: string; icon: typeof UserCirc
 
 const ROLE_ACTIONS: AdminAppUserRole[] = ["viewer", "creator", "superadmin"];
 
-export function AdminUsersPanel({ users }: AdminUsersPanelProps) {
-  const [query, setQuery] = useState("");
+export function AdminUsersPanel({ users, query, page, totalPages, totalCount }: AdminUsersPanelProps) {
   const [items, setItems] = useState(users);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const filteredUsers = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return items;
-    return items.filter((user) =>
-      [user.display_name, user.username, user.email, user.role]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalized))
-    );
-  }, [items, query]);
 
   async function applyRole(user: AdminUserEntry, role: AdminAppUserRole) {
     if (user.role === role) return;
@@ -111,23 +105,38 @@ export function AdminUsersPanel({ users }: AdminUsersPanelProps) {
       </CardHeader>
 
       <CardContent className="space-y-4 px-5 pb-5 pt-5">
-        <label className="relative block">
-          <span className="sr-only">Buscar usuarios</span>
-          <MagnifyingGlass
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7f8994]"
-          />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar por email, username, nombre o rol"
-            className="h-11 pl-9"
-          />
-        </label>
+        <form action="/admin" method="get" className="space-y-3">
+          <input type="hidden" name="page" value="1" />
+          <label className="relative block">
+            <span className="sr-only">Buscar usuarios</span>
+            <MagnifyingGlass
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7f8994]"
+            />
+            <Input
+              name="q"
+              defaultValue={query}
+              placeholder="Buscar por email, username, nombre o rol"
+              className="h-11 pl-9"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="submit" className="bg-[#c91f18] hover:bg-[#e03128]">
+              Buscar
+            </Button>
+            {query ? (
+              <Link href="/admin" className="yt-btn-secondary inline-flex items-center justify-center">
+                Limpiar
+              </Link>
+            ) : null}
+          </div>
+        </form>
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#aab2bc]">
-          <span>{filteredUsers.length} usuarios visibles</span>
-          <span>{items.length} usuarios cargados</span>
+          <span>{totalCount} usuarios encontrados</span>
+          <span>
+            Página {page} de {Math.max(1, totalPages)} · {items.length} visibles en esta vista
+          </span>
         </div>
 
         {message ? (
@@ -139,7 +148,7 @@ export function AdminUsersPanel({ users }: AdminUsersPanelProps) {
         {error ? <p className="rounded-2xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-[12px] text-[#ffb0a7]">{error}</p> : null}
 
         <div className="space-y-3">
-          {filteredUsers.map((user) => {
+          {items.map((user) => {
             const meta = ROLE_META[user.role];
             const Icon = meta.icon;
             const isPending = pendingUserId === user.id;
@@ -190,13 +199,60 @@ export function AdminUsersPanel({ users }: AdminUsersPanelProps) {
             );
           })}
 
-          {filteredUsers.length === 0 ? (
+          {items.length === 0 ? (
             <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-white/[0.02] px-4 py-8 text-center text-sm text-[#aab2bc]">
               No hay usuarios que coincidan con ese filtro.
             </div>
           ) : null}
         </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+          <p className="text-[12px] text-[#aab2bc]">
+            Mostrando {items.length} resultados por página de un total de {totalCount}.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PageLink href={buildPageHref(query, Math.max(1, page - 1))} disabled={page <= 1}>
+              Anterior
+            </PageLink>
+            <PageLink href={buildPageHref(query, page + 1)} disabled={page >= totalPages || totalPages === 0}>
+              Siguiente
+            </PageLink>
+          </div>
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+function buildPageHref(query: string, page: number) {
+  const params = new URLSearchParams();
+  if (query.trim()) {
+    params.set("q", query.trim());
+  }
+  params.set("page", String(page));
+  return `/admin?${params.toString()}`;
+}
+
+function PageLink({
+  href,
+  disabled,
+  children,
+}: {
+  href: string;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  if (disabled) {
+    return (
+      <span className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 text-[12px] text-[#6f7781]">
+        {children}
+      </span>
+    );
+  }
+
+  return (
+    <Link href={href} className="yt-btn-secondary inline-flex h-10 items-center justify-center px-4 text-[12px]">
+      {children}
+    </Link>
   );
 }

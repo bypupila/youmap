@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUserFromRequest, userIsSuperAdmin } from "@/lib/current-user";
+import { getValidSessionUserFromRequest, userIsSuperAdmin } from "@/lib/current-user";
 import { fetchMapSyncRun } from "@/lib/map-sync";
 import { sql } from "@/lib/neon";
 
@@ -13,7 +13,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
       return NextResponse.json({ error: "runId is required" }, { status: 400 });
     }
 
-    const sessionUser = await getSessionUserFromRequest(_request);
+    const sessionUser = await getValidSessionUserFromRequest(_request);
     if (!sessionUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

@@ -5,7 +5,7 @@ import { DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_VIDEO_LOCATIONS } from "@/lib/dem
 import { buildAnalyticsFromVideoLocations } from "@/lib/analytics";
 import { createPreviewSession } from "@/lib/preview-session";
 import { importYoutubeChannelPreview } from "@/lib/youtube-import";
-import { getSessionUserIdFromRequest } from "@/lib/current-user";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { hasGeminiApiKey } from "@/lib/gemini";
 import { sql } from "@/lib/neon";
 
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const userId = getSessionUserIdFromRequest(request);
+    const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
       return NextResponse.json(await createPreviewImportResponse(payload.channelUrl));
     }
