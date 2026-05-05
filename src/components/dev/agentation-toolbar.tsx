@@ -7,7 +7,13 @@ const Agentation = dynamic(() => import("agentation").then((module) => module.Ag
 });
 
 export function AgentationToolbar() {
-  if (process.env.NODE_ENV !== "development" || process.env.NEXT_PUBLIC_ENABLE_AGENTATION !== "1") {
+  if (process.env.NODE_ENV !== "development") {
+    return null;
+  }
+
+  // Agentation is opt-in in local dev because its feedback surface can sit above the app
+  // and block clicks if it is mounted during normal QA.
+  if (process.env.NEXT_PUBLIC_ENABLE_AGENTATION !== "overlay") {
     return null;
   }
 
