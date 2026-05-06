@@ -42,6 +42,8 @@ interface TravelGlobeProps {
   onActiveVideoChange?: (video: TravelVideoLocation | null) => void;
   onPinnedVideoChange?: (video: TravelVideoLocation | null) => void;
   onCountrySelect?: (countryCode: string | null) => void;
+  rotationEnabled?: boolean;
+  onRotationChange?: (enabled: boolean) => void;
   command?: { id: number; action: "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation" } | null;
 }
 
@@ -64,19 +66,39 @@ export function TravelGlobe({
   onActiveVideoChange,
   onPinnedVideoChange,
   onCountrySelect,
+  rotationEnabled: controlledRotationEnabled,
+  onRotationChange,
   command = null,
 }: TravelGlobeProps) {
   const [GlobeComponent, setGlobeComponent] = useState<null | typeof import("react-globe.gl").default>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const [selectedPoint, setSelectedPoint] = useState<GlobePoint | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<GlobePoint | null>(null);
-  const [rotationEnabled, setRotationEnabled] = useState(true);
+  const [internalRotationEnabled, setInternalRotationEnabled] = useState(true);
   const [polygonsData, setPolygonsData] = useState<object[]>([]);
   const [hoveredPolygonName, setHoveredPolygonName] = useState<string | null>(null);
   const [hoveredPolygonCode, setHoveredPolygonCode] = useState<string | null>(null);
   const didApplyInitialSelection = useRef(false);
   const didApplyFocusSelection = useRef<string | null>(null);
   const didApplyFocusVideo = useRef<string | null>(null);
+  const rotationPointOfViewRef = useRef({ lat: 20, lng: -10, altitude: 2.3 });
+  const rotationEnabled = controlledRotationEnabled ?? internalRotationEnabled;
+
+  const updateRotationEnabled = useCallback(
+    (enabled: boolean) => {
+      if (onRotationChange) {
+        onRotationChange(enabled);
+        return;
+      }
+      setInternalRotationEnabled(enabled);
+    },
+    [onRotationChange]
+  );
+
+  const setGlobePointOfView = useCallback((view: { lat: number; lng: number; altitude: number }, duration = 0) => {
+    rotationPointOfViewRef.current = view;
+    globeRef.current?.pointOfView(view, duration);
+  }, []);
 
   const totalViews = useMemo(
     () => videoLocations.reduce((sum, video) => sum + Number(video.view_count || 0), 0),
@@ -169,26 +191,26 @@ export function TravelGlobe({
 
   useEffect(() => {
     if (!globeRef.current) return;
-    globeRef.current.pointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 0);
-  }, [GlobeComponent]);
+    setGlobePointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 0);
+  }, [GlobeComponent, setGlobePointOfView]);
 
   useEffect(() => {
     if (!command || !globeRef.current) return;
-    const current = globeRef.current.pointOfView?.() as { lat?: number; lng?: number; altitude?: number } | undefined;
 
     if (command.action === "reset_view") {
-      setRotationEnabled(false);
-      globeRef.current.pointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 700);
+      updateRotationEnabled(false);
+      setGlobePointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 700);
       return;
     }
 
     if (command.action === "zoom_out") {
-      setRotationEnabled(false);
-      globeRef.current.pointOfView(
+      updateRotationEnabled(false);
+      const current = rotationPointOfViewRef.current;
+      setGlobePointOfView(
         {
-          lat: Number(current?.lat ?? 20),
-          lng: Number(current?.lng ?? -10),
-          altitude: Math.min(4.2, Math.max(0.6, Number(current?.altitude ?? 2.3) * 1.22)),
+          lat: Number(current.lat ?? 20),
+          lng: Number(current.lng ?? -10),
+          altitude: Math.min(4.2, Math.max(0.6, Number(current.altitude ?? 2.3) * 1.22)),
         },
         450
       );
@@ -196,41 +218,41 @@ export function TravelGlobe({
     }
 
     if (command.action === "zoom_in") {
-      setRotationEnabled(false);
-      globeRef.current.pointOfView(
+      updateRotationEnabled(false);
+      const current = rotationPointOfViewRef.current;
+      setGlobePointOfView(
         {
-          lat: Number(current?.lat ?? 20),
-          lng: Number(current?.lng ?? -10),
-          altitude: Math.max(0.45, Math.min(4.2, Number(current?.altitude ?? 2.3) * 0.82)),
+          lat: Number(current.lat ?? 20),
+          lng: Number(current.lng ?? -10),
+          altitude: Math.max(0.45, Math.min(4.2, Number(current.altitude ?? 2.3) * 0.82)),
         },
         450
       );
       return;
     }
 
-    if (command.action === "toggle_rotation") {
-      setRotationEnabled((previous) => !previous);
-    }
-  }, [command]);
+    if (command.action === "toggle_rotation") return;
+  }, [command, setGlobePointOfView, updateRotationEnabled]);
 
   const focusCountryOnGlobe = useCallback((countrySelection: GlobePoint) => {
     const { lat, lng, altitude } = getCountryPointOfView(countrySelection.videos, pointMode);
+    updateRotationEnabled(false);
     setSelectedPoint(countrySelection);
+    rotationPointOfViewRef.current = { lat, lng, altitude };
     globeRef.current?.pointOfView({ lat, lng, altitude }, 900);
-  }, [pointMode]);
+  }, [pointMode, updateRotationEnabled]);
 
   useEffect(() => {
     if (!initialCountryCode || didApplyInitialSelection.current || pointsData.length === 0) return;
     const initialSelection = pointsData.find((point) => point.country_code.toUpperCase() === initialCountryCode.toUpperCase());
     if (!initialSelection) return;
     didApplyInitialSelection.current = true;
-    setRotationEnabled(false);
+    updateRotationEnabled(false);
     setSelectedPoint(initialSelection);
-    globeRef.current?.pointOfView(
-      { lat: initialSelection.lat, lng: initialSelection.lng, altitude: pointMode === "video" ? 0.82 : 1.35 },
-      900
-    );
-  }, [initialCountryCode, pointMode, pointsData]);
+    const nextView = { lat: initialSelection.lat, lng: initialSelection.lng, altitude: pointMode === "video" ? 0.82 : 1.35 };
+    rotationPointOfViewRef.current = nextView;
+    globeRef.current?.pointOfView(nextView, 900);
+  }, [initialCountryCode, pointMode, pointsData, updateRotationEnabled]);
 
   useEffect(() => {
     if (!focusCountryCode || pointsData.length === 0) return;
@@ -252,21 +274,21 @@ export function TravelGlobe({
 
     didApplyFocusVideo.current = normalizedVideoId;
     didApplyFocusSelection.current = candidate.country_code.toUpperCase();
-    setRotationEnabled(false);
+    updateRotationEnabled(false);
     setSelectedPoint(candidate);
-    globeRef.current.pointOfView(
-      { lat: candidate.lat, lng: candidate.lng, altitude: pointMode === "video" ? 0.72 : 1.2 },
-      850
-    );
-  }, [focusVideoId, pointMode, pointsData]);
+    const nextView = { lat: candidate.lat, lng: candidate.lng, altitude: pointMode === "video" ? 0.72 : 1.2 };
+    rotationPointOfViewRef.current = nextView;
+    globeRef.current.pointOfView(nextView, 850);
+  }, [focusVideoId, pointMode, pointsData, updateRotationEnabled]);
 
   useEffect(() => {
     if (!globeRef.current || !rotationEnabled) return;
-    let lng = 0;
     const id = window.setInterval(() => {
       if (!globeRef.current) return;
-      lng += 0.18;
-      globeRef.current.pointOfView({ lat: 20, lng, altitude: 2.3 }, 80);
+      const current = rotationPointOfViewRef.current;
+      const nextView = { lat: current.lat, lng: current.lng + 0.18, altitude: current.altitude };
+      rotationPointOfViewRef.current = nextView;
+      globeRef.current.pointOfView(nextView, 80);
     }, 90);
     return () => window.clearInterval(id);
   }, [rotationEnabled]);
@@ -285,7 +307,7 @@ export function TravelGlobe({
   }, []);
 
   function handlePointSelection(selected: GlobePoint) {
-    setRotationEnabled(false);
+    updateRotationEnabled(false);
     setSelectedPoint(selected);
 
     if (selected.kind === "video") {
@@ -303,7 +325,7 @@ export function TravelGlobe({
     if (!countryCode) return;
 
     onCountrySelect?.(countryCode);
-    setRotationEnabled(false);
+    updateRotationEnabled(false);
     setHoveredPoint(null);
   }
 
@@ -410,7 +432,7 @@ export function TravelGlobe({
           onGlobeClick={
             interactive
               ? () => {
-                  setRotationEnabled(false);
+                  updateRotationEnabled(false);
                   setHoveredPoint(null);
                   setHoveredPolygonName(null);
                   setHoveredPolygonCode(null);
@@ -541,7 +563,7 @@ export function TravelGlobe({
         <button
           type="button"
           className={`absolute left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/20 bg-black/50 px-4 py-2 text-xs text-white backdrop-blur hover:bg-black/70 ${compact ? "bottom-4" : "bottom-5"}`}
-          onClick={() => setRotationEnabled((previous) => !previous)}
+          onClick={() => updateRotationEnabled(!rotationEnabled)}
         >
           {rotationEnabled ? "Pausar rotacion" : "Reanudar rotacion"}
         </button>

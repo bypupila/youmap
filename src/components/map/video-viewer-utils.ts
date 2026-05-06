@@ -103,6 +103,28 @@ export function getOfficialYouTubeEmbedPlayerVars(origin: string, allowFullscree
   } satisfies Record<string, string | number>;
 }
 
+export function getVideoWatchStateLabel(input: {
+  openedInYoutube: boolean;
+  watchStatus?: string | null;
+}) {
+  if (input.openedInYoutube) return "VISTO EN YOUTUBE";
+  if (input.watchStatus === "watched") return "COMPLETADO";
+  if (input.watchStatus === "not_finished") return "INICIADO";
+  if (input.watchStatus === "watch_later") return "VER MAS TARDE";
+  return "SIN INICIAR";
+}
+
+export function getVideoWatchStateTone(input: {
+  openedInYoutube: boolean;
+  watchStatus?: string | null;
+}) {
+  if (input.openedInYoutube) return "youtube" as const;
+  if (input.watchStatus === "watched") return "success" as const;
+  if (input.watchStatus === "not_finished") return "active" as const;
+  if (input.watchStatus === "watch_later") return "muted" as const;
+  return "idle" as const;
+}
+
 export function countryCodeToFlag(countryCode?: string | null) {
   const code = String(countryCode || "").toUpperCase();
   if (code.length !== 2) return "🌐";

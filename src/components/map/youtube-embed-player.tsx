@@ -19,6 +19,8 @@ interface YouTubeEmbedPlayerProps {
   frameClassName?: string;
   allowFullscreen?: boolean;
   isMadeForKids?: boolean;
+  openButtonLabel?: string;
+  onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
   onOpenInYouTube?: () => void;
 }
 
@@ -38,6 +40,7 @@ type YTPlayerOptions = {
   events?: {
     onReady?: () => void;
     onError?: (event: { data: number }) => void;
+    onStateChange?: (event: { data: number }) => void;
   };
 };
 
@@ -107,6 +110,8 @@ export function YouTubeEmbedPlayer({
   frameClassName,
   allowFullscreen = true,
   isMadeForKids = false,
+  openButtonLabel = "Abrir en YouTube",
+  onPlaybackStateChange,
   onOpenInYouTube,
 }: YouTubeEmbedPlayerProps) {
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
@@ -154,6 +159,12 @@ export function YouTubeEmbedPlayer({
               setErrorReason(event.data === 2 ? "invalid_id" : "player_error");
               setStatus("error");
             },
+            onStateChange: (event) => {
+              if (cancelled) return;
+              if (event.data === 1) onPlaybackStateChange?.("playing");
+              if (event.data === 2) onPlaybackStateChange?.("paused");
+              if (event.data === 0) onPlaybackStateChange?.("ended");
+            },
           },
         });
       })
@@ -168,7 +179,7 @@ export function YouTubeEmbedPlayer({
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [allowFullscreen, normalizedVideoId]);
+  }, [allowFullscreen, normalizedVideoId, onPlaybackStateChange]);
 
   function openInYoutube() {
     if (onOpenInYouTube) {
@@ -240,7 +251,7 @@ export function YouTubeEmbedPlayer({
           className="inline-flex h-8 items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[11px] font-medium text-[#e8edf4] transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Abrir en YouTube"
         >
-          Abrir en YouTube
+          {openButtonLabel}
           <ArrowSquareOut size={12} />
         </button>
       </div>

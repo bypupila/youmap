@@ -26,6 +26,7 @@ export type VideoActivityController = {
   savedIds: Set<string>;
   featuredIds: Set<string>;
   watchStatusById: Record<string, VideoWatchStatus>;
+  markVideoStarted: (videoId: string | null | undefined) => void;
   markVideoOpened: (videoId: string | null | undefined) => void;
   toggleVideoSaved: (videoId: string | null | undefined) => void;
   toggleVideoFeatured: (videoId: string | null | undefined) => void;
@@ -144,6 +145,28 @@ export function useLocalVideoActivity(): VideoActivityController {
     setWatchStatusById(readWatchStatusById());
   }, []);
 
+  const markVideoStarted = useCallback((videoId: string | null | undefined) => {
+    setSeenIds((current) => {
+      const next = addId(current, videoId);
+      if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.seen, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.seen, next);
+      return next;
+    });
+    setOpenedIds((current) => {
+      const next = addId(current, videoId);
+      if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.opened, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.opened, next);
+      return next;
+    });
+    const normalized = String(videoId || "").trim();
+    if (!normalized) return;
+    setWatchStatusById((current) => {
+      if (current[normalized] === "watched" || current[normalized] === "watch_later") return current;
+      if (current[normalized] === "not_finished") return current;
+      const next = { ...current, [normalized]: "not_finished" as VideoWatchStatus };
+      writeWatchStatusById(next);
+      return next;
+    });
+  }, []);
+
   const markVideoOpened = useCallback((videoId: string | null | undefined) => {
     setSeenIds((current) => {
       const next = addId(current, videoId);
@@ -203,6 +226,7 @@ export function useLocalVideoActivity(): VideoActivityController {
     savedIds,
     featuredIds,
     watchStatusById,
+    markVideoStarted,
     markVideoOpened,
     toggleVideoSaved,
     toggleVideoFeatured,

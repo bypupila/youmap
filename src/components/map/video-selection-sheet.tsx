@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useMemo } from "react";
-import { CaretLeft, CaretRight, ChatCircle, CheckCircle, Clock, Eye, Heart, MapPin, Play, X } from "@phosphor-icons/react";
+import { BatteryCharging, CaretLeft, CaretRight, ChatCircle, CheckCircle, Clock, Eye, Heart, MapPin, Play, X } from "@phosphor-icons/react";
 import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -15,6 +15,8 @@ import {
   formatVideoDuration,
   formatVideoPlace,
   getYouTubeHref,
+  getVideoWatchStateLabel,
+  getVideoWatchStateTone,
 } from "@/components/map/video-viewer-utils";
 import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
 import type { TravelVideoLocation } from "@/lib/types";
@@ -29,9 +31,11 @@ interface VideoSelectionSheetProps {
   onClose: () => void;
   onChangeVideo: (video: TravelVideoLocation) => void;
   onOpenInYouTube?: (video: TravelVideoLocation) => void;
+  openButtonLabel?: string;
+  onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
 }
 
-export function VideoSelectionSheet({ open, videos, currentVideo, activity, onClose, onChangeVideo, onOpenInYouTube }: VideoSelectionSheetProps) {
+export function VideoSelectionSheet({ open, videos, currentVideo, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, onPlaybackStateChange }: VideoSelectionSheetProps) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
   const sections = useMemo(() => buildCountryVideoSections(videos, currentVideo), [currentVideo, videos]);
 
@@ -42,6 +46,16 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
   );
   const currentSection = sections.find((section) => section.country_code === currentCountryCode) || sections[0] || null;
   const currentSeen = Boolean(currentVideo?.youtube_video_id && activity.seenIds.has(currentVideo.youtube_video_id));
+  const currentOpenedInYoutube = Boolean(currentVideo?.youtube_video_id && activity.openedIds.has(currentVideo.youtube_video_id));
+  const currentWatchStatus = currentVideo?.youtube_video_id ? activity.watchStatusById[currentVideo.youtube_video_id] || (currentSeen ? "watched" : undefined) : undefined;
+  const currentWatchBadgeLabel = getVideoWatchStateLabel({
+    openedInYoutube: currentOpenedInYoutube,
+    watchStatus: currentWatchStatus,
+  });
+  const currentWatchBadgeTone = getVideoWatchStateTone({
+    openedInYoutube: currentOpenedInYoutube,
+    watchStatus: currentWatchStatus,
+  });
   const youtubeHref = getYouTubeHref(currentVideo);
 
   function go(direction: -1 | 1) {
@@ -61,9 +75,9 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
         country_code: currentVideo.country_code,
         country_name: currentVideo.country_name,
       });
-      activity.markVideoOpened(currentVideo.youtube_video_id);
-      onOpenInYouTube?.(currentVideo);
     }
+    activity.markVideoOpened(currentVideo.youtube_video_id);
+    onOpenInYouTube?.(currentVideo);
     window.open(youtubeHref, "_blank", "noopener");
   }
 
@@ -115,27 +129,45 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
                     title={currentVideo?.title || "Video seleccionado"}
                     youtubeHref={youtubeHref}
                     thumbnailUrl={currentVideo?.thumbnail_url || null}
+                    openButtonLabel={openButtonLabel || (currentOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
                     onOpenInYouTube={openYouTubeVideo}
+                    onPlaybackStateChange={onPlaybackStateChange}
                     isMadeForKids={Boolean(currentVideo?.made_for_kids)}
                     frameClassName="max-h-[32dvh] lg:max-h-none"
                   />
                 </div>
 
-                <div className="mt-2 flex items-center justify-center gap-2">
+                <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                   <button
                     type="button"
                     onClick={() => go(-1)}
-                    className="flex h-9 min-w-[116px] items-center justify-center gap-1 rounded-md border border-white/10 bg-black/45 px-3 text-[12px] text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95"
+                    className="justify-self-start flex h-9 min-w-[116px] items-center justify-center gap-1 rounded-md border border-white/10 bg-black/45 px-3 text-[12px] text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95"
                     aria-label="Video anterior"
                   >
                     <CaretLeft size={16} />
                     Anterior
                   </button>
 
+                  <span
+                    className={cn(
+                      "inline-flex h-9 items-center gap-1 rounded-full border px-2.5 text-[10px] font-black uppercase tracking-[0.08em]",
+                      currentWatchBadgeTone === "youtube"
+                        ? "border-[rgba(225,84,58,0.45)] bg-[rgba(225,84,58,0.15)] text-[#ffbeb7]"
+                        : currentWatchBadgeTone === "success"
+                          ? "border-[rgba(85,200,123,0.45)] bg-[rgba(85,200,123,0.12)] text-[#c8f3d6]"
+                          : currentWatchBadgeTone === "active"
+                            ? "border-[rgba(255,186,73,0.4)] bg-[rgba(255,186,73,0.12)] text-[#ffe0ab]"
+                            : "border-white/10 bg-white/[0.04] text-[#d8dee6]"
+                    )}
+                  >
+                    <BatteryCharging size={12} weight="fill" />
+                    {currentWatchBadgeLabel}
+                  </span>
+
                   <button
                     type="button"
                     onClick={() => go(1)}
-                    className="flex h-9 min-w-[116px] items-center justify-center gap-1 rounded-md border border-white/10 bg-black/45 px-3 text-[12px] text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95"
+                    className="justify-self-end flex h-9 min-w-[116px] items-center justify-center gap-1 rounded-md border border-white/10 bg-black/45 px-3 text-[12px] text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95"
                     aria-label="Siguiente video"
                   >
                     Siguiente
@@ -158,10 +190,6 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
                       {currentSeen ? "Visto" : "Nuevo"}
                     </span>
                   </div>
-
-                  <h3 className="mt-3 line-clamp-3 text-[22px] font-semibold leading-7 text-[#f4f7fb] lg:text-[26px] lg:leading-8">
-                    {currentVideo?.title || "Untitled video"}
-                  </h3>
 
                   <div className="mt-3 grid grid-cols-3 gap-2">
                     <MetricPill icon={Eye} label="Vistas" value={formatCompactNumber(Number(currentVideo?.view_count || 0))} />
