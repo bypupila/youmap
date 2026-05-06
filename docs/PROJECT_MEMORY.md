@@ -64,6 +64,7 @@ npm run dev
 ## Marca y posicionamiento
 
 - Marca principal: `TravelYourMap - BY PUPILA`.
+- Contrato de diseno y compliance visual: `Design.MD`.
 - Promesa central: convertir un canal de viajes en una experiencia geografica interactiva y publicable.
 - Tono de marca: editorial, premium, tecnico y directo; evita UI generica o demasiado neutra.
 - Identidad visual: superficies oscuras, acentos rojos, glass/blur controlado y foco fuerte en el contenido.
