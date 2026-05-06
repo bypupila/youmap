@@ -1,6 +1,6 @@
 # Tasks: Creator Travel Business Layer
 
-Estado: plan pendiente de aprobacion.
+Estado: tanda 1 aplicada. Foco actual: media kit publico + dashboard negocio + pricing. OAuth y portal de marcas quedan como añadidos futuros.
 
 ## P0 - Convertir concepto en producto vendible
 
@@ -16,7 +16,7 @@ Estado: plan pendiente de aprobacion.
 
 3. Crear modelo de eventos first-party.
    - Archivos probables: nueva migracion Neon, `src/app/api/map/events/route.ts`, helpers en `src/lib`.
-   - Eventos: `map_view`, `country_select`, `video_panel_open`, `youtube_fallback_open`, `sponsor_impression`, `sponsor_click`, `inquiry_submit`, `poll_vote`.
+   - Eventos: `map_view`, `country_select`, `video_panel_open`, `youtube_external_open`, `sponsor_impression`, `sponsor_click`, `inquiry_submit`, `poll_vote`.
    - Validacion: eventos se guardan con hash anonimo y no se registran para `made_for_kids=true` cuando aplica.
 
 4. Corregir sponsor attribution.
@@ -28,6 +28,7 @@ Estado: plan pendiente de aprobacion.
    - Archivos probables: nueva API `src/app/api/sponsors/inquiries/route.ts`, componente en dashboard/map rail.
    - Actividad: listar leads, cambiar status, agregar notas, ver presupuesto/contacto.
    - Validacion: owner ve propuestas reales; viewer no accede.
+   - Estado: implementado (listado + cambio de estado + acceso owner-only + demo mode).
 
 6. Crear media kit publico.
    - Archivos probables: `src/app/u/[username]/media-kit/page.tsx` o seccion linkable en `/u/[username]`.

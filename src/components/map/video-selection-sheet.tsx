@@ -28,9 +28,10 @@ interface VideoSelectionSheetProps {
   activity: VideoActivityController;
   onClose: () => void;
   onChangeVideo: (video: TravelVideoLocation) => void;
+  onOpenInYouTube?: (video: TravelVideoLocation) => void;
 }
 
-export function VideoSelectionSheet({ open, videos, currentVideo, activity, onClose, onChangeVideo }: VideoSelectionSheetProps) {
+export function VideoSelectionSheet({ open, videos, currentVideo, activity, onClose, onChangeVideo, onOpenInYouTube }: VideoSelectionSheetProps) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
   const sections = useMemo(() => buildCountryVideoSections(videos, currentVideo), [currentVideo, videos]);
 
@@ -61,6 +62,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
         country_name: currentVideo.country_name,
       });
       activity.markVideoOpened(currentVideo.youtube_video_id);
+      onOpenInYouTube?.(currentVideo);
     }
     window.open(youtubeHref, "_blank", "noopener");
   }

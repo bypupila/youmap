@@ -48,7 +48,7 @@ interface PublicChannelRow {
   last_synced_at: string | null;
 }
 
-const FALLBACK_SHARE_HOST = "https://youmap.bypupila.com";
+const FALLBACK_SHARE_HOST = "https://travelyourmap.bypupila.com";
 const BY_PUPILA_KEYS = new Set(["bypupila", "by.pupila"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

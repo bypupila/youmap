@@ -1,6 +1,13 @@
-import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import {
+  getRequestHashesFromHeaders,
+  isPublicMapPath,
+  recordMapEvent,
+  requestUserOwnsChannel,
+  resolvePathFromRequest,
+  resolveReferrerFromRequest,
+} from "@/lib/map-events";
 import { sql } from "@/lib/neon";
 
 const payloadSchema = z.object({
@@ -35,8 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Canal no encontrado" }, { status: 404 });
     }
 
-    const ipHash = hashValue(readClientIp(request.headers));
-    const userAgentHash = hashValue(normalizeOptionalString(request.headers.get("user-agent")));
+    const requestHashes = getRequestHashesFromHeaders(request.headers);
 
     await sql`
       insert into public.sponsor_inquiries (
@@ -64,10 +70,31 @@ export async function POST(request: Request) {
         ${payload.proposedBudgetUsd || null},
         ${payload.brief},
         ${payload.mapUrl},
-        ${ipHash},
-        ${userAgentHash}
+        ${requestHashes.ipHash},
+        ${requestHashes.userAgentHash}
       )
     `;
+
+    const path = resolvePathFromRequest(request, payload.mapUrl);
+    if (isPublicMapPath(path) && !(await requestUserOwnsChannel(request, payload.channelId))) {
+      try {
+        await recordMapEvent({
+          channelId: payload.channelId,
+          eventType: "inquiry_submit",
+          viewerMode: "viewer",
+          path,
+          referrer: resolveReferrerFromRequest(request, null),
+          ipHash: requestHashes.ipHash,
+          userAgentHash: requestHashes.userAgentHash,
+          metadata: {
+            brand_name: payload.brandName,
+            proposed_budget_usd: payload.proposedBudgetUsd || null,
+          },
+        });
+      } catch (eventError) {
+        console.warn("[api/sponsors/inquiry] map event skipped", eventError);
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -79,30 +106,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: "No se pudo registrar la solicitud" }, { status: 500 });
   }
-}
-
-function readClientIp(headers: Headers) {
-  const forwardedFor = normalizeOptionalString(headers.get("x-forwarded-for"));
-  if (forwardedFor) {
-    const firstIp = forwardedFor.split(",")[0]?.trim();
-    if (firstIp) return firstIp;
-  }
-
-  const realIp = normalizeOptionalString(headers.get("x-real-ip"));
-  if (realIp) return realIp;
-
-  return null;
-}
-
-function normalizeOptionalString(value: string | null | undefined) {
-  if (!value) return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function hashValue(value: string | null) {
-  if (!value) return null;
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function isValidUrl(value: string) {

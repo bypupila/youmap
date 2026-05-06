@@ -24,11 +24,11 @@ Convertir TravelYourMap en una herramienta escalable para creadores de viajes en
 - La actividad de video (`seen`, `opened`, `saved`, `featured`) existe, pero vive en `localStorage`; no es todavia un producto de analytics server-side ni un argumento fuerte para sponsors.
 - `AnalyticsDashboard` y `/api/analytics/[channelId]` existen, pero el dashboard principal actual usa `MapExperience`; la analitica comercial no esta centralizada como cockpit del creador.
 - Las metricas actuales mezclan mucho YouTube API Data (`view_count`, `total_views`) con estimaciones propias (`monthly_visitors`) sin una separacion fuerte para venta comercial.
-- `SponsorManagerDialog` permite crear sponsors, pero no hay inbox/CRM de propuestas, estados comerciales, notas, export, notificaciones, ni pipeline de cierre.
-- `POST /api/sponsors/click` recibe `channelId`, pero actualmente no persiste `channel_id`; eso limita atribucion por canal en reporting.
+- `SponsorManagerDialog` permite crear sponsors y ahora existe inbox comercial owner-only en el rail (`/api/sponsors/inquiries`) con pipeline base de estados (`new`, `reviewed`, `contacted`, `won`, `lost`).
+- Tanda 1 agrega atribucion comercial first-party: `map_events`, `POST /api/map/events`, sponsor impressions deduplicadas por sesion de pagina, clicks con `channel_id` y stats con impresiones/CTR.
 - No existe una ruta dedicada tipo media kit exportable para marcas (`/u/[username]/media-kit` o equivalente).
 - No existe un modelo de paquetes comerciales por destino, pais, ruta o temporada.
-- No existe tracking server-side de impresiones del mapa, impresiones de sponsor, aperturas de embed, clicks por destino o conversiones de inquiry.
+- El tracking server-side inicial cubre mapa publico, seleccion de pais, panel de video, apertura externa de YouTube, impresiones/clicks de sponsor, inquiries y votos; excluye owner self-view y eventos de video `made_for_kids=true` cuando aplica.
 - Terms/Privacy ya existen como base, pero la promesa comercial publica aun debe evitar prometer que cada reproduccion cuenta como view o que TravelYourMap participa en ad revenue de YouTube.
 
 ## Constraints oficiales relevantes
@@ -86,7 +86,7 @@ Convertir TravelYourMap en una herramienta escalable para creadores de viajes en
 
 8. Que eventos propios deben persistirse?
    - Impacto: habilita reporting real.
-   - Recommended answer: map_view, country_select, video_panel_open, youtube_fallback_open, sponsor_impression, sponsor_click, inquiry_submit, poll_vote.
+   - Recommended answer: map_view, country_select, video_panel_open, youtube_external_open, sponsor_impression, sponsor_click, inquiry_submit, poll_vote.
    - Status: inferred.
 
 9. Como se separan analytics YouTube vs TravelYourMap?

@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAMES } from "@/lib/auth-session";
 
-const VANITY_HOSTS = new Set(["youmap.bypupila.com", "www.youmap.bypupila.com"]);
+const VANITY_HOSTS = new Set([
+  "travelyourmap.bypupila.com",
+  "www.travelyourmap.bypupila.com",
+  "youmap.bypupila.com",
+  "www.youmap.bypupila.com",
+]);
 const RESERVED_PATHS = new Set(["", "admin", "auth", "dashboard", "onboarding", "pricing", "explore", "map", "api", "u", "_next", "monitoring"]);
 
 export async function proxy(request: NextRequest) {

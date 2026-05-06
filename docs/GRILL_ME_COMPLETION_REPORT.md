@@ -92,10 +92,10 @@ Este documento cierra el bloque de decisiones trabajado con el skill Grill Me pa
 - `npm run build`: OK.
 - Smoke HTTP local: `/`, `/u/demo`, `/map?channelId=demo-channel` responden `200`.
 - Smoke HTTP local: `/admin` sin sesion responde `307` a auth.
-- Smoke HTTP local con `Host: youmap.bypupila.com`: `/admin` queda reservado y redirige a auth, `/u/demo` responde `200`, `/demo` responde `200` como vanity username.
+- Smoke HTTP local con `Host: travelyourmap.bypupila.com`: `/admin` queda reservado y redirige a auth, `/u/demo` responde `200`, `/demo` responde `200` como vanity username.
 - Smoke HTTP local: `/admin` con cookie superadmin responde `200` y renderiza directorio/auditoria.
 - Smoke HTTP local: `/api/map/polls/close-expired` responde `200` con `ok: true`.
-- Deploy produccion Vercel: `dpl_2m8jQPTTUppqwoYFxYZuTQrFre1d`, alias `https://youmap.bypupila.com`.
+- Deploy produccion Vercel: `dpl_2m8jQPTTUppqwoYFxYZuTQrFre1d`, alias `https://travelyourmap.bypupila.com`.
 - Smoke produccion: `/`, `/u/demo`, `/demo`, `/map?channelId=demo-channel` responden `200`.
 - Smoke produccion: `/admin` sin sesion responde `307`.
 - Smoke produccion: `/api/map/polls/close-expired` sin token responde `401`, confirmando proteccion manual.

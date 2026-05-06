@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import {
   BookmarkSimple,
+  CaretDown,
   CaretLeft,
   CaretRight,
   CheckCircle,
@@ -32,6 +34,7 @@ interface DesktopVideoMapCardProps {
   activity: VideoActivityController;
   onClose: () => void;
   onChangeVideo: (video: TravelVideoLocation) => void;
+  onOpenInYouTube?: (video: TravelVideoLocation) => void;
 }
 
 export function DesktopVideoMapCard({
@@ -40,7 +43,9 @@ export function DesktopVideoMapCard({
   activity,
   onClose,
   onChangeVideo,
+  onOpenInYouTube,
 }: DesktopVideoMapCardProps) {
+  const [watchMenuOpen, setWatchMenuOpen] = useState(false);
   if (!currentVideo) return null;
 
   const selectedVideo = currentVideo;
@@ -54,6 +59,9 @@ export function DesktopVideoMapCard({
   const isSeen = activity.seenIds.has(selectedVideo.youtube_video_id);
   const isSaved = activity.savedIds.has(selectedVideo.youtube_video_id);
   const isFeatured = activity.featuredIds.has(selectedVideo.youtube_video_id);
+  const watchStatus = activity.watchStatusById[selectedVideo.youtube_video_id] || (isSeen ? "watched" : undefined);
+  const publishedMs = selectedVideo.published_at ? new Date(selectedVideo.published_at).getTime() : 0;
+  const isNewThisWeek = publishedMs > 0 && Date.now() - publishedMs <= 7 * 24 * 60 * 60 * 1000;
 
   function go(direction: -1 | 1) {
     if (orderedVideos.length === 0) return;
@@ -73,27 +81,51 @@ export function DesktopVideoMapCard({
         country_name: selectedVideo.country_name,
       });
       activity.markVideoOpened(selectedVideo.youtube_video_id);
+      onOpenInYouTube?.(selectedVideo);
     }
     window.open(youtubeHref, "_blank", "noopener");
   }
 
   return (
     <article className="pointer-events-auto w-full overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/90 text-sm text-white shadow-[0_28px_90px_-48px_rgba(0,0,0,0.94)] backdrop-blur-2xl">
-      <header className="flex items-center justify-between gap-2 border-b border-white/10 px-2.5 py-1.5">
+      <header className="flex items-center justify-between gap-2 px-2.5 py-1.5">
         <div className="min-w-0">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#ff6b64]">Video seleccionado</p>
           <p className="mt-0.5 truncate text-[12px] text-[#d8dee6]">
-            {countryCodeToFlag(selectedVideo.country_code)} {selectedVideo.country_name || selectedVideo.country_code} / {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
+            {countryCodeToFlag(selectedVideo.country_code)} {selectedVideo.country_name || selectedVideo.country_code} · {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Cerrar video seleccionado"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[#dce4ed] transition hover:bg-white/[0.08] active:scale-95"
-        >
-          <X size={15} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => activity.toggleVideoSaved(selectedVideo.youtube_video_id)}
+            aria-label={isSaved ? "Quitar de guardados" : "Guardar video"}
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-lg border transition active:scale-95",
+              isSaved ? "border-[rgba(255, 90, 61,0.36)] bg-[rgba(255, 90, 61,0.18)] text-[#ffb7b3]" : "border-white/10 bg-white/[0.04] text-[#dce4ed] hover:bg-white/[0.08]"
+            )}
+          >
+            <BookmarkSimple size={14} weight={isSaved ? "fill" : "regular"} />
+          </button>
+          <button
+            type="button"
+            onClick={() => activity.toggleVideoFeatured(selectedVideo.youtube_video_id)}
+            aria-label={isFeatured ? "Quitar destacado" : "Destacar video"}
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-lg border transition active:scale-95",
+              isFeatured ? "border-[rgba(255, 90, 61,0.36)] bg-[rgba(255, 90, 61,0.18)] text-[#ffb7b3]" : "border-white/10 bg-white/[0.04] text-[#dce4ed] hover:bg-white/[0.08]"
+            )}
+          >
+            <Star size={14} weight={isFeatured ? "fill" : "regular"} />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar video seleccionado"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[#dce4ed] transition hover:bg-white/[0.08] active:scale-95"
+          >
+            <X size={15} />
+          </button>
+        </div>
       </header>
 
       <div className="p-2">
@@ -129,53 +161,58 @@ export function DesktopVideoMapCard({
         </div>
 
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] shadow-[0_12px_30px_-16px_rgba(255, 90, 61,0.9)]", isSeen ? "bg-[#ff5a3d] text-white" : "bg-white text-[#e1543a]")}>
-            {isSeen ? <CheckCircle size={12} weight="fill" /> : null}
-            {isSeen ? "Visto" : "Nuevo"}
-          </span>
+          <div className="relative">
+            {isSeen ? (
+              <>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-full bg-black px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white"
+                  onClick={() => setWatchMenuOpen((current) => !current)}
+                >
+                  <CheckCircle size={12} weight="fill" />
+                  Visto
+                  <CaretDown size={12} />
+                </button>
+                {watchMenuOpen ? (
+                  <div className="absolute left-0 top-[calc(100%+6px)] z-20 min-w-[148px] overflow-hidden rounded-lg border border-white/10 bg-[#060a11] p-1 shadow-lg">
+                    <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished"); setWatchMenuOpen(false); }} className={cn("block w-full rounded-md px-2 py-1.5 text-left text-[11px] hover:bg-white/[0.08]", watchStatus === "not_finished" && "text-[#ff6a4e]")}>
+                      Falta por ver
+                    </button>
+                    <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watched"); setWatchMenuOpen(false); }} className={cn("block w-full rounded-md px-2 py-1.5 text-left text-[11px] hover:bg-white/[0.08]", watchStatus === "watched" && "text-[#ff6a4e]")}>
+                      Visto completo
+                    </button>
+                    <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later"); setWatchMenuOpen(false); }} className={cn("block w-full rounded-md px-2 py-1.5 text-left text-[11px] hover:bg-white/[0.08]", watchStatus === "watch_later" && "text-[#ff6a4e]")}>
+                      Ver mas tarde
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+            {!isSeen && isNewThisWeek ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#e1543a] shadow-[0_12px_30px_-16px_rgba(255, 90, 61,0.9)]">
+                Nuevo
+              </span>
+            ) : null}
+          </div>
           <span className="rounded bg-black/70 px-1.5 py-1 text-[10px] font-medium text-white">
             {formatVideoDuration(selectedVideo.duration_seconds)}
           </span>
         </div>
 
         <h3 className="mt-2 line-clamp-2 text-[12.5px] font-semibold leading-[17px] text-[#f4f7fb] xl:text-[13px] xl:leading-[18px]">{selectedVideo.title}</h3>
-        <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 text-[10.5px] text-[#aab2bc]">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-[#aab2bc]">
           <p className="flex min-w-0 items-center gap-1.5">
             <MapPin size={13} className="shrink-0" />
             <span className="truncate">{formatVideoPlace(selectedVideo)}</span>
-          </p>
-          <p className="flex shrink-0 items-center gap-1.5">
-            <Clock size={13} />
-            {formatVideoDate(selectedVideo.published_at)}
           </p>
           <p className="flex items-center gap-1.5">
             <Eye size={13} />
             {formatCompactNumber(Number(selectedVideo.view_count || 0))} vistas
           </p>
-          <div className="flex justify-end gap-1">
-            <button
-              type="button"
-              onClick={() => activity.toggleVideoSaved(selectedVideo.youtube_video_id)}
-              aria-label={isSaved ? "Quitar de guardados" : "Guardar video"}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-lg border transition active:scale-95",
-                isSaved ? "border-[rgba(255, 90, 61,0.36)] bg-[rgba(255, 90, 61,0.18)] text-[#ffb7b3]" : "border-white/10 bg-white/[0.04] text-[#dce4ed] hover:bg-white/[0.08]"
-              )}
-            >
-              <BookmarkSimple size={14} weight={isSaved ? "fill" : "regular"} />
-            </button>
-            <button
-              type="button"
-              onClick={() => activity.toggleVideoFeatured(selectedVideo.youtube_video_id)}
-              aria-label={isFeatured ? "Quitar destacado" : "Destacar video"}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-lg border transition active:scale-95",
-                isFeatured ? "border-[rgba(255, 90, 61,0.36)] bg-[rgba(255, 90, 61,0.18)] text-[#ffb7b3]" : "border-white/10 bg-white/[0.04] text-[#dce4ed] hover:bg-white/[0.08]"
-              )}
-            >
-              <Star size={14} weight={isFeatured ? "fill" : "regular"} />
-            </button>
-          </div>
+          <p className="flex shrink-0 items-center gap-1.5">
+            <Clock size={13} />
+            {formatVideoDate(selectedVideo.published_at)}
+          </p>
         </div>
       </div>
     </article>

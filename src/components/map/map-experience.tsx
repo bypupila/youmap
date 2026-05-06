@@ -31,7 +31,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import posthog from "posthog-js";
@@ -50,8 +50,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ManualVerificationItem, MapSummary } from "@/lib/map-data";
+import type { MapEventType } from "@/lib/map-event-types";
 import type { MapPollRecord } from "@/lib/map-polls";
 import type { MapRailSponsor, MapViewerContext } from "@/lib/map-public";
+import { SPONSOR_INQUIRY_STATUSES, type SponsorInquiryStatus } from "@/lib/sponsor-inquiries";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
@@ -62,6 +64,13 @@ type MobileMapTab = "overview" | "map" | "videos" | "community" | "more";
 type MapViewMode = "viewer" | "creator" | "demo";
 type DesktopMapTab = VideoActivityTab;
 type GlobeCommandAction = "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation";
+type MapClientEventPayload = {
+  countryCode?: string | null;
+  youtubeVideoId?: string | null;
+  sponsorId?: string | null;
+  pollId?: string | null;
+  metadata?: Record<string, unknown>;
+};
 
 const EMPTY_MANUAL_QUEUE: ManualVerificationItem[] = [];
 const EMPTY_SPONSORS: MapRailSponsor[] = [];
@@ -73,6 +82,13 @@ const DEFAULT_VIEWER: MapViewerContext = {
   isSuperAdmin: false,
   shareUrl: "",
   adminUrl: null,
+};
+const SPONSOR_INQUIRY_STATUS_LABEL: Record<SponsorInquiryStatus, string> = {
+  new: "Nuevo",
+  reviewed: "Revisado",
+  contacted: "Contactado",
+  won: "Ganado",
+  lost: "Perdido",
 };
 
 interface PollOptionInput {
@@ -118,7 +134,7 @@ type CountryBucket = {
   country_name: string;
   count: number;
   views: number;
-  cities: string[];
+  cities: Array<{ name: string; count: number }>;
 };
 
 type DestinationCandidate = {
@@ -150,6 +166,24 @@ type YouTubeDataHealth = {
   latestRefreshedAt: string | null;
   staleVideos: number;
   trackedVideos: number;
+};
+
+type SponsorInquiryRecord = {
+  id: string;
+  channel_id: string;
+  channel_name: string;
+  brand_name: string;
+  contact_name: string;
+  contact_email: string;
+  website_url: string | null;
+  whatsapp: string | null;
+  proposed_budget_usd: number | null;
+  brief: string;
+  status: SponsorInquiryStatus;
+  source: string;
+  map_url: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type MapShellProps = {
@@ -189,6 +223,8 @@ type MapShellProps = {
   interactive: boolean;
   viewMode: MapViewMode;
   canUseAdminPanels: boolean;
+  canToggleViewerPreview: boolean;
+  isPreviewingViewer: boolean;
   isDemoMode: boolean;
   desktopMapTab: DesktopMapTab;
   mobileMenuOpen: boolean;
@@ -204,6 +240,9 @@ type MapShellProps = {
   createSponsor: (input: SponsorInput) => Promise<void>;
   deleteSponsor: (sponsorId: string) => Promise<void>;
   resetDemoSponsors: () => void;
+  onSponsorImpression: (sponsor: MapRailSponsor) => void;
+  onSponsorClick: (sponsor: MapRailSponsor) => void;
+  onYouTubeExternalOpen: (video: TravelVideoLocation) => void;
   issueGlobeCommand: (action: GlobeCommandAction) => void;
   locateFirstSearchResult: () => void;
   selectCountry: (countryCode: string | null) => void;
@@ -213,6 +252,7 @@ type MapShellProps = {
   copyShareUrl: () => Promise<void>;
   handleRefresh: () => Promise<void>;
   setMissingVideosOpen: Dispatch<SetStateAction<boolean>>;
+  toggleViewerPreview: () => void;
   scrollToRail: (ref: RefObject<HTMLDivElement | null>) => void;
 };
 
@@ -253,6 +293,7 @@ export function MapExperience({
   const [missingVideosOpen, setMissingVideosOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopMapTab, setDesktopMapTab] = useState<DesktopMapTab>("all");
+  const [isPreviewingViewer, setIsPreviewingViewer] = useState(false);
   const [globeCommand, setGlobeCommand] = useState<{ id: number; action: GlobeCommandAction } | null>(null);
   const [pollState, setPollState] = useState<MapPollRecord | null>(activePoll);
   const [sponsorItems, setSponsorItems] = useState<MapRailSponsor[]>(sponsors);
@@ -265,6 +306,8 @@ export function MapExperience({
   const videosRailRef = useRef<HTMLDivElement | null>(null);
   const votesRailRef = useRef<HTMLDivElement | null>(null);
   const sponsorsRailRef = useRef<HTMLDivElement | null>(null);
+  const trackedMapViewRef = useRef<string | null>(null);
+  const trackedSponsorImpressionIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setItems(videoLocations);
@@ -429,9 +472,11 @@ export function MapExperience({
       trackedVideos,
     };
   }, [items]);
-  const resolvedViewMode: MapViewMode = viewMode || (viewer.isOwner ? "creator" : "viewer");
+  const baseViewMode: MapViewMode = viewMode || (viewer.isOwner ? "creator" : "viewer");
+  const canToggleViewerPreview = baseViewMode === "creator" || baseViewMode === "demo" || viewer.isOwner;
+  const resolvedViewMode: MapViewMode = isPreviewingViewer && canToggleViewerPreview ? "viewer" : baseViewMode;
   const isDemoMode = resolvedViewMode === "demo";
-  const canUseAdminPanels = resolvedViewMode === "creator" || resolvedViewMode === "demo" || viewer.isOwner;
+  const canUseAdminPanels = resolvedViewMode === "creator" || resolvedViewMode === "demo";
   const hideLivePollMetrics = Boolean(
     pollState && pollState.status === "live" && !viewer.isOwner && !viewer.isAuthenticated
   );
@@ -451,6 +496,103 @@ export function MapExperience({
   const mapUrl = shellViewer.shareUrl || (channelId ? `/map?channelId=${encodeURIComponent(channelId)}` : "/map");
   const shouldShowChrome = showHeader || showLegend || showOperationsPanel || showActiveVideoCard;
   const shouldUseDesktopVideoCard = shouldShowChrome && isDesktopViewport;
+  const publicMapAnalyticsEnabled = Boolean(channelId && interactive && resolvedViewMode === "viewer" && !viewer.isOwner && !isDemoMode);
+
+  const trackMapEvent = useCallback(
+    (eventType: MapEventType, payload: MapClientEventPayload = {}) => {
+      if (!publicMapAnalyticsEnabled || !channelId || typeof window === "undefined") return;
+
+      const metadata = {
+        ...payload.metadata,
+        viewer_authenticated: viewer.isAuthenticated,
+      };
+
+      void fetch("/api/map/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId,
+          eventType,
+          viewerMode: resolvedViewMode,
+          path: window.location.pathname,
+          referrer: document.referrer || null,
+          countryCode: payload.countryCode || null,
+          youtubeVideoId: payload.youtubeVideoId || null,
+          sponsorId: payload.sponsorId || null,
+          pollId: payload.pollId || null,
+          metadata,
+        }),
+        keepalive: true,
+      }).catch(() => undefined);
+    },
+    [channelId, publicMapAnalyticsEnabled, resolvedViewMode, viewer.isAuthenticated]
+  );
+
+  useEffect(() => {
+    if (!publicMapAnalyticsEnabled || !channelId || typeof window === "undefined") return;
+
+    const key = `${channelId}:${window.location.pathname}`;
+    if (trackedMapViewRef.current === key) return;
+
+    trackedMapViewRef.current = key;
+    trackMapEvent("map_view", {
+      metadata: {
+        video_count: items.length,
+        country_count: resolvedSummary.total_countries,
+      },
+    });
+  }, [channelId, items.length, publicMapAnalyticsEnabled, resolvedSummary.total_countries, trackMapEvent]);
+
+  const trackSponsorImpression = useCallback(
+    (sponsor: MapRailSponsor) => {
+      if (!sponsor.id || sponsor.isExample || trackedSponsorImpressionIdsRef.current.has(sponsor.id)) return;
+
+      trackedSponsorImpressionIdsRef.current.add(sponsor.id);
+      trackMapEvent("sponsor_impression", {
+        sponsorId: sponsor.id,
+        metadata: {
+          sponsor_name: sponsor.brand_name,
+          sponsor_countries: sponsor.country_codes,
+        },
+      });
+    },
+    [trackMapEvent]
+  );
+
+  const trackSponsorClick = useCallback(
+    (sponsor: MapRailSponsor) => {
+      if (!publicMapAnalyticsEnabled || !channelId || !sponsor.id || sponsor.isExample || typeof window === "undefined") return;
+
+      void fetch("/api/sponsors/click", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sponsorId: sponsor.id,
+          channelId,
+          countryCode: selectedCountryCode || null,
+          path: window.location.pathname,
+          referrer: document.referrer || null,
+        }),
+        keepalive: true,
+      }).catch(() => undefined);
+    },
+    [channelId, publicMapAnalyticsEnabled, selectedCountryCode]
+  );
+
+  const trackYouTubeExternalOpen = useCallback(
+    (video: TravelVideoLocation) => {
+      if (video.made_for_kids) return;
+
+      trackMapEvent("youtube_external_open", {
+        youtubeVideoId: video.youtube_video_id,
+        countryCode: video.country_code,
+        metadata: {
+          video_title: video.title,
+        },
+      });
+    },
+    [trackMapEvent]
+  );
 
   async function reloadMapData() {
     if (!channelId) return;
@@ -529,6 +671,7 @@ export function MapExperience({
     setSelectedCountryCode(normalized);
     setFocusCountryCode(normalized);
     if (normalized) {
+      trackMapEvent("country_select", { countryCode: normalized });
       posthog.capture("map_country_selected", {
         country_code: normalized,
         channel_id: channelId,
@@ -545,6 +688,15 @@ export function MapExperience({
 
   function openVideo(video: TravelVideoLocation) {
     setSelectedVideo(video);
+    if (!video.made_for_kids) {
+      trackMapEvent("video_panel_open", {
+        youtubeVideoId: video.youtube_video_id,
+        countryCode: video.country_code,
+        metadata: {
+          video_title: video.title,
+        },
+      });
+    }
     posthog.capture("map_video_opened", {
       video_id: video.youtube_video_id,
       video_title: video.title,
@@ -581,6 +733,7 @@ export function MapExperience({
         await navigator.clipboard.writeText(shareUrl);
       }
       setCopyState("copied");
+      trackMapEvent("share_url_copied");
       posthog.capture("map_share_url_copied", {
         channel_id: channelId,
         channel_name: channel.channel_name,
@@ -708,6 +861,8 @@ export function MapExperience({
     interactive,
     viewMode: resolvedViewMode,
     canUseAdminPanels,
+    canToggleViewerPreview,
+    isPreviewingViewer,
     isDemoMode,
     desktopMapTab,
     setDesktopMapTab,
@@ -723,6 +878,9 @@ export function MapExperience({
     createSponsor,
     deleteSponsor,
     resetDemoSponsors,
+    onSponsorImpression: trackSponsorImpression,
+    onSponsorClick: trackSponsorClick,
+    onYouTubeExternalOpen: trackYouTubeExternalOpen,
     locateFirstSearchResult,
     issueGlobeCommand,
     selectCountry,
@@ -732,6 +890,7 @@ export function MapExperience({
     copyShareUrl,
     handleRefresh,
     setMissingVideosOpen,
+    toggleViewerPreview: () => setIsPreviewingViewer((current) => !current),
     scrollToRail,
   };
 
@@ -801,6 +960,7 @@ export function MapExperience({
         videos={searchFilteredVideos}
         currentVideo={pinnedVideo}
         activity={videoActivity}
+        onOpenInYouTube={trackYouTubeExternalOpen}
         onClose={() => setSelectedVideo(null)}
         onChangeVideo={(video) => setSelectedVideo(video)}
       />
@@ -819,9 +979,7 @@ function MapAppShell(props: MapShellProps) {
     <>
       <MobileMapShell {...props} mobileTab={mobileTab} setMobileTab={setMobileTab} />
 
-      <div className="pointer-events-none absolute inset-0 z-[320] hidden min-h-0 lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
-        <MapSidebar {...props} />
-
+      <div className="pointer-events-none absolute inset-0 z-[320] hidden min-h-0 lg:grid lg:grid-cols-1">
         <main className="pointer-events-none relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]">
           <MapTopBar {...props} />
 
@@ -1208,12 +1366,15 @@ function MobileCommunityView(props: MapShellProps) {
           <FanVoteSummary candidates={props.destinationCandidates} onSelect={props.selectCountry} />
         )}
         <SponsorsRail
+          channelId={props.channelId}
           sponsors={props.sponsors}
           viewer={props.viewer}
           isDemoMode={props.isDemoMode}
           createSponsor={props.createSponsor}
           deleteSponsor={props.deleteSponsor}
           resetDemoSponsors={props.resetDemoSponsors}
+          onSponsorImpression={props.onSponsorImpression}
+          onSponsorClick={props.onSponsorClick}
         />
       </div>
     </div>
@@ -1237,12 +1398,15 @@ function MobileMoreView(props: MapShellProps) {
           />
         ) : null}
         <SponsorsRail
+          channelId={props.channelId}
           sponsors={props.sponsors}
           viewer={props.viewer}
           isDemoMode={props.isDemoMode}
           createSponsor={props.createSponsor}
           deleteSponsor={props.deleteSponsor}
           resetDemoSponsors={props.resetDemoSponsors}
+          onSponsorImpression={props.onSponsorImpression}
+          onSponsorClick={props.onSponsorClick}
         />
       </div>
     </div>
@@ -1424,6 +1588,7 @@ function MobileBottomNav({
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function MapSidebar({
   channel,
   viewer,
@@ -1565,15 +1730,22 @@ function MapTopBar({
   viewer,
   copyShareUrl,
   copyState,
-  setMissingVideosOpen,
+  toggleViewerPreview,
   channel,
   canUseAdminPanels,
+  canToggleViewerPreview,
+  isPreviewingViewer,
   headerEyebrow,
 }: MapShellProps) {
+  const panelHref = viewer.adminUrl ? `${viewer.adminUrl}${viewer.adminUrl.includes("?") ? "&" : "?"}panel=creator` : null;
+
   return (
     <header className="pointer-events-auto z-[370] px-4 py-3 xl:px-5">
       <div className="mx-auto grid min-h-[52px] w-full grid-cols-1 gap-3 rounded-xl border border-white/10 bg-[#07101a]/86 p-2 shadow-[0_28px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[rgba(255,0,0,0.55)] bg-[rgba(255,0,0,0.12)] text-[#ff3b3b]">
+            <Video size={18} weight="fill" />
+          </span>
           <div className="tym-search h-10 min-h-10 w-full max-w-none rounded-xl border-white/10 bg-white/[0.04]">
             <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
               <MagnifyingGlass size={16} />
@@ -1591,18 +1763,25 @@ function MapTopBar({
         </div>
 
         <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
-          {canUseAdminPanels ? (
-            <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => setMissingVideosOpen(true)}>
-              <WarningCircle size={14} />
-              Videos faltantes
+          {canUseAdminPanels && panelHref ? (
+            <Button asChild type="button" size="sm" className="shrink-0 bg-[#c91f18] text-white hover:bg-[#e03128]">
+              <Link href={`${panelHref}&focus=missing-videos`}>
+                <WarningCircle size={14} />
+                Videos faltantes
+              </Link>
             </Button>
           ) : null}
-          {canUseAdminPanels && viewer.adminUrl ? (
+          {canUseAdminPanels && panelHref ? (
             <Button asChild size="sm" variant="outline" className="shrink-0">
-              <Link href={viewer.adminUrl}>
+              <Link href={panelHref}>
                 <GearSix size={14} />
                 Panel
               </Link>
+            </Button>
+          ) : null}
+          {canToggleViewerPreview ? (
+            <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={toggleViewerPreview}>
+              {isPreviewingViewer ? "Volver a creador" : "Ver como fan"}
             </Button>
           ) : null}
           <Button type="button" size="sm" className="shrink-0 bg-[#e1543a] hover:bg-[#ee6b49]" onClick={copyShareUrl}>
@@ -1685,9 +1864,17 @@ function MapOverviewRail({
                           {bucket.count}
                         </Badge>
                       </div>
-                      <p className="mt-1 text-[10px] text-[#9da5ae]">
-                        {bucket.cities.length > 0 ? bucket.cities.join(", ") : "Sin ciudades detectadas"}
-                      </p>
+                      <div className="mt-1 space-y-1">
+                        {bucket.cities.length > 0 ? (
+                          bucket.cities.map((city) => (
+                            <p key={`${bucket.country_code}-${city.name}`} className="truncate text-[10px] text-[#9da5ae]">
+                              {city.name} ({city.count})
+                            </p>
+                          ))
+                        ) : (
+                          <p className="text-[10px] text-[#9da5ae]">Sin ciudades detectadas</p>
+                        )}
+                      </div>
                     </button>
                   );
                 })
@@ -1713,6 +1900,7 @@ function MapCenterStage({
   videoActivity,
   closePinnedVideo,
   changePinnedVideo,
+  onYouTubeExternalOpen,
   selectCountry,
   issueGlobeCommand,
 }: MapShellProps) {
@@ -1775,6 +1963,7 @@ function MapCenterStage({
           videos={mapVideos}
           currentVideo={pinnedVideo}
           activity={videoActivity}
+          onOpenInYouTube={onYouTubeExternalOpen}
           onClose={closePinnedVideo}
           onChangeVideo={changePinnedVideo}
         />
@@ -1785,6 +1974,7 @@ function MapCenterStage({
           videos={suggestedVideos}
           relatedCountryCode={relatedCountryCode || null}
           relatedCountryName={pinnedVideo?.country_name || selectedCountryName}
+          seenIds={videoActivity.seenIds}
           onOpenVideo={changePinnedVideo}
         />
       </div>
@@ -1821,6 +2011,8 @@ function MapRightRail({
   createSponsor,
   deleteSponsor,
   resetDemoSponsors,
+  onSponsorImpression,
+  onSponsorClick,
   votesRailRef,
   sponsorsRailRef,
 }: MapShellProps) {
@@ -1879,12 +2071,15 @@ function MapRightRail({
 
       <div ref={sponsorsRailRef}>
         <SponsorsRail
+          channelId={channelId}
           sponsors={sponsors}
           viewer={viewer}
           isDemoMode={isDemoMode}
           createSponsor={createSponsor}
           deleteSponsor={deleteSponsor}
           resetDemoSponsors={resetDemoSponsors}
+          onSponsorImpression={onSponsorImpression}
+          onSponsorClick={onSponsorClick}
         />
       </div>
     </aside>
@@ -2052,11 +2247,13 @@ function SuggestedDestinations({
   videos,
   relatedCountryCode,
   relatedCountryName,
+  seenIds,
   onOpenVideo,
 }: {
   videos: TravelVideoLocation[];
   relatedCountryCode: string | null;
   relatedCountryName: string | null;
+  seenIds: Set<string>;
   onOpenVideo: (video: TravelVideoLocation) => void;
 }) {
   const visibleVideos = videos.slice(0, 5);
@@ -2078,12 +2275,27 @@ function SuggestedDestinations({
             key={`${video.youtube_video_id}-${video.published_at || "suggested-video"}`}
             type="button"
             onClick={() => onOpenVideo(video)}
-            className="group min-w-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]"
+            className={cn(
+              "group min-w-0 overflow-hidden rounded-lg border bg-white/[0.04] text-left transition hover:bg-white/[0.08]",
+              seenIds.has(video.youtube_video_id) ? "border-[rgba(201,31,24,0.8)]" : "border-white/10"
+            )}
           >
-            <VideoThumb video={video} className="h-[64px] w-full rounded-none object-cover" />
-            <div className="p-2">
-              <p className="line-clamp-2 text-[10px] font-semibold leading-4 text-[#f5f7fb]">{video.title}</p>
-              <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{formatPlace(video)}</p>
+            <div className="relative h-[92px] w-full overflow-hidden">
+              {video.thumbnail_url ? (
+                <Image
+                  src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
+                  alt={video.title}
+                  fill
+                  sizes="160px"
+                  className="object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-white/[0.06]" />
+              )}
+              <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.18),rgba(0,0,0,0.72))]" />
+              <div className="absolute inset-x-0 bottom-0 p-2">
+                <p className="line-clamp-2 text-[10px] font-semibold leading-4 text-[#f5f7fb]">{video.title}</p>
+              </div>
             </div>
           </button>
         ))}
@@ -2248,27 +2460,106 @@ function BrandInquiryCta({
 }
 
 function SponsorsRail({
+  channelId,
   sponsors,
   viewer,
   isDemoMode,
   createSponsor,
   deleteSponsor,
   resetDemoSponsors,
+  onSponsorImpression,
+  onSponsorClick,
 }: {
+  channelId: string | null;
   sponsors: MapRailSponsor[];
   viewer: MapViewerContext;
   isDemoMode: boolean;
   createSponsor: (input: SponsorInput) => Promise<void>;
   deleteSponsor: (sponsorId: string) => Promise<void>;
   resetDemoSponsors: () => void;
+  onSponsorImpression: (sponsor: MapRailSponsor) => void;
+  onSponsorClick: (sponsor: MapRailSponsor) => void;
 }) {
   const [startIndex, setStartIndex] = useState(0);
   const [managerOpen, setManagerOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inquiries, setInquiries] = useState<SponsorInquiryRecord[]>([]);
+  const [inquiriesLoading, setInquiriesLoading] = useState(false);
+  const [inquiriesError, setInquiriesError] = useState<string | null>(null);
+  const [updatingInquiryId, setUpdatingInquiryId] = useState<string | null>(null);
   const maxStartIndex = Math.max(0, sponsors.length - 3);
   const clampedStart = Math.min(startIndex, maxStartIndex);
-  const visibleSponsors = sponsors.slice(clampedStart, clampedStart + 3);
+  const visibleSponsors = useMemo(() => sponsors.slice(clampedStart, clampedStart + 3), [clampedStart, sponsors]);
   const canMoveLeft = clampedStart > 0;
   const canMoveRight = clampedStart < maxStartIndex;
+  const canOpenInbox = viewer.isOwner && (isDemoMode || Boolean(channelId));
+  const newInquiryCount = inquiries.filter((inquiry) => inquiry.status === "new").length;
+
+  useEffect(() => {
+    visibleSponsors.forEach(onSponsorImpression);
+  }, [onSponsorImpression, visibleSponsors]);
+
+  const loadInquiries = useCallback(async () => {
+    if (!canOpenInbox) return;
+
+    setInquiriesLoading(true);
+    setInquiriesError(null);
+    try {
+      const params = new URLSearchParams();
+      if (isDemoMode) params.set("demo", "1");
+      if (channelId) params.set("channelId", channelId);
+      const response = await fetch(`/api/sponsors/inquiries?${params.toString()}`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as { inquiries?: SponsorInquiryRecord[]; error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo cargar el inbox comercial.");
+      }
+      setInquiries(Array.isArray(payload?.inquiries) ? payload.inquiries : []);
+    } catch (error) {
+      setInquiriesError(error instanceof Error ? error.message : "No se pudo cargar el inbox comercial.");
+    } finally {
+      setInquiriesLoading(false);
+    }
+  }, [canOpenInbox, channelId, isDemoMode]);
+
+  useEffect(() => {
+    if (!inboxOpen) return;
+    void loadInquiries();
+  }, [inboxOpen, loadInquiries]);
+
+  const updateInquiryStatus = useCallback(
+    async (inquiryId: string, nextStatus: SponsorInquiryStatus) => {
+      setInquiriesError(null);
+      if (isDemoMode) {
+        setInquiries((current) =>
+          current.map((inquiry) =>
+            inquiry.id === inquiryId ? { ...inquiry, status: nextStatus, updated_at: new Date().toISOString() } : inquiry
+          )
+        );
+        return;
+      }
+
+      setUpdatingInquiryId(inquiryId);
+      try {
+        const response = await fetch("/api/sponsors/inquiries", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inquiryId, status: nextStatus }),
+        });
+        const payload = (await response.json().catch(() => null)) as { inquiry?: { id: string; status: SponsorInquiryStatus }; error?: string } | null;
+        if (!response.ok) {
+          throw new Error(payload?.error || "No se pudo actualizar el estado.");
+        }
+        setInquiries((current) =>
+          current.map((inquiry) => (inquiry.id === inquiryId ? { ...inquiry, status: payload?.inquiry?.status || nextStatus, updated_at: new Date().toISOString() } : inquiry))
+        );
+      } catch (error) {
+        setInquiriesError(error instanceof Error ? error.message : "No se pudo actualizar el estado.");
+      } finally {
+        setUpdatingInquiryId(null);
+      }
+    },
+    [isDemoMode]
+  );
 
   return (
     <Card className="tm-surface-strong rounded-xl border-white/10">
@@ -2297,15 +2588,27 @@ function SponsorsRail({
               <CaretRight size={13} />
             </button>
           </div>
-          {viewer.isOwner ? (
-            <button
-              type="button"
-              onClick={() => setManagerOpen(true)}
-              className="h-7 rounded-full border border-white/10 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6] transition hover:bg-white/[0.1]"
-            >
-              Agregar
-            </button>
-          ) : null}
+          <div className="flex items-center gap-1">
+            {canOpenInbox ? (
+              <button
+                type="button"
+                onClick={() => setInboxOpen(true)}
+                className="inline-flex h-7 items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-2.5 text-[11px] font-medium text-[#d8dee6] transition hover:bg-white/[0.1]"
+              >
+                Leads
+                {newInquiryCount > 0 ? <span className="rounded-full bg-[#e1543a] px-1.5 text-[10px] font-semibold text-white">{newInquiryCount}</span> : null}
+              </button>
+            ) : null}
+            {viewer.isOwner ? (
+              <button
+                type="button"
+                onClick={() => setManagerOpen(true)}
+                className="h-7 rounded-full border border-white/10 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6] transition hover:bg-white/[0.1]"
+              >
+                Agregar
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -2315,6 +2618,7 @@ function SponsorsRail({
               href={sponsor.affiliate_url || sponsor.logo_url || "#"}
               target={sponsor.affiliate_url ? "_blank" : undefined}
               rel={sponsor.affiliate_url ? "noreferrer" : undefined}
+              onClick={() => onSponsorClick(sponsor)}
               className="group min-w-0 text-center"
             >
               <span className="mx-auto flex h-[44px] w-[44px] items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white text-[10px] font-semibold text-[#07101a] transition group-hover:scale-[1.04]">
@@ -2340,6 +2644,16 @@ function SponsorsRail({
         onCreateSponsor={createSponsor}
         onDeleteSponsor={deleteSponsor}
         onResetDemo={resetDemoSponsors}
+      />
+      <SponsorInboxDialog
+        open={inboxOpen}
+        onOpenChange={setInboxOpen}
+        inquiries={inquiries}
+        loading={inquiriesLoading}
+        error={inquiriesError}
+        updatingInquiryId={updatingInquiryId}
+        onReload={loadInquiries}
+        onUpdateStatus={updateInquiryStatus}
       />
     </Card>
   );
@@ -2456,6 +2770,105 @@ function SponsorManagerDialog({
             </ScrollArea>
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SponsorInboxDialog({
+  open,
+  onOpenChange,
+  inquiries,
+  loading,
+  error,
+  updatingInquiryId,
+  onReload,
+  onUpdateStatus,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  inquiries: SponsorInquiryRecord[];
+  loading: boolean;
+  error: string | null;
+  updatingInquiryId: string | null;
+  onReload: () => Promise<void>;
+  onUpdateStatus: (inquiryId: string, status: SponsorInquiryStatus) => Promise<void>;
+}) {
+  const newCount = inquiries.filter((inquiry) => inquiry.status === "new").length;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="tm-surface-strong max-w-[min(920px,calc(100%-1.5rem))] border-white/10 bg-[#07101a]/95 p-5 text-[#f5f7fb] sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-[18px] font-semibold text-[#f5f7fb]">Inbox comercial</DialogTitle>
+          <DialogDescription className="text-[12px] leading-5 text-[#aab2bc]">
+            Leads recibidos desde el mapa publico. Nuevos: {newCount}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[12px] text-[#9da5ae]">Total: {inquiries.length} propuestas</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => void onReload()} disabled={loading}>
+            <ArrowsClockwise size={13} />
+            Recargar
+          </Button>
+        </div>
+
+        {error ? <p className="rounded-lg border border-[rgba(255,82,82,0.35)] bg-[rgba(255,82,82,0.14)] px-3 py-2 text-[12px] text-[#ffc5c5]">{error}</p> : null}
+
+        <ScrollArea className="h-[420px]" data-map-scroll="true">
+          <div className="space-y-3 pr-2">
+            {loading && !inquiries.length ? <p className="text-[12px] text-[#9da5ae]">Cargando inbox...</p> : null}
+            {!loading && !inquiries.length ? <p className="text-[12px] text-[#9da5ae]">Todavia no hay propuestas de marcas.</p> : null}
+            {inquiries.map((inquiry) => (
+              <article key={inquiry.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-[#f5f7fb]">{inquiry.brand_name}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-[#aab2bc]">
+                      {inquiry.contact_name} · {inquiry.contact_email}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[#8f9aa5]">{formatInquiryDate(inquiry.created_at)} · {inquiry.channel_name}</p>
+                  </div>
+                  <label className="flex min-w-[140px] items-center gap-2 text-[11px] text-[#c6cdd5]">
+                    Estado
+                    <select
+                      value={inquiry.status}
+                      onChange={(event) => void onUpdateStatus(inquiry.id, event.target.value as SponsorInquiryStatus)}
+                      disabled={updatingInquiryId === inquiry.id}
+                      className="h-8 w-full rounded-lg border border-white/10 bg-white/[0.04] px-2 text-[11px] text-[#f5f7fb] outline-none"
+                    >
+                      {SPONSOR_INQUIRY_STATUSES.map((status) => (
+                        <option key={status} value={status} className="bg-[#07101a] text-[#f5f7fb]">
+                          {SPONSOR_INQUIRY_STATUS_LABEL[status]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <p className="mt-2 text-[12px] leading-5 text-[#d9dfe6]">{inquiry.brief}</p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#9da5ae]">
+                  {typeof inquiry.proposed_budget_usd === "number" ? (
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1">USD {formatExactNumber(inquiry.proposed_budget_usd)}</span>
+                  ) : null}
+                  {inquiry.website_url ? (
+                    <a href={inquiry.website_url} target="_blank" rel="noreferrer" className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[#c6dfff] hover:text-white">
+                      Web
+                    </a>
+                  ) : null}
+                  {inquiry.whatsapp ? <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1">{inquiry.whatsapp}</span> : null}
+                  {inquiry.map_url ? (
+                    <a href={inquiry.map_url} target="_blank" rel="noreferrer" className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[#c6dfff] hover:text-white">
+                      Mapa origen
+                    </a>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
@@ -2597,7 +3010,14 @@ function buildCountryBuckets(videos: TravelVideoLocation[]) {
     row.count += 1;
     row.views += Number(video.view_count || 0);
     const city = String(video.city || video.location_label || "").trim();
-    if (city && !row.cities.includes(city)) row.cities.push(city);
+    if (city) {
+      const existing = row.cities.find((entry) => entry.name === city);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        row.cities.push({ name: city, count: 1 });
+      }
+    }
     buckets.set(countryCode, row);
   }
   return Array.from(buckets.values()).sort((a, b) => b.count - a.count);
@@ -2622,7 +3042,7 @@ function buildDestinationCandidates(poll: MapPollRecord | null, buckets: Country
   return buckets.slice(0, 6).map((country) => ({
     country_code: country.country_code,
     country_name: country.country_name,
-    cities: country.cities,
+    cities: country.cities.map((city) => city.name),
     votes: 0,
     percent: Math.max(12, Math.round((country.count / maxScore) * 100)),
     source: "videos" as const,
@@ -2672,6 +3092,22 @@ function formatIsoDateTime(value: string) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+function formatInquiryDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "sin fecha";
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  if (diffMinutes < 1) return "ahora";
+  if (diffMinutes < 60) return `hace ${diffMinutes} min`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `hace ${diffHours} h`;
+  return date.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }
 

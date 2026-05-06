@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
+import { isPublicMapPath, recordMapEventFromRequest, resolvePathFromRequest } from "@/lib/map-events";
 import {
   getOrCreateVoterFingerprint,
   getRequestHashes,
@@ -30,6 +32,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ pol
       ipHash: requestHashes.ipHash,
       userAgentHash: requestHashes.userAgentHash,
     });
+
+    const sessionUserId = await getValidSessionUserIdFromRequest(request);
+    const path = resolvePathFromRequest(request);
+    if (poll && sessionUserId !== poll.created_by_user_id && isPublicMapPath(path)) {
+      try {
+        await recordMapEventFromRequest(request, {
+          channelId: poll.channel_id,
+          eventType: "poll_vote",
+          viewerMode: "viewer",
+          path,
+          pollId: poll.id,
+          countryCode: payload.countryCode,
+          metadata: {
+            city: payload.city || null,
+          },
+        });
+      } catch (eventError) {
+        console.warn("[api/map/polls/[pollId]/vote] map event skipped", eventError);
+      }
+    }
 
     const response = NextResponse.json({ poll });
     if (fingerprint.shouldSetCookie) {

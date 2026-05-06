@@ -7,6 +7,7 @@ export const VIDEO_ACTIVITY_STORAGE_KEYS = {
   opened: "travelyourmap_opened_videos_v1",
   saved: "travelyourmap_saved_videos_v1",
   featured: "travelyourmap_featured_videos_v1",
+  watchStatus: "travelyourmap_watch_status_v1",
 } as const;
 
 const LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS = {
@@ -17,15 +18,18 @@ const LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS = {
 } as const;
 
 export type VideoActivityTab = "all" | "watched" | "opened" | "saved" | "featured";
+export type VideoWatchStatus = "not_finished" | "watched" | "watch_later";
 
 export type VideoActivityController = {
   seenIds: Set<string>;
   openedIds: Set<string>;
   savedIds: Set<string>;
   featuredIds: Set<string>;
+  watchStatusById: Record<string, VideoWatchStatus>;
   markVideoOpened: (videoId: string | null | undefined) => void;
   toggleVideoSaved: (videoId: string | null | undefined) => void;
   toggleVideoFeatured: (videoId: string | null | undefined) => void;
+  setVideoWatchStatus: (videoId: string | null | undefined, status: VideoWatchStatus) => void;
 };
 
 type StorageKey = (typeof VIDEO_ACTIVITY_STORAGE_KEYS)[keyof typeof VIDEO_ACTIVITY_STORAGE_KEYS];
@@ -90,6 +94,33 @@ function toggleId(current: Set<string>, videoId: string | null | undefined) {
   return next;
 }
 
+function readWatchStatusById() {
+  if (typeof window === "undefined") return {} as Record<string, VideoWatchStatus>;
+  try {
+    const raw = window.localStorage.getItem(VIDEO_ACTIVITY_STORAGE_KEYS.watchStatus);
+    if (!raw) return {} as Record<string, VideoWatchStatus>;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {} as Record<string, VideoWatchStatus>;
+    const next: Record<string, VideoWatchStatus> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!key) continue;
+      if (value === "watched" || value === "not_finished" || value === "watch_later") next[key] = value;
+    }
+    return next;
+  } catch {
+    return {} as Record<string, VideoWatchStatus>;
+  }
+}
+
+function writeWatchStatusById(value: Record<string, VideoWatchStatus>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(VIDEO_ACTIVITY_STORAGE_KEYS.watchStatus, JSON.stringify(value));
+  } catch {
+    // Progressive enhancement only.
+  }
+}
+
 export function useLocalVideoActivity(): VideoActivityController {
   const [seenIds, setSeenIds] = useState<Set<string>>(() =>
     readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.seen, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.seen)
@@ -103,12 +134,14 @@ export function useLocalVideoActivity(): VideoActivityController {
   const [featuredIds, setFeaturedIds] = useState<Set<string>>(() =>
     readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.featured, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.featured)
   );
+  const [watchStatusById, setWatchStatusById] = useState<Record<string, VideoWatchStatus>>(() => readWatchStatusById());
 
   useEffect(() => {
     setSeenIds(readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.seen, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.seen));
     setOpenedIds(readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.opened, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.opened));
     setSavedIds(readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.saved, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.saved));
     setFeaturedIds(readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.featured, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.featured));
+    setWatchStatusById(readWatchStatusById());
   }, []);
 
   const markVideoOpened = useCallback((videoId: string | null | undefined) => {
@@ -122,6 +155,15 @@ export function useLocalVideoActivity(): VideoActivityController {
       if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.opened, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.opened, next);
       return next;
     });
+    const normalized = String(videoId || "").trim();
+    if (normalized) {
+      setWatchStatusById((current) => {
+        if (current[normalized] === "watched") return current;
+        const next = { ...current, [normalized]: "watched" as VideoWatchStatus };
+        writeWatchStatusById(next);
+        return next;
+      });
+    }
   }, []);
 
   const toggleVideoSaved = useCallback((videoId: string | null | undefined) => {
@@ -144,13 +186,26 @@ export function useLocalVideoActivity(): VideoActivityController {
     });
   }, []);
 
+  const setVideoWatchStatus = useCallback((videoId: string | null | undefined, status: VideoWatchStatus) => {
+    const normalized = String(videoId || "").trim();
+    if (!normalized) return;
+    setWatchStatusById((current) => {
+      if (current[normalized] === status) return current;
+      const next = { ...current, [normalized]: status };
+      writeWatchStatusById(next);
+      return next;
+    });
+  }, []);
+
   return {
     seenIds,
     openedIds,
     savedIds,
     featuredIds,
+    watchStatusById,
     markVideoOpened,
     toggleVideoSaved,
     toggleVideoFeatured,
+    setVideoWatchStatus,
   };
 }
