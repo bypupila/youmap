@@ -134,6 +134,7 @@ export function DesktopVideoMapCard({
             videoId={selectedVideo.youtube_video_id}
             title={selectedVideo.title}
             youtubeHref={youtubeHref}
+            thumbnailUrl={selectedVideo.thumbnail_url}
             onOpenInYouTube={openYouTubeVideo}
             isMadeForKids={Boolean(selectedVideo.made_for_kids)}
           />

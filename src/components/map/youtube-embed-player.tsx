@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
-import { ArrowSquareOut } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowSquareOut, SpinnerGap, WarningCircle } from "@phosphor-icons/react";
+import { isValidYouTubeVideoId } from "@/components/map/video-viewer-utils";
 import { cn } from "@/lib/utils";
 
 interface YouTubeEmbedPlayerProps {
   videoId: string | null;
   title: string;
   youtubeHref: string;
+  thumbnailUrl?: string | null;
   className?: string;
   frameClassName?: string;
   allowFullscreen?: boolean;
@@ -15,30 +17,154 @@ interface YouTubeEmbedPlayerProps {
   onOpenInYouTube?: () => void;
 }
 
+type EmbedStatus = "loading" | "ready" | "error";
+type EmbedErrorReason = "invalid_id" | "api_failed" | "player_error" | null;
+
+type YTPlayerInstance = {
+  destroy: () => void;
+};
+
+type YTPlayerOptions = {
+  videoId: string;
+  host?: string;
+  playerVars?: Record<string, string | number | boolean>;
+  events?: {
+    onReady?: () => void;
+    onError?: (event: { data: number }) => void;
+  };
+};
+
+type YTPlayerConstructor = new (element: HTMLElement, options: YTPlayerOptions) => YTPlayerInstance;
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: YTPlayerConstructor;
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+let youtubeIframeApiPromise: Promise<void> | null = null;
+
+function loadYouTubeIframeApi() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Window is not available."));
+  }
+
+  if (window.YT?.Player) return Promise.resolve();
+  if (youtubeIframeApiPromise) return youtubeIframeApiPromise;
+
+  youtubeIframeApiPromise = new Promise<void>((resolve, reject) => {
+    const previousReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      previousReady?.();
+      resolve();
+    };
+
+    const existingScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    if (existingScript) return;
+
+    const script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    script.async = true;
+    script.onerror = () => {
+      youtubeIframeApiPromise = null;
+      reject(new Error("No se pudo cargar la API oficial de YouTube."));
+    };
+    document.head.appendChild(script);
+  });
+
+  return youtubeIframeApiPromise;
+}
+
+function getErrorMessage(errorReason: EmbedErrorReason) {
+  switch (errorReason) {
+    case "invalid_id":
+      return "Este video no tiene un ID valido para el embed oficial.";
+    case "api_failed":
+      return "No se pudo cargar la API oficial de YouTube.";
+    case "player_error":
+      return "YouTube devolvio un error al intentar reproducir este video en el embed oficial.";
+    default:
+      return "Preparando el reproductor oficial de YouTube.";
+  }
+}
+
 export function YouTubeEmbedPlayer({
   videoId,
   title,
   youtubeHref,
+  thumbnailUrl,
   className,
   frameClassName,
   allowFullscreen = true,
   isMadeForKids = false,
   onOpenInYouTube,
 }: YouTubeEmbedPlayerProps) {
-  const embedSrc = useMemo(() => {
-    if (!videoId) return "";
-    const params = new URLSearchParams({
-      playsinline: "1",
-      rel: "0",
-      modestbranding: "1",
-    });
+  const playerContainerRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<YTPlayerInstance | null>(null);
+  const [status, setStatus] = useState<EmbedStatus>(videoId && isValidYouTubeVideoId(videoId) ? "loading" : "error");
+  const [errorReason, setErrorReason] = useState<EmbedErrorReason>(videoId && isValidYouTubeVideoId(videoId) ? null : "invalid_id");
 
-    if (typeof window !== "undefined" && window.location?.origin) {
-      params.set("origin", window.location.origin);
+  useEffect(() => {
+    let cancelled = false;
+
+    playerRef.current?.destroy();
+    playerRef.current = null;
+
+    if (!videoId || !isValidYouTubeVideoId(videoId)) {
+      setStatus("error");
+      setErrorReason("invalid_id");
+      return () => {
+        cancelled = true;
+      };
     }
 
-    return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
-  }, [videoId]);
+    setStatus("loading");
+    setErrorReason(null);
+
+    loadYouTubeIframeApi()
+      .then(() => {
+        if (cancelled || !playerContainerRef.current || !window.YT?.Player) return;
+
+        playerRef.current?.destroy();
+        playerRef.current = new window.YT.Player(playerContainerRef.current, {
+          host: "https://www.youtube.com",
+          videoId,
+          playerVars: {
+            playsinline: 1,
+            rel: 0,
+            modestbranding: 1,
+            fs: allowFullscreen ? 1 : 0,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: () => {
+              if (!cancelled) setStatus("ready");
+            },
+            onError: (event) => {
+              if (cancelled) return;
+              playerRef.current?.destroy();
+              playerRef.current = null;
+              setErrorReason(event.data === 2 ? "invalid_id" : "player_error");
+              setStatus("error");
+            },
+          },
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatus("error");
+        setErrorReason("api_failed");
+      });
+
+    return () => {
+      cancelled = true;
+      playerRef.current?.destroy();
+      playerRef.current = null;
+    };
+  }, [allowFullscreen, videoId]);
 
   function openInYoutube() {
     if (onOpenInYouTube) {
@@ -52,21 +178,48 @@ export function YouTubeEmbedPlayer({
   return (
     <div className={cn("space-y-2", className)}>
       <div className={cn("relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black", frameClassName)}>
-        {videoId ? (
-          <iframe
-            src={embedSrc}
-            title={title}
-            loading="lazy"
-            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerPolicy="strict-origin-when-cross-origin"
-            allowFullScreen={allowFullscreen}
-            className="h-full w-full"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[12px] text-[#9da5ae]">
-            Video no disponible
+        <div
+          ref={playerContainerRef}
+          className={cn("absolute inset-0 transition-opacity duration-200", status === "ready" ? "opacity-100" : "opacity-0")}
+          aria-hidden={status !== "ready"}
+        />
+
+        {status !== "ready" ? (
+          <div className="absolute inset-0 overflow-hidden">
+            {thumbnailUrl ? (
+              <div
+                className="absolute inset-0 bg-cover bg-center opacity-35"
+                style={{ backgroundImage: `url(${thumbnailUrl})` }}
+                aria-hidden="true"
+              />
+            ) : null}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,90,61,0.18),transparent_48%),linear-gradient(180deg,rgba(2,4,6,0.34),rgba(2,4,6,0.86))]" />
+
+            <div className="relative flex h-full w-full flex-col justify-between gap-4 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="max-w-[calc(100%-3rem)]">
+                  <span className="inline-flex items-center rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#ff9a89]">
+                    {status === "loading" ? "Cargando embed oficial" : "Vista previa no disponible"}
+                  </span>
+                  <p className="mt-2 text-[14px] font-medium leading-5 text-white">{title}</p>
+                  <p className="mt-1 max-w-[34ch] text-[12px] leading-5 text-[#c7ced8]">{getErrorMessage(errorReason)}</p>
+                </div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.8)]">
+                  {status === "loading" ? <SpinnerGap size={16} className="animate-spin" /> : <WarningCircle size={16} />}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] text-[#8f98a3]">
+                  {isMadeForKids
+                    ? "Contenido Made for Kids: tracking local desactivado."
+                    : "Reproductor oficial de YouTube."}
+                </span>
+                <span className="text-[11px] text-[#8f98a3]">Usa el botón inferior para abrirlo en YouTube.</span>
+              </div>
+            </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-2">
@@ -79,7 +232,7 @@ export function YouTubeEmbedPlayer({
           type="button"
           onClick={openInYoutube}
           disabled={!youtubeHref}
-          className="inline-flex h-8 items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[11px] font-medium text-[#e8edf4] transition hover:bg-white/[0.08]"
+          className="inline-flex h-8 items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[11px] font-medium text-[#e8edf4] transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Abrir en YouTube"
         >
           Abrir en YouTube

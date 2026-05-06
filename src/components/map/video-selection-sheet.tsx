@@ -114,6 +114,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
                     videoId={currentVideo?.youtube_video_id || null}
                     title={currentVideo?.title || "Video seleccionado"}
                     youtubeHref={youtubeHref}
+                    thumbnailUrl={currentVideo?.thumbnail_url || null}
                     onOpenInYouTube={openYouTubeVideo}
                     isMadeForKids={Boolean(currentVideo?.made_for_kids)}
                     frameClassName="max-h-[32dvh] lg:max-h-none"

@@ -7,6 +7,7 @@ import { feature } from "topojson-client";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { SponsorBanner } from "@/components/sponsors/sponsor-banner";
+import { getYouTubeHref } from "@/components/map/video-viewer-utils";
 
 type PointKind = "country" | "video";
 
@@ -497,7 +498,7 @@ export function TravelGlobe({
             {visibleVideos.map((video) => (
               <a
                 key={`${activePoint.point_id}-${video.youtube_video_id}`}
-                href={video.video_url || `https://youtube.com/watch?v=${video.youtube_video_id}`}
+                href={getYouTubeHref(video) || "#"}
                 target="_blank"
                 rel="noreferrer"
                 className="block rounded-xl border border-white/10 bg-white/5 p-2 transition hover:bg-white/10"
@@ -569,7 +570,7 @@ function buildPointLabel(point: GlobePoint) {
     const comments = formatNumber(Number(video?.comment_count || 0));
     const title = escapeHtml(video?.title || "Video");
     const date = escapeHtml(formatDate(video?.published_at || null));
-    const href = escapeHtml(video?.video_url || `https://youtube.com/watch?v=${video?.youtube_video_id || ""}`);
+    const href = escapeHtml(getYouTubeHref(video) || "#");
     return `<div style="background:rgba(5,8,16,.92);padding:10px;border-radius:14px;border:1px solid rgba(255,255,255,.18);width:300px;color:white;font-family:system-ui">
       <img src="${thumb}" alt="${title}" style="width:100%;height:160px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,.12)" />
       <div style="margin-top:8px;font-size:16px;font-weight:700;line-height:1.25">${title}</div>

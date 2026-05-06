@@ -6,6 +6,16 @@ export type CountryVideoBucket = {
   videos: TravelVideoLocation[];
 };
 
+const YOUTUBE_HOSTS = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "youtu.be",
+  "youtube-nocookie.com",
+  "www.youtube-nocookie.com",
+]);
+const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
 export function buildCountryVideoSections(videos: TravelVideoLocation[], currentVideo: TravelVideoLocation | null) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
   const buckets = new Map<string, CountryVideoBucket>();
@@ -33,9 +43,25 @@ export function buildCountryVideoSections(videos: TravelVideoLocation[], current
     });
 }
 
+export function isValidYouTubeVideoId(videoId?: string | null) {
+  return YOUTUBE_VIDEO_ID_PATTERN.test(String(videoId || "").trim());
+}
+
+function isYouTubeUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return YOUTUBE_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function getYouTubeHref(video?: TravelVideoLocation | null) {
   if (!video) return "";
-  return video.video_url || `https://youtube.com/watch?v=${video.youtube_video_id}`;
+  const explicitUrl = String(video.video_url || "").trim();
+  if (explicitUrl && isYouTubeUrl(explicitUrl)) return explicitUrl;
+  if (!isValidYouTubeVideoId(video.youtube_video_id)) return "";
+  return `https://www.youtube.com/watch?v=${video.youtube_video_id}`;
 }
 
 export function countryCodeToFlag(countryCode?: string | null) {
