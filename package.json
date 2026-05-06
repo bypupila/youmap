@@ -36,7 +36,7 @@
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "react-globe.gl": "^2.37.0",
-    "recharts": "^2.12.7",
+    "recharts": "^3.8.1",
     "shadcn": "^4.2.0",
     "standardwebhooks": "^1.0.0",
     "tailwind-merge": "^3.5.0",
