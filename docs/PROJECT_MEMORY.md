@@ -217,6 +217,18 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 
 ## Registro de memoria
 
+### 2026-05-06
+
+- Se endurece el contrato de embed oficial de YouTube: `YouTubeEmbedPlayer` usa helpers compartidos, deriva todo desde `youtube_video_id`, mantiene `origin`, no activa autoplay y elimina `modestbranding`.
+- CSP ahora permite `https://www.youtube.com` en `script-src` para cargar el IFrame API oficial, ademas de los hosts oficiales en `frame-src`.
+- El player no oculta el iframe oficial esperando `onReady`; solo muestra fallback visual ante error real, evitando overlays sobre controles de YouTube.
+- `src/components/travel-globe.tsx` deja de generar links directos a `watch?v=...` desde tooltips/paneles internos; cualquier preview reproducible debe pasar por el visor oficial del mapa.
+- `scripts/extract_youtube_channel_videos.py` ahora hidrata `status.madeForKids`, exporta `made_for_kids`, `youtube_data_refreshed_at` y `youtube_data_expires_at`, y requiere `--allow-search-fallback` para usar `search.list`.
+- `src/lib/youtube-public.ts` queda bloqueado en produccion salvo opt-in explicito `YOUTUBE_ALLOW_PUBLIC_SCRAPE=1`; la ruta productiva es YouTube Data API oficial.
+- Se agrega `npm run youtube:embed-audit` para validar IDs, duplicados, Shorts excluidos, CSP, player oficial, ausencia de links directos en previews y bloqueo de scraping productivo. Con `--check-neon-by-pupila` puede auditar Neon si existe `DATABASE_URL`.
+- Los datasets estaticos actuales tienen IDs validos y sin duplicados; advertencia operativa: deben regenerarse con API key para incorporar `made_for_kids` en todos los registros procesados.
+- QA browser 2026-05-06 valido `/map?channelId=demo-channel` en desktop/tablet/mobile, `/map?channelId=luisito-global-map`, `/map?channelId=drew-global-map`, `/u/demo` y `/u/by.pupila` con embed oficial visible, `origin`, `enablejsapi=1`, sin autoplay y sin `modestbranding`.
+
 ### 2026-04-29
 
 - Se rediseña el rail de sponsors para creator/viewer con layout unificado tipo carrusel de logos circulares: titulo + accion `Ver todos`, chips de marca con estado bajo cada logo y tile final de `Agregar`.

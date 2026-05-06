@@ -3,15 +3,19 @@
 Estado de ejecucion (2026-05-05):
 
 - [x] P0.1 `YouTubeEmbedPlayer` + reemplazo de thumbnails por embed en `VideoSelectionSheet` y `DesktopVideoMapCard`.
-- [x] P0.2 CSP `frame-src` abierto para YouTube embed.
+- [x] P0.2 CSP `script-src` para YouTube IFrame API y `frame-src` abierto para YouTube embed.
 - [x] P0.3 Ruta productiva de validacion/import sobre YouTube Data API oficial.
 - [x] P0.4 `/terms` y `/privacy` visibles en auth/onboarding con aceptacion requerida.
 - [x] P0.5 Campos de frescura/expiracion + sweep de invalidacion + cron diario.
 - [x] P0.6 `made_for_kids` persistido y tracking local desactivado para ese caso.
 - [x] P1.7 Separacion operacional en UI (estado de frescura YouTube en mapa).
 - [x] P1.9 Reduccion de riesgo de cuota (`search.list` queda excepcional).
-- [ ] P2.10 OAuth read-only para creadores.
-- [ ] P2.11 Paquete de compliance audit/cuota extendida.
+- [x] P1.10 Helpers canonicos para `youtube_video_id`, `watch` y embed oficial.
+- [x] P1.11 `TravelGlobe` sin links directos a videos desde preview interno.
+- [x] P1.12 Auditoria automatica `npm run youtube:embed-audit`.
+- [x] P1.13 Extractor local endurecido con `status.madeForKids` y expiracion de datos.
+- [ ] P2.14 OAuth read-only para creadores.
+- [ ] P2.15 Paquete de compliance audit/cuota extendida.
 
 ## P0 - Antes de publicar embeds
 
@@ -21,8 +25,8 @@ Estado de ejecucion (2026-05-05):
 
 2. Abrir CSP para YouTube embeds.
    - Archivo: `next.config.mjs`.
-   - Cambio: `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com`.
-   - Validacion: no errores CSP en consola.
+   - Cambio: `script-src` incluye `https://www.youtube.com`; `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com`.
+   - Validacion: no errores CSP en consola y `https://www.youtube.com/iframe_api` carga.
 
 3. Eliminar scraping HTML como fallback de produccion.
    - Archivos: `src/lib/youtube-public.ts`, `src/lib/youtube.ts`, `src/app/api/youtube/validate/route.ts`.
@@ -55,12 +59,28 @@ Estado de ejecucion (2026-05-05):
    - Cambio: resolver por channel ID/handle primero; `search.list` solo fallback excepcional.
    - Validacion: logs de cuota muestran menor consumo.
 
+10. Centralizar helpers de embed oficial.
+   - Archivos: `src/components/map/video-viewer-utils.ts`, `src/components/map/youtube-embed-player.tsx`.
+   - Validacion: player usa `getOfficialYouTubeEmbedPlayerVars`, sin `modestbranding`, sin autoplay, iframe visible >= 200x200 y sin overlay sobre controles.
+
+11. Eliminar links directos desde previews reproducibles del globo.
+   - Archivo: `src/components/travel-globe.tsx`.
+   - Validacion: no existe `href={getYouTubeHref(video)}` ni anchor HTML en tooltip de video.
+
+12. Agregar auditoria de contrato YouTube.
+   - Archivo: `scripts/audit-youtube-embeds.mjs`.
+   - Validacion: `npm run youtube:embed-audit` pasa y reporta solo warnings esperados de datasets estaticos antiguos.
+
+13. Endurecer extractor local de canales.
+   - Archivo: `scripts/extract_youtube_channel_videos.py`.
+   - Validacion: `python3 -m py_compile scripts/extract_youtube_channel_videos.py`; al ejecutar con API key exporta `made_for_kids`, frescura y expiracion.
+
 ## P2 - Modelo robusto de analytics
 
-10. OAuth read-only de YouTube para creadores.
+14. OAuth read-only de YouTube para creadores.
     - Requiere Terms/Privacy finales, revocacion, borrado y token management.
     - Validacion: usuario autoriza canal, puede revocar, datos se borran dentro de ventanas requeridas.
 
-11. Preparar compliance audit/cuota.
+15. Preparar compliance audit/cuota.
     - Requiere inventario de endpoints, pantallas, datos guardados, deletion policy, privacy docs y demo de produccion.
     - Validacion: paquete de auditoria listo antes de pedir cuota mayor o vender analytics avanzadas.

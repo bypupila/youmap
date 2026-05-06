@@ -7,7 +7,6 @@ import { feature } from "topojson-client";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { SponsorBanner } from "@/components/sponsors/sponsor-banner";
-import { getYouTubeHref } from "@/components/map/video-viewer-utils";
 
 type PointKind = "country" | "video";
 
@@ -496,12 +495,11 @@ export function TravelGlobe({
 
           <div className={`${minimalOverlay ? "space-y-1.5" : "space-y-2 overflow-y-auto pr-1"}`} style={minimalOverlay ? undefined : { maxHeight: "calc(100dvh - 220px)" }}>
             {visibleVideos.map((video) => (
-              <a
+              <button
+                type="button"
                 key={`${activePoint.point_id}-${video.youtube_video_id}`}
-                href={getYouTubeHref(video) || "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-xl border border-white/10 bg-white/5 p-2 transition hover:bg-white/10"
+                onClick={() => onPinnedVideoChange?.(video)}
+                className="block w-full rounded-xl border border-white/10 bg-white/5 p-2 text-left transition hover:bg-white/10"
               >
                 <div className="flex gap-3">
                   {video.thumbnail_url ? (
@@ -525,7 +523,7 @@ export function TravelGlobe({
                     </p>
                   </div>
                 </div>
-              </a>
+              </button>
             ))}
           </div>
 
@@ -570,13 +568,12 @@ function buildPointLabel(point: GlobePoint) {
     const comments = formatNumber(Number(video?.comment_count || 0));
     const title = escapeHtml(video?.title || "Video");
     const date = escapeHtml(formatDate(video?.published_at || null));
-    const href = escapeHtml(getYouTubeHref(video) || "#");
     return `<div style="background:rgba(5,8,16,.92);padding:10px;border-radius:14px;border:1px solid rgba(255,255,255,.18);width:300px;color:white;font-family:system-ui">
       <img src="${thumb}" alt="${title}" style="width:100%;height:160px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,.12)" />
       <div style="margin-top:8px;font-size:16px;font-weight:700;line-height:1.25">${title}</div>
       <div style="margin-top:6px;font-size:13px;color:#d1d5db">${views} views · ${likes} likes · ${comments} comments</div>
       <div style="margin-top:4px;font-size:12px;color:#94a3b8">${date} · ${escapeHtml(point.country_name)}</div>
-      <a href="${href}" target="_blank" rel="noreferrer" style="display:inline-block;margin-top:8px;font-size:12px;color:#67e8f9;text-decoration:none">Open video ↗</a>
+      <div style="margin-top:8px;font-size:12px;color:#67e8f9">Selecciona el pin para abrir el embed oficial</div>
     </div>`;
   }
 

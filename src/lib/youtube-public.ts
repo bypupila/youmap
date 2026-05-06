@@ -3,6 +3,12 @@ import { sanitizeEnvValue } from "@/lib/env";
 const CHANNEL_ID_REGEX = /^UC[a-zA-Z0-9_-]{20,}$/;
 const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
 
+function assertPublicYouTubeScrapeAllowed() {
+  if (process.env.NODE_ENV === "production" && process.env.YOUTUBE_ALLOW_PUBLIC_SCRAPE !== "1") {
+    throw new Error("Public YouTube HTML/RSS scraping is disabled in production. Use YouTube Data API Services.");
+  }
+}
+
 export interface PublicYouTubeChannelValidation {
   channelId: string;
   channelName: string;
@@ -153,6 +159,7 @@ function extractThumbnailUrl(entryXml: string) {
 }
 
 export async function loadPublicChannelFeedVideos(channelId: string): Promise<PublicYouTubeFeedVideo[]> {
+  assertPublicYouTubeScrapeAllowed();
   const xml = await fetchChannelFeedXml(channelId);
   if (!xml) return [];
 
@@ -235,6 +242,7 @@ async function fetchChannelAboutStats(channelId: string) {
 }
 
 export async function validateYouTubeChannelWithoutApiKey(input: string): Promise<PublicYouTubeChannelValidation> {
+  assertPublicYouTubeScrapeAllowed();
   const inputUrl = normalizeYoutubeChannelUrl(input);
   const { html, resolvedUrl } = await fetchChannelPage(inputUrl);
   const parsed = parseChannelPage(html, resolvedUrl);

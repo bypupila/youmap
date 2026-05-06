@@ -118,3 +118,19 @@ La mejor opcion para TravelYourMap es un modelo hibrido:
 HIGH: quieres un MVP mas rapido sin OAuth, limitado a metadata fresca y metricas propias de TravelYourMap, o quieres ir directo al modelo robusto con OAuth creator para habilitar analytics de YouTube por destino con menor riesgo?
 
 Recomendacion: empezar con embed oficial + Data API oficial + refresh/borrado 30 dias + metricas propias de TravelYourMap. Agregar OAuth antes de vender analytics avanzadas basadas en views/likes.
+
+## Addendum 2026-05-06: hardening post-implementacion
+
+CONFIRMADO:
+
+- `src/components/map/video-selection-sheet.tsx` y `src/components/map/desktop-video-map-card.tsx` ya usan `YouTubeEmbedPlayer`.
+- `src/components/map/video-viewer-utils.ts` centraliza validacion de IDs, `watch` canonico y config oficial del embed.
+- `src/components/travel-globe.tsx` ya no genera links directos a `watch?v=...` desde tooltips/paneles de preview; los clicks de video deben ir al visor con embed del shell.
+- `next.config.mjs` permite `script-src` para `https://www.youtube.com` porque el IFrame API carga desde ese host; tambien permite `frame-src` para `https://www.youtube.com` y `https://www.youtube-nocookie.com`, y mantiene `Referrer-Policy: strict-origin-when-cross-origin`.
+- El iframe oficial no debe quedar oculto esperando `onReady`; ese evento puede demorarse o no resolver en algunas superficies de QA. El fallback visual solo se muestra ante error real para no tapar controles del reproductor.
+- `src/lib/youtube-public.ts` queda bloqueado en produccion salvo opt-in explicito `YOUTUBE_ALLOW_PUBLIC_SCRAPE=1`; la ruta productiva es YouTube Data API.
+- Los datasets procesados tienen IDs validos y sin duplicados. Advertencia: los datasets estaticos antiguos todavia no incluyen `made_for_kids`; deben regenerarse con el extractor endurecido cuando haya `YOUTUBE_API_KEY`.
+
+Decision cerrada:
+
+- V1 mantiene MVP sin OAuth: embed oficial + YouTube Data API oficial + expiracion de datos no autorizados. OAuth read-only y paquete de compliance audit quedan como P2.

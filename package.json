@@ -13,6 +13,7 @@
     "security:workflow-pinning": "node scripts/check-workflow-pinning.mjs",
     "security:install-hooks": "./scripts/install-git-hooks.sh",
     "security:rotate-auth": "node scripts/rotate-auth-session-secret.mjs",
+    "youtube:embed-audit": "node scripts/audit-youtube-embeds.mjs",
     "validate:env": "node scripts/validate-env.mjs",
     "polar:bootstrap": "node scripts/polar-bootstrap-travel.mjs",
     "user:set-role": "node scripts/set-user-role.mjs"

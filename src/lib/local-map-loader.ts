@@ -17,6 +17,7 @@ const locationSchema = z.object({
   comment_count: z.number().optional().nullable(),
   duration_seconds: z.number().optional().nullable(),
   is_short: z.boolean().optional().nullable(),
+  made_for_kids: z.boolean().optional().nullable(),
   is_travel: z.boolean().optional().nullable(),
   travel_score: z.number().optional().nullable(),
   travel_signals: z.array(z.string()).optional().nullable(),
@@ -25,14 +26,27 @@ const locationSchema = z.object({
   recording_lat: z.number().optional().nullable(),
   recording_lng: z.number().optional().nullable(),
   recording_location_description: z.string().optional().nullable(),
+  youtube_data_refreshed_at: z.string().optional().nullable(),
+  youtube_data_expires_at: z.string().optional().nullable(),
   travel_type: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  location_status: z.enum(["pending", "processing", "mapped", "no_location", "failed", "verified_auto", "needs_manual", "verified_manual"]).optional().nullable(),
+  location_source: z.string().optional().nullable(),
+  verification_source: z.enum(["heuristic", "nominatim", "gemini", "manual", "youtube_recording_details"]).optional().nullable(),
+  location_score: z.number().optional().nullable(),
+  location_evidence: z.record(z.unknown()).optional().nullable(),
+  playlist_signals: z.array(z.record(z.unknown())).optional().nullable(),
+  geo_hints: z.array(z.record(z.unknown())).optional().nullable(),
+  location_precision: z.enum(["city", "region", "country", "unresolved"]).optional().nullable(),
+  needs_manual_reason: z.string().optional().nullable(),
   country_code: z.string().length(2),
   country_name: z.string().optional().nullable(),
   location_label: z.string().optional().nullable(),
   lat: z.number(),
   lng: z.number(),
   confidence_score: z.number().optional().nullable(),
-});
+}).passthrough();
 
 const locationsSchema = z.array(locationSchema);
 

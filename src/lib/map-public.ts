@@ -50,6 +50,7 @@ interface PublicChannelRow {
 
 const FALLBACK_SHARE_HOST = "https://travelyourmap.bypupila.com";
 const BY_PUPILA_KEYS = new Set(["bypupila", "by.pupila"]);
+const LOCAL_GLOBAL_MAP_IDS = new Set(["luisito-global-map", "drew-global-map"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const EXAMPLE_SPONSORS: MapRailSponsor[] = [
@@ -243,6 +244,30 @@ export async function loadPublicMapPayloadByChannelId({
     const demoChannelRef = await resolvePublicChannel(DEMO_USERNAME);
     if (!demoChannelRef) return null;
     return loadPublicMapPayloadByChannelRef(demoChannelRef, viewerUserId || null, voterFingerprint || null);
+  }
+
+  if (LOCAL_GLOBAL_MAP_IDS.has(channelId)) {
+    const mapPayload = await loadMapDataByChannelId(channelId);
+    if (!mapPayload) return null;
+    const canonicalHandle = normalizeChannelHandle(mapPayload.channel.channel_handle || mapPayload.channel.channel_name);
+    return {
+      ...mapPayload,
+      channel: {
+        ...mapPayload.channel,
+        canonicalHandle,
+      },
+      viewer: {
+        isOwner: false,
+        isAuthenticated: Boolean(viewerUserId),
+        role: "viewer",
+        isSuperAdmin: false,
+        shareUrl: `${FALLBACK_SHARE_HOST}/map?channelId=${encodeURIComponent(channelId)}`,
+        adminUrl: null,
+      },
+      sponsors: [],
+      activePoll: null,
+      availablePollOptions: buildPollOptionsFromVideos(mapPayload.videoLocations),
+    };
   }
 
   // Backward compatibility: old links may pass handle/username in channelId.

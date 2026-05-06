@@ -15,6 +15,8 @@ const YOUTUBE_HOSTS = new Set([
   "www.youtube-nocookie.com",
 ]);
 const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+export const YOUTUBE_OFFICIAL_EMBED_HOST = "https://www.youtube.com";
+export const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 export function buildCountryVideoSections(videos: TravelVideoLocation[], currentVideo: TravelVideoLocation | null) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
@@ -47,21 +49,58 @@ export function isValidYouTubeVideoId(videoId?: string | null) {
   return YOUTUBE_VIDEO_ID_PATTERN.test(String(videoId || "").trim());
 }
 
-function isYouTubeUrl(value: string) {
+export function normalizeYouTubeVideoId(videoId?: string | null) {
+  const normalized = String(videoId || "").trim();
+  return isValidYouTubeVideoId(normalized) ? normalized : "";
+}
+
+function parseYouTubeVideoIdFromUrl(value: string) {
   try {
     const url = new URL(value);
-    return YOUTUBE_HOSTS.has(url.hostname);
+    if (!YOUTUBE_HOSTS.has(url.hostname)) return "";
+
+    if (url.hostname === "youtu.be") {
+      return normalizeYouTubeVideoId(url.pathname.split("/").filter(Boolean)[0]);
+    }
+
+    const watchId = normalizeYouTubeVideoId(url.searchParams.get("v"));
+    if (watchId) return watchId;
+
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (parts[0] === "embed" || parts[0] === "shorts") {
+      return normalizeYouTubeVideoId(parts[1]);
+    }
   } catch {
-    return false;
+    return "";
   }
+
+  return "";
 }
 
 export function getYouTubeHref(video?: TravelVideoLocation | null) {
   if (!video) return "";
-  const explicitUrl = String(video.video_url || "").trim();
-  if (explicitUrl && isYouTubeUrl(explicitUrl)) return explicitUrl;
-  if (!isValidYouTubeVideoId(video.youtube_video_id)) return "";
-  return `https://www.youtube.com/watch?v=${video.youtube_video_id}`;
+  const videoId = normalizeYouTubeVideoId(video.youtube_video_id) || parseYouTubeVideoIdFromUrl(String(video.video_url || "").trim());
+  if (!videoId) return "";
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+export function getOfficialYouTubeEmbedUrl(videoId?: string | null, origin?: string | null) {
+  const normalizedVideoId = normalizeYouTubeVideoId(videoId);
+  if (!normalizedVideoId) return "";
+
+  const url = new URL(`/embed/${normalizedVideoId}`, YOUTUBE_OFFICIAL_EMBED_HOST);
+  url.searchParams.set("playsinline", "1");
+  if (origin) url.searchParams.set("origin", origin);
+  return url.toString();
+}
+
+export function getOfficialYouTubeEmbedPlayerVars(origin: string, allowFullscreen = true) {
+  return {
+    playsinline: 1,
+    controls: 1,
+    fs: allowFullscreen ? 1 : 0,
+    origin,
+  } satisfies Record<string, string | number>;
 }
 
 export function countryCodeToFlag(countryCode?: string | null) {

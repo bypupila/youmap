@@ -39,6 +39,7 @@ Permitir que los videos se reproduzcan dentro de TravelYourMap usando el reprodu
 
 ### CSP y Referer
 
+- Actualizar `script-src` a incluir `https://www.youtube.com`, requerido por `https://www.youtube.com/iframe_api`.
 - Actualizar `frame-src` a incluir `https://www.youtube.com` y, si se decide privacy enhanced mode, `https://www.youtube-nocookie.com`.
 - Mantener `Referrer-Policy: strict-origin-when-cross-origin`.
 - No abrir embeds en `window.open(..., "noreferrer")`; YouTube requiere Referer para embedded playback.
@@ -116,3 +117,34 @@ Permitir que los videos se reproduzcan dentro de TravelYourMap usando el reprodu
 - `npm run lint` OK.
 - `npm run build` OK.
 - Se genero la ruta `POST/GET /api/youtube/data-expiry/sweep` y se conecto cron diario en `vercel.json`.
+
+## Addendum 2026-05-06
+
+Cambios de hardening aplicados:
+
+- `YouTubeEmbedPlayer` usa helpers compartidos para config oficial, valida `youtube_video_id`, mantiene `origin`, no activa autoplay y elimina `modestbranding`.
+- El viewport del player queda con minimo de 200px reales para cumplir el tamano minimo del reproductor embebido.
+- El iframe oficial permanece visible durante carga; no se tapa esperando `onReady`. El fallback con thumbnail solo aparece si la API o el ID fallan.
+- CSP cubre `script-src https://www.youtube.com` para el IFrame API y `frame-src` para hosts oficiales de embed.
+- `getYouTubeHref` ignora URLs arbitrarias y reconstruye el watch canonico desde un ID validado; `getOfficialYouTubeEmbedUrl` y `getOfficialYouTubeEmbedPlayerVars` quedan como contrato compartido.
+- `TravelGlobe` elimina links directos a videos en tooltips/paneles internos; las superficies reproducibles deben abrir `VideoSelectionSheet` o `DesktopVideoMapCard`.
+- `scripts/extract_youtube_channel_videos.py` hidrata `status`, exporta `made_for_kids`, `youtube_data_refreshed_at` y `youtube_data_expires_at`, y evita `search.list` salvo `--allow-search-fallback`.
+- `src/lib/local-map-loader.ts` acepta campos de compliance cuando los datasets estaticos se regeneren.
+- `scripts/audit-youtube-embeds.mjs` valida datasets, codigo del player, CSP, bloqueo de scraping en produccion y opcionalmente Neon `by.pupila` con `--check-neon-by-pupila`.
+
+Validacion esperada para cierre:
+
+- `npm run youtube:embed-audit`
+- `python3 -m py_compile scripts/extract_youtube_channel_videos.py`
+- `npm run lint`
+- `npm run build`
+- QA browser en rutas demo/locales con embed visible.
+
+Validacion browser ejecutada el 2026-05-06:
+
+- `/map?channelId=demo-channel` en desktop, tablet y mobile.
+- `/map?channelId=luisito-global-map`.
+- `/map?channelId=drew-global-map`.
+- `/u/demo`.
+- `/u/by.pupila`.
+- Resultado: todos cargaron `https://www.youtube.com/embed/...` con `enablejsapi=1`, `origin`, sin `autoplay=1`, sin `modestbranding`, sin errores CSP y sin overlays sobre controles inferiores.

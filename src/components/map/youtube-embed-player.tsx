@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowSquareOut, SpinnerGap, WarningCircle } from "@phosphor-icons/react";
-import { isValidYouTubeVideoId } from "@/components/map/video-viewer-utils";
+import { ArrowSquareOut, WarningCircle } from "@phosphor-icons/react";
+import {
+  getOfficialYouTubeEmbedPlayerVars,
+  normalizeYouTubeVideoId,
+  YOUTUBE_IFRAME_API_SRC,
+  YOUTUBE_OFFICIAL_EMBED_HOST,
+} from "@/components/map/video-viewer-utils";
 import { cn } from "@/lib/utils";
 
 interface YouTubeEmbedPlayerProps {
@@ -27,6 +32,8 @@ type YTPlayerInstance = {
 type YTPlayerOptions = {
   videoId: string;
   host?: string;
+  width?: string | number;
+  height?: string | number;
   playerVars?: Record<string, string | number | boolean>;
   events?: {
     onReady?: () => void;
@@ -62,11 +69,11 @@ function loadYouTubeIframeApi() {
       resolve();
     };
 
-    const existingScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    const existingScript = document.querySelector(`script[src="${YOUTUBE_IFRAME_API_SRC}"]`);
     if (existingScript) return;
 
     const script = document.createElement("script");
-    script.src = "https://www.youtube.com/iframe_api";
+    script.src = YOUTUBE_IFRAME_API_SRC;
     script.async = true;
     script.onerror = () => {
       youtubeIframeApiPromise = null;
@@ -104,8 +111,9 @@ export function YouTubeEmbedPlayer({
 }: YouTubeEmbedPlayerProps) {
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayerInstance | null>(null);
-  const [status, setStatus] = useState<EmbedStatus>(videoId && isValidYouTubeVideoId(videoId) ? "loading" : "error");
-  const [errorReason, setErrorReason] = useState<EmbedErrorReason>(videoId && isValidYouTubeVideoId(videoId) ? null : "invalid_id");
+  const normalizedVideoId = normalizeYouTubeVideoId(videoId);
+  const [status, setStatus] = useState<EmbedStatus>(normalizedVideoId ? "loading" : "error");
+  const [errorReason, setErrorReason] = useState<EmbedErrorReason>(normalizedVideoId ? null : "invalid_id");
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +121,7 @@ export function YouTubeEmbedPlayer({
     playerRef.current?.destroy();
     playerRef.current = null;
 
-    if (!videoId || !isValidYouTubeVideoId(videoId)) {
+    if (!normalizedVideoId) {
       setStatus("error");
       setErrorReason("invalid_id");
       return () => {
@@ -130,15 +138,11 @@ export function YouTubeEmbedPlayer({
 
         playerRef.current?.destroy();
         playerRef.current = new window.YT.Player(playerContainerRef.current, {
-          host: "https://www.youtube.com",
-          videoId,
-          playerVars: {
-            playsinline: 1,
-            rel: 0,
-            modestbranding: 1,
-            fs: allowFullscreen ? 1 : 0,
-            origin: window.location.origin,
-          },
+          host: YOUTUBE_OFFICIAL_EMBED_HOST,
+          width: "100%",
+          height: "100%",
+          videoId: normalizedVideoId,
+          playerVars: getOfficialYouTubeEmbedPlayerVars(window.location.origin, allowFullscreen),
           events: {
             onReady: () => {
               if (!cancelled) setStatus("ready");
@@ -164,7 +168,7 @@ export function YouTubeEmbedPlayer({
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [allowFullscreen, videoId]);
+  }, [allowFullscreen, normalizedVideoId]);
 
   function openInYoutube() {
     if (onOpenInYouTube) {
@@ -175,16 +179,17 @@ export function YouTubeEmbedPlayer({
     window.open(youtubeHref, "_blank", "noopener");
   }
 
+  const showFallback = status === "error";
+
   return (
     <div className={cn("space-y-2", className)}>
-      <div className={cn("relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black", frameClassName)}>
+      <div className={cn("relative aspect-video min-h-[202px] overflow-hidden rounded-xl border border-white/10 bg-black", frameClassName)}>
         <div
           ref={playerContainerRef}
-          className={cn("absolute inset-0 transition-opacity duration-200", status === "ready" ? "opacity-100" : "opacity-0")}
-          aria-hidden={status !== "ready"}
+          className="absolute inset-0"
         />
 
-        {status !== "ready" ? (
+        {showFallback ? (
           <div className="absolute inset-0 overflow-hidden">
             {thumbnailUrl ? (
               <div
@@ -199,13 +204,13 @@ export function YouTubeEmbedPlayer({
               <div className="flex items-start justify-between gap-3">
                 <div className="max-w-[calc(100%-3rem)]">
                   <span className="inline-flex items-center rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#ff9a89]">
-                    {status === "loading" ? "Cargando embed oficial" : "Vista previa no disponible"}
+                    Vista previa no disponible
                   </span>
                   <p className="mt-2 text-[14px] font-medium leading-5 text-white">{title}</p>
                   <p className="mt-1 max-w-[34ch] text-[12px] leading-5 text-[#c7ced8]">{getErrorMessage(errorReason)}</p>
                 </div>
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.8)]">
-                  {status === "loading" ? <SpinnerGap size={16} className="animate-spin" /> : <WarningCircle size={16} />}
+                  <WarningCircle size={16} />
                 </div>
               </div>
 

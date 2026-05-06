@@ -20,7 +20,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -95,6 +95,7 @@ def resolve_channel(
     handle: Optional[str],
     channel_id: Optional[str],
     uploads_playlist_id: Optional[str],
+    allow_search_fallback: bool = False,
 ) -> Dict[str, Optional[str]]:
     if uploads_playlist_id:
         return {
@@ -102,38 +103,63 @@ def resolve_channel(
             "channel_name": None,
             "channel_handle": handle,
             "uploads_playlist_id": uploads_playlist_id,
+            "resolution_method": "uploads_playlist_id",
         }
 
     resolved_channel_id = channel_id or None
+    channel_row: Optional[Dict] = None
+
     if not resolved_channel_id and handle:
-        search = youtube_fetch(
-            "search",
+        normalized_handle = str(handle).strip().replace("@", "")
+        for candidate in (f"@{normalized_handle}", normalized_handle):
+            channels_by_handle = youtube_fetch(
+                "channels",
+                {
+                    "part": "snippet,statistics,contentDetails",
+                    "forHandle": candidate,
+                    "maxResults": "1",
+                },
+                api_key,
+            )
+            channel_row = (channels_by_handle.get("items") or [None])[0]
+            if channel_row:
+                resolved_channel_id = channel_row.get("id")
+                break
+
+        if not resolved_channel_id and allow_search_fallback:
+            search = youtube_fetch(
+                "search",
+                {
+                    "part": "snippet",
+                    "type": "channel",
+                    "q": handle,
+                    "maxResults": "5",
+                },
+                api_key,
+            )
+            items = search.get("items") or []
+            if items:
+                resolved_channel_id = (((items[0] or {}).get("id") or {}).get("channelId")) or None
+
+    if not resolved_channel_id:
+        raise RuntimeError(
+            "No se pudo resolver el canal con YouTube Data API oficial. "
+            "Pasa --channel-id o --uploads-playlist-id, o usa --allow-search-fallback si necesitas search.list excepcionalmente."
+        )
+
+    if not channel_row:
+        channels = youtube_fetch(
+            "channels",
             {
-                "part": "snippet",
-                "type": "channel",
-                "q": handle,
-                "maxResults": "5",
+                "part": "snippet,statistics,contentDetails",
+                "id": resolved_channel_id,
+                "maxResults": "1",
             },
             api_key,
         )
-        items = search.get("items") or []
-        if not items:
-            raise RuntimeError(f"No se encontro canal para handle '{handle}'")
-        resolved_channel_id = (((items[0] or {}).get("id") or {}).get("channelId")) or None
+        channel_row = (channels.get("items") or [None])[0]
 
-    if not resolved_channel_id:
-        raise RuntimeError("Debes pasar handle, channel_id o uploads_playlist_id")
-
-    channels = youtube_fetch(
-        "channels",
-        {
-            "part": "snippet,statistics,contentDetails",
-            "id": resolved_channel_id,
-            "maxResults": "1",
-        },
-        api_key,
-    )
-    row = (channels.get("items") or [None])[0]
+    row = channel_row
     if not row:
         raise RuntimeError("No se pudo resolver el canal en YouTube API")
 
@@ -147,6 +173,7 @@ def resolve_channel(
         "channel_name": snippet.get("title"),
         "channel_handle": f"@{handle}" if handle and not str(handle).startswith("@") else handle,
         "uploads_playlist_id": uploads,
+        "resolution_method": "channel_id" if channel_id else "forHandle" if handle else "unknown",
     }
 
 
@@ -188,13 +215,15 @@ def load_all_playlist_video_ids(api_key: str, uploads_playlist_id: str) -> List[
 
 def load_video_details(api_key: str, video_ids: List[str]) -> List[Dict]:
     details: List[Dict] = []
+    refreshed_at = datetime.now(timezone.utc)
+    expires_at = refreshed_at + timedelta(days=30)
 
     for index in range(0, len(video_ids), 50):
         batch = video_ids[index : index + 50]
         payload = youtube_fetch(
             "videos",
             {
-                "part": "snippet,statistics,contentDetails,recordingDetails",
+                "part": "snippet,statistics,contentDetails,recordingDetails,status",
                 "id": ",".join(batch),
                 "maxResults": str(len(batch)),
             },
@@ -206,6 +235,7 @@ def load_video_details(api_key: str, video_ids: List[str]) -> List[Dict]:
             stats = item.get("statistics") or {}
             content = item.get("contentDetails") or {}
             recording = item.get("recordingDetails") or {}
+            status = item.get("status") or {}
             recording_location = recording.get("location") or {}
             duration_seconds = parse_iso8601_duration_to_seconds(content.get("duration"))
             thumbs = snippet.get("thumbnails") or {}
@@ -237,6 +267,11 @@ def load_video_details(api_key: str, video_ids: List[str]) -> List[Dict]:
                         snippet.get("title") or "",
                         snippet.get("description") or "",
                     ),
+                    "made_for_kids": (
+                        bool(status.get("madeForKids"))
+                        if isinstance(status.get("madeForKids"), bool)
+                        else None
+                    ),
                     "recording_lat": (
                         float(recording_location.get("latitude"))
                         if recording_location.get("latitude") is not None
@@ -249,6 +284,8 @@ def load_video_details(api_key: str, video_ids: List[str]) -> List[Dict]:
                     ),
                     "recording_location_description": recording.get("locationDescription"),
                     "thumbnail_url": thumbnail_url,
+                    "youtube_data_refreshed_at": refreshed_at.isoformat(),
+                    "youtube_data_expires_at": expires_at.isoformat(),
                 }
             )
 
@@ -314,6 +351,7 @@ def export_csv(path: Path, rows: List[Dict]) -> None:
         "published_at",
         "duration_seconds",
         "is_short",
+        "made_for_kids",
         "recording_lat",
         "recording_lng",
         "recording_location_description",
@@ -321,6 +359,8 @@ def export_csv(path: Path, rows: List[Dict]) -> None:
         "like_count",
         "comment_count",
         "thumbnail_url",
+        "youtube_data_refreshed_at",
+        "youtube_data_expires_at",
     ]
     with path.open("w", encoding="utf-8", newline="") as fp:
         writer = csv.DictWriter(fp, fieldnames=fields)
@@ -336,6 +376,11 @@ def main() -> int:
     parser.add_argument("--uploads-playlist-id", default=None)
     parser.add_argument("--out-dir", default="data/processed")
     parser.add_argument("--include-shorts", action="store_true", help="Incluye Shorts (por defecto se omiten).")
+    parser.add_argument(
+        "--allow-search-fallback",
+        action="store_true",
+        help="Permite usar search.list si forHandle/channel_id no resuelve. Es excepcional por cuota/compliance.",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -344,14 +389,16 @@ def main() -> int:
     if not api_key:
         raise RuntimeError("Falta YOUTUBE_API_KEY en .env.local o entorno.")
 
-    handle = parse_handle(args.handle) if args.handle else None
-    channel_id = parse_channel_id(args.channel_id) if args.channel_id else None
+    channel_id_from_handle_input = parse_channel_id(args.handle) if args.handle else None
+    handle = None if channel_id_from_handle_input else parse_handle(args.handle) if args.handle else None
+    channel_id = parse_channel_id(args.channel_id) if args.channel_id else channel_id_from_handle_input
 
     channel = resolve_channel(
         api_key=api_key,
         handle=handle,
         channel_id=channel_id,
         uploads_playlist_id=args.uploads_playlist_id,
+        allow_search_fallback=bool(args.allow_search_fallback),
     )
     uploads_playlist_id = channel["uploads_playlist_id"] or ""
     if not uploads_playlist_id:
@@ -382,6 +429,9 @@ def main() -> int:
             "channel_name": channel.get("channel_name"),
             "channel_handle": channel.get("channel_handle"),
             "uploads_playlist_id": uploads_playlist_id,
+            "resolution_method": channel.get("resolution_method"),
+            "ingestion": "youtube_data_api_v3",
+            "youtube_data_policy": "non_authorized_data_expires_within_30_days",
             "videos_count": len(rows),
             "shorts_included": bool(args.include_shorts),
         },

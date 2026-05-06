@@ -286,6 +286,7 @@ def main() -> None:
         "comment_count": video.get("comment_count"),
         "duration_seconds": video.get("duration_seconds"),
         "is_short": False,
+        "made_for_kids": video.get("made_for_kids"),
         "is_travel": True,
         "travel_score": round(float(travel_score), 3),
         "travel_signals": signals,
@@ -302,6 +303,8 @@ def main() -> None:
         "lng": lng,
         "confidence_score": round(confidence, 3),
         "location_source": source,
+        "youtube_data_refreshed_at": video.get("youtube_data_refreshed_at"),
+        "youtube_data_expires_at": video.get("youtube_data_expires_at"),
       }
     )
 
