@@ -72,14 +72,14 @@ export function ExplorePageClient() {
       <div className="relative z-10 mx-auto max-w-[1400px] px-4 pb-10 pt-6">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
           <div>
-            <p className="yt-overline mb-4">Discovery editorial</p>
-            <h1 className="yt-display max-w-[12ch]">Creadores, países y rutas en una sola capa de exploración.</h1>
+            <p className="tym-overline mb-4">Discovery editorial</p>
+            <h1 className="tym-display max-w-[12ch]">Creadores, países y rutas en una sola capa de exploración.</h1>
             <p className="mt-4 max-w-[58ch] text-base leading-7 text-muted-foreground">
               La navegación mezcla mapa, miniaturas y metadata real para que una marca o un fan pueda detectar patrones de viaje sin caer en un grid genérico.
             </p>
           </div>
           <div className="tm-surface rounded-[2rem] p-5">
-            <p className="yt-overline">Selección curada</p>
+            <p className="tym-overline">Selección curada</p>
             <p className="mt-3 text-lg font-medium">Cada tarjeta conserva contexto geográfico, fecha y señales de rendimiento para que el catálogo no se vea como un feed indiferenciado.</p>
           </div>
         </motion.div>
@@ -89,7 +89,7 @@ export function ExplorePageClient() {
             <button
               key={chip}
               type="button"
-              className="yt-nav-pill"
+              className="tym-nav-pill"
               data-active={activeFilter === chip ? "true" : "false"}
               onClick={() => setActiveFilter(chip)}
             >
@@ -100,7 +100,7 @@ export function ExplorePageClient() {
 
         {filteredVideos.length === 0 ? (
           <section className="tm-surface-strong rounded-[2rem] p-8 text-center">
-            <p className="yt-overline">Empty state</p>
+            <p className="tym-overline">Empty state</p>
             <h2 className="mt-3 text-2xl font-medium">Todavía no hay videos explorables.</h2>
             <p className="mx-auto mt-3 max-w-[52ch] text-sm leading-6 text-muted-foreground">
               Conecta un canal o termina la importación para poblar esta vista con países, miniaturas y navegación por destino.
@@ -114,10 +114,10 @@ export function ExplorePageClient() {
                 initial={{ opacity: 0, y: 22 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04 }}
-                className={cn("yt-video-card", index === 0 && "md:col-span-2")}
+                className={cn("tym-video-card", index === 0 && "md:col-span-2")}
               >
                 <Link href="/map" className="group">
-                  <div className="yt-video-thumb aspect-[16/10]">
+                  <div className="tym-video-thumb aspect-[16/10]">
                     {video.thumbnail_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img

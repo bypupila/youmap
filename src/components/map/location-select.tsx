@@ -133,7 +133,7 @@ export function LocationSelect({
                         className={cn(
                           "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors",
                           active
-                            ? "bg-[rgba(255,0,0,0.14)] text-[#f1f1f1]"
+                            ? "bg-[rgba(255, 90, 61,0.14)] text-[#f1f1f1]"
                             : "text-[#d8d8d8] hover:bg-white/[0.06]"
                         )}
                       >

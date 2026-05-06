@@ -122,6 +122,16 @@ function filterOutShortVideoIds(videoIds: string[], detailsByVideoId: Map<string
   return videoIds.filter((videoId) => !detailsByVideoId.get(videoId)?.is_short);
 }
 
+function buildVideoSourcePayload(details: Awaited<ReturnType<typeof loadVideoDetails>> extends Map<string, infer T> ? T : never) {
+  return {
+    ingestion: "youtube_data_api_v3",
+    fetched_at: details.youtube_data_refreshed_at,
+    expires_at: details.youtube_data_expires_at,
+    made_for_kids: details.made_for_kids ?? null,
+    has_recording_details: typeof details.recording_lat === "number" && typeof details.recording_lng === "number",
+  } satisfies Record<string, unknown>;
+}
+
 async function upsertChannelImportRun(input: {
   importRunId: string;
   channelId: string;
@@ -208,9 +218,12 @@ async function upsertVideoSkeleton(input: {
       comment_count,
       duration_seconds,
       is_short,
+      made_for_kids,
       recording_lat,
       recording_lng,
       recording_location_description,
+      youtube_data_refreshed_at,
+      youtube_data_expires_at,
       location_status,
       playlist_signals,
       geo_hints,
@@ -229,9 +242,12 @@ async function upsertVideoSkeleton(input: {
       ${input.details?.comment_count ?? null},
       ${input.details?.duration_seconds ?? null},
       ${Boolean(input.details?.is_short)},
+      ${input.details?.made_for_kids ?? null},
       ${input.details?.recording_lat ?? null},
       ${input.details?.recording_lng ?? null},
       ${input.details?.recording_location_description ?? null},
+      ${input.details?.youtube_data_refreshed_at || now},
+      ${input.details?.youtube_data_expires_at || now},
       'processing',
       '[]'::jsonb,
       '[]'::jsonb,
@@ -249,9 +265,12 @@ async function upsertVideoSkeleton(input: {
       comment_count = excluded.comment_count,
       duration_seconds = excluded.duration_seconds,
       is_short = excluded.is_short,
+      made_for_kids = excluded.made_for_kids,
       recording_lat = excluded.recording_lat,
       recording_lng = excluded.recording_lng,
       recording_location_description = excluded.recording_location_description,
+      youtube_data_refreshed_at = excluded.youtube_data_refreshed_at,
+      youtube_data_expires_at = excluded.youtube_data_expires_at,
       source_payload = excluded.source_payload,
       updated_at = excluded.updated_at
     returning id
@@ -287,6 +306,7 @@ async function loadPrimaryLocations(channelId: string) {
       comment_count: number | string | null;
       duration_seconds: number | string | null;
       is_short: boolean | null;
+      made_for_kids: boolean | null;
       is_travel: boolean | null;
       travel_score: number | string | null;
       travel_signals: string[] | null;
@@ -295,6 +315,8 @@ async function loadPrimaryLocations(channelId: string) {
       recording_lat: number | string | null;
       recording_lng: number | string | null;
       recording_location_description: string | null;
+      youtube_data_refreshed_at: string | null;
+      youtube_data_expires_at: string | null;
       location_status: string | null;
       playlist_signals: Array<Record<string, unknown>> | null;
       geo_hints: Array<Record<string, unknown>> | null;
@@ -325,6 +347,7 @@ async function loadPrimaryLocations(channelId: string) {
       v.comment_count,
       v.duration_seconds,
       v.is_short,
+      v.made_for_kids,
       v.is_travel,
       v.travel_score,
       v.travel_signals,
@@ -333,6 +356,8 @@ async function loadPrimaryLocations(channelId: string) {
       v.recording_lat,
       v.recording_lng,
       v.recording_location_description,
+      v.youtube_data_refreshed_at,
+      v.youtube_data_expires_at,
       v.location_status,
       v.playlist_signals,
       v.geo_hints,
@@ -359,6 +384,7 @@ async function loadPrimaryLocations(channelId: string) {
     comment_count: Number(row.comment_count || 0) || null,
     duration_seconds: Number(row.duration_seconds || 0) || null,
     is_short: Boolean(row.is_short),
+    made_for_kids: typeof row.made_for_kids === "boolean" ? row.made_for_kids : null,
     is_travel: row.is_travel !== false,
     travel_score: Number(row.travel_score || 0) || null,
     travel_signals: Array.isArray(row.travel_signals) ? row.travel_signals : [],
@@ -367,6 +393,8 @@ async function loadPrimaryLocations(channelId: string) {
     recording_lat: Number(row.recording_lat || 0) || null,
     recording_lng: Number(row.recording_lng || 0) || null,
     recording_location_description: row.recording_location_description || null,
+    youtube_data_refreshed_at: row.youtube_data_refreshed_at || null,
+    youtube_data_expires_at: row.youtube_data_expires_at || null,
     country_code: row.country_code,
     country_name: row.country_name || row.country_code,
     location_label: row.location_label,
@@ -633,7 +661,7 @@ export async function importYoutubeChannel({
               youtubeVideoId: videoId,
               details,
               sourcePayload: {
-                video_details: details.raw || null,
+                ...buildVideoSourcePayload(details),
               },
             }),
           2

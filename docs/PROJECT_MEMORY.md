@@ -1,4 +1,4 @@
-# Project Memory - TravelMap
+# Project Memory - TravelYourMap
 
 Documento vivo de procesos para construir, validar, operar y evolucionar este proyecto.
 Cada cambio relevante debe actualizar este archivo el mismo dia.
@@ -63,7 +63,7 @@ npm run dev
 
 ## Marca y posicionamiento
 
-- Marca principal: `TravelMap` / `YOUMAP - BY PUPILA`.
+- Marca principal: `TravelYourMap - BY PUPILA`.
 - Promesa central: convertir un canal de viajes en una experiencia geografica interactiva y publicable.
 - Tono de marca: editorial, premium, tecnico y directo; evita UI generica o demasiado neutra.
 - Identidad visual: superficies oscuras, acentos rojos, glass/blur controlado y foco fuerte en el contenido.

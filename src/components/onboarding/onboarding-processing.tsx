@@ -161,6 +161,28 @@ async function readResponseMessage(response: Response, fallback: string) {
   }
 }
 
+function readStoredImportRunId(storageKey: string, legacyStorageKey: string) {
+  const primary = String(sessionStorage.getItem(storageKey) || "").trim();
+  if (primary) return primary;
+
+  const legacy = String(sessionStorage.getItem(legacyStorageKey) || "").trim();
+  if (legacy) {
+    sessionStorage.setItem(storageKey, legacy);
+  }
+
+  return legacy;
+}
+
+function writeStoredImportRunId(storageKey: string, legacyStorageKey: string, runId: string) {
+  sessionStorage.setItem(storageKey, runId);
+  sessionStorage.setItem(legacyStorageKey, runId);
+}
+
+function clearStoredImportRunId(storageKey: string, legacyStorageKey: string) {
+  sessionStorage.removeItem(storageKey);
+  sessionStorage.removeItem(legacyStorageKey);
+}
+
 export function OnboardingProcessing({
   locale,
   user,
@@ -170,7 +192,8 @@ export function OnboardingProcessing({
 }) {
   const router = useRouter();
   const copy = copyByLocale[locale];
-  const storageKey = useMemo(() => `travelmap-import-run-id:${user.id}`, [user.id]);
+  const storageKey = useMemo(() => `travelyourmap-import-run-id:${user.id}`, [user.id]);
+  const legacyStorageKey = useMemo(() => `travelmap-import-run-id:${user.id}`, [user.id]);
   const [runId, setRunId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<string>("idle");
   const [progress, setProgress] = useState(0);
@@ -209,7 +232,7 @@ export function OnboardingProcessing({
     async function ensureImportRun() {
       try {
         if (active) setError(null);
-        const cachedRunId = String(sessionStorage.getItem(storageKey) || "").trim();
+        const cachedRunId = readStoredImportRunId(storageKey, legacyStorageKey);
         if (cachedRunId) {
           const validateResponse = await fetch(`/api/youtube/import/${encodeURIComponent(cachedRunId)}`, { cache: "no-store" });
           if (validateResponse.ok) {
@@ -223,7 +246,7 @@ export function OnboardingProcessing({
               Date.now() - updatedAtMs > STALE_RUN_MS;
 
             if (status === "failed" || isStaleRunningRun) {
-              sessionStorage.removeItem(storageKey);
+              clearStoredImportRunId(storageKey, legacyStorageKey);
             } else {
               if (!active) return;
               setError(null);
@@ -233,7 +256,7 @@ export function OnboardingProcessing({
             }
           } else {
             invalidRunIdsRef.current.add(cachedRunId);
-            sessionStorage.removeItem(storageKey);
+            clearStoredImportRunId(storageKey, legacyStorageKey);
           }
         }
 
@@ -250,7 +273,7 @@ export function OnboardingProcessing({
           throw new Error(copy.errorFallback);
         }
 
-        sessionStorage.setItem(storageKey, startPayload.import_run_id);
+        writeStoredImportRunId(storageKey, legacyStorageKey, startPayload.import_run_id);
         if (!active) return;
         setError(null);
         setRunId(startPayload.import_run_id);
@@ -266,7 +289,7 @@ export function OnboardingProcessing({
     return () => {
       active = false;
     };
-  }, [copy.errorFallback, runId, storageKey]);
+  }, [copy.errorFallback, legacyStorageKey, runId, storageKey]);
 
   useEffect(() => {
     const currentRunId: string = runId || "";
@@ -294,7 +317,7 @@ export function OnboardingProcessing({
         if (!response.ok) {
           if (response.status === 404) {
             invalidRunIdsRef.current.add(currentRunId);
-            sessionStorage.removeItem(storageKey);
+            clearStoredImportRunId(storageKey, legacyStorageKey);
             if (!active) return;
             setError(null);
             setRunId(null);
@@ -339,7 +362,7 @@ export function OnboardingProcessing({
         }
 
         if (status === "failed") {
-          sessionStorage.removeItem(storageKey);
+          clearStoredImportRunId(storageKey, legacyStorageKey);
           setError(payload.error_message || copy.errorFallback);
           setRunId(null);
         }
@@ -355,7 +378,7 @@ export function OnboardingProcessing({
       active = false;
       window.clearInterval(interval);
     };
-  }, [copy.errorFallback, runId, storageKey]);
+  }, [copy.errorFallback, legacyStorageKey, runId, storageKey]);
 
   const progressLabel = useMemo(() => {
     if (runStatus === "completed") return copy.profileFallback;
@@ -391,7 +414,7 @@ export function OnboardingProcessing({
       }
 
       setProfileSuccess(payload?.public_map_path || copy.profileFallback);
-      sessionStorage.removeItem(storageKey);
+      clearStoredImportRunId(storageKey, legacyStorageKey);
       router.push(payload?.channel_id ? `/dashboard?channelId=${encodeURIComponent(payload.channel_id)}` : "/dashboard");
       router.refresh();
     } catch (profileSubmitError) {
@@ -404,7 +427,7 @@ export function OnboardingProcessing({
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-[#f1f1f1]">
       <div className="platform-grid-glow pointer-events-none absolute inset-0" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_18%,rgba(255,255,255,0.08),transparent_26%),radial-gradient(circle_at_82%_22%,rgba(255,0,0,0.16),transparent_26%),linear-gradient(180deg,rgba(17,20,22,0.95),rgba(17,20,22,0.82))]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_18%,rgba(255,255,255,0.08),transparent_26%),radial-gradient(circle_at_82%_22%,rgba(255, 90, 61,0.16),transparent_26%),linear-gradient(180deg,rgba(17,20,22,0.95),rgba(17,20,22,0.82))]" />
 
       <header className="absolute inset-x-0 top-0 z-40 px-4 py-3">
         <FloatingTopBar
@@ -419,7 +442,7 @@ export function OnboardingProcessing({
       <section className="relative z-20 flex min-h-[100dvh] items-center justify-center px-4 pt-28 pb-8">
         <div className="grid w-full max-w-[1040px] gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="rounded-[28px] border border-white/10 bg-[#181818]/96 p-6 shadow-[0_30px_100px_rgba(0,0,0,0.35)] backdrop-blur">
-            <p className="yt-overline text-[#aaaaaa]">{copy.eyebrow}</p>
+            <p className="tym-overline text-[#aaaaaa]">{copy.eyebrow}</p>
             <h1 className="mt-3 max-w-2xl text-[32px] leading-[36px] font-bold tracking-tight text-[#f1f1f1] sm:text-[42px] sm:leading-[46px]">
               {copy.title}
             </h1>
@@ -436,7 +459,7 @@ export function OnboardingProcessing({
 
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#2a2a2a]">
                 <div
-                  className="h-full rounded-full bg-[linear-gradient(90deg,rgba(255,0,0,0.88)_0%,rgba(204,0,0,1)_100%)] transition-all duration-500"
+                  className="h-full rounded-full bg-[linear-gradient(90deg,rgba(255, 90, 61,0.88)_0%,rgba(216, 70, 47,1)_100%)] transition-all duration-500"
                   style={{ width: `${Math.round(progress * 100)}%` }}
                 />
               </div>
@@ -447,7 +470,7 @@ export function OnboardingProcessing({
                     key={phrase}
                     className={cn(
                       "rounded-full border px-3 py-1 text-[12px] transition-colors",
-                      index === phraseIndex ? "border-[rgba(255,0,0,0.4)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-[#181818] text-[#8f8f8f]"
+                      index === phraseIndex ? "border-[rgba(255, 90, 61,0.4)] bg-[rgba(255, 90, 61,0.12)] text-[#f1f1f1]" : "border-white/10 bg-[#181818] text-[#8f8f8f]"
                     )}
                   >
                     {phrase}
@@ -466,7 +489,7 @@ export function OnboardingProcessing({
           <div className="rounded-[28px] border border-white/10 bg-[#181818]/96 p-6 shadow-[0_30px_100px_rgba(0,0,0,0.35)] backdrop-blur">
             {showProfile ? (
               <>
-                <p className="yt-overline text-[#aaaaaa]">{copy.profileTitle}</p>
+                <p className="tym-overline text-[#aaaaaa]">{copy.profileTitle}</p>
                 <h2 className="mt-2 text-[28px] leading-[32px] font-bold text-[#f1f1f1]">{copy.profileTitle}</h2>
                 <p className="onboarding-description mt-3 text-[14px] leading-6">{copy.profileDescription}</p>
 
@@ -505,7 +528,7 @@ export function OnboardingProcessing({
               </>
             ) : (
               <>
-                <p className="yt-overline text-[#aaaaaa]">{copy.loadingTitle}</p>
+                <p className="tym-overline text-[#aaaaaa]">{copy.loadingTitle}</p>
                 <h2 className="mt-2 text-[28px] leading-[32px] font-bold text-[#f1f1f1]">{copy.loadingTitle}</h2>
                 <p className="onboarding-description mt-3 text-[14px] leading-6">{copy.loadingDescription}</p>
                 <div className="mt-5 rounded-[24px] border border-white/10 bg-[#212121] p-4">
@@ -573,14 +596,14 @@ function ImportPlanet({ progress, mappedVideos, locale }: { progress: number; ma
           </div>
 
           <div
-            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,0,0,0.15)_0%,rgba(255,0,0,0.55)_58%,rgba(94,0,0,0.92)_100%)] transition-transform duration-700 ease-out"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255, 90, 61,0.15)_0%,rgba(255, 90, 61,0.55)_58%,rgba(94,0,0,0.92)_100%)] transition-transform duration-700 ease-out"
             style={{ transform: `translateY(${100 - progressPercent}%)` }}
           />
           <div
             className="pointer-events-none absolute inset-x-5 h-[2px] rounded-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.88),transparent)] transition-[top] duration-700 ease-out"
             style={{ top: `${Math.max(0, Math.min(100, 100 - progressPercent))}%` }}
           />
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.24),transparent_42%),radial-gradient(circle_at_68%_73%,rgba(255,0,0,0.2),transparent_40%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.24),transparent_42%),radial-gradient(circle_at_68%_73%,rgba(255, 90, 61,0.2),transparent_40%)]" />
         </div>
 
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">

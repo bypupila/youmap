@@ -302,7 +302,7 @@ export function MissingVideosDialog({
               className={cn(
                 "inline-flex h-8 items-center gap-2 rounded-lg border px-3 text-[12px] font-medium transition-colors",
                 allSelected
-                  ? "border-[rgba(255,0,0,0.45)] bg-[rgba(255,0,0,0.12)] text-[#ffd5d5]"
+                  ? "border-[rgba(255, 90, 61,0.45)] bg-[rgba(255, 90, 61,0.12)] text-[#ffd5d5]"
                   : "border-white/10 bg-white/[0.04] text-[#d8d8d8] hover:bg-white/[0.08]",
                 pendingManual.length === 0 && "opacity-50"
               )}
@@ -311,7 +311,7 @@ export function MissingVideosDialog({
                 aria-hidden="true"
                 className={cn(
                   "flex h-4 w-4 items-center justify-center rounded border",
-                  allSelected ? "border-transparent bg-[#ff3a3a]" : "border-white/30"
+                  allSelected ? "border-transparent bg-[#ff6a4e]" : "border-white/30"
                 )}
               >
                 {allSelected ? <Check size={11} weight="bold" className="text-white" /> : null}
@@ -347,7 +347,7 @@ export function MissingVideosDialog({
               type="button"
               onClick={handleBulkApply}
               disabled={busy || selectedVideoIds.size === 0 || !bulkCountry}
-              className="h-11 rounded-xl bg-[#ff3a3a] px-5 text-[13px] font-semibold text-white hover:bg-[#ff5252] disabled:bg-white/10 disabled:text-[#7a7f86] sm:px-6"
+              className="h-11 rounded-xl bg-[#ff6a4e] px-5 text-[13px] font-semibold text-white hover:bg-[#ff7a63] disabled:bg-white/10 disabled:text-[#7a7f86] sm:px-6"
             >
               <SquaresFour size={15} weight="bold" />
               Apply to selected
@@ -408,7 +408,7 @@ export function MissingVideosDialog({
                             aria-hidden="true"
                             className={cn(
                               "flex h-5 w-5 items-center justify-center rounded-md border transition-colors",
-                              selected ? "border-transparent bg-[#ff3a3a]" : "border-white/25 bg-white/[0.02] peer-hover:border-white/40"
+                              selected ? "border-transparent bg-[#ff6a4e]" : "border-white/25 bg-white/[0.02] peer-hover:border-white/40"
                             )}
                           >
                             {selected ? <Check size={13} weight="bold" className="text-white" /> : null}

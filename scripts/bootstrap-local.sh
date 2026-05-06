@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-echo "TravelMap local bootstrap"
+echo "TravelYourMap local bootstrap"
 
 if [[ -f .env.local ]]; then
   echo "Found .env.local"

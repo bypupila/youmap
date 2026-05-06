@@ -1,4 +1,4 @@
-# TravelMap Design System (Apple-inspired, shadcn-based)
+# TravelYourMap Design System (Apple-inspired, shadcn-based)
 
 ## Objetivo
 

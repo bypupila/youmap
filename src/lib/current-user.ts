@@ -1,5 +1,11 @@
 import { cookies } from "next/headers";
-import { getSessionPayloadFromToken, getSessionUserIdFromCookieHeader, getSessionUserIdFromToken, SESSION_COOKIE_NAME } from "@/lib/auth-session";
+import {
+  getSessionPayloadFromCookieHeader,
+  getSessionTokenFromCookieStore,
+  getSessionUserIdFromCookieHeader,
+  getSessionPayloadFromToken,
+  getSessionUserIdFromToken,
+} from "@/lib/auth-session";
 import { sql } from "@/lib/neon";
 import { isSessionRevoked } from "@/lib/session-revocations";
 
@@ -36,13 +42,13 @@ export async function getValidSessionUserIdFromRequest(request: Request) {
 
 export async function getSessionUserIdFromServerCookies() {
   const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value || null;
+  const token = getSessionTokenFromCookieStore(cookieStore);
   return getSessionUserIdFromToken(token);
 }
 
 export async function getValidSessionUserIdFromServerCookies() {
   const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value || null;
+  const token = getSessionTokenFromCookieStore(cookieStore);
   const payload = getSessionPayloadFromToken(token);
   if (!payload) return null;
   if (await isSessionRevoked(payload.sub, payload.iat)) return null;
@@ -80,21 +86,6 @@ export async function getValidSessionUserFromRequest(request: Request): Promise<
   const userId = await getValidSessionUserIdFromRequest(request);
   if (!userId) return null;
   return getSessionUserById(userId);
-}
-
-function getSessionPayloadFromCookieHeader(cookieHeader: string | null) {
-  if (!cookieHeader) return null;
-  const pairs = cookieHeader.split(";");
-  for (const pair of pairs) {
-    const trimmed = pair.trim();
-    if (!trimmed) continue;
-    const separator = trimmed.indexOf("=");
-    if (separator <= 0) continue;
-    const key = trimmed.slice(0, separator).trim();
-    if (key !== SESSION_COOKIE_NAME) continue;
-    return getSessionPayloadFromToken(decodeURIComponent(trimmed.slice(separator + 1).trim()));
-  }
-  return null;
 }
 
 export interface ChannelAccess {

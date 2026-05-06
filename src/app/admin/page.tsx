@@ -36,11 +36,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(201,31,24,0.2),transparent_34%),linear-gradient(180deg,rgba(11,13,15,0.98),rgba(17,20,22,0.96))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(225, 84, 58,0.2),transparent_34%),linear-gradient(180deg,rgba(11,13,15,0.98),rgba(17,20,22,0.96))]" />
       <div className="relative mx-auto max-w-[1440px] px-4 py-6 lg:px-6 lg:py-8">
         <header className="tm-surface-strong flex flex-wrap items-center justify-between gap-4 rounded-[2rem] border border-white/10 px-5 py-4 shadow-[0_30px_120px_-60px_rgba(0,0,0,0.92)]">
           <div>
-            <p className="yt-overline text-[#8ff0ff]">Panel operativo</p>
+            <p className="tym-overline text-[#8ff0ff]">Panel operativo</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#f5f7fb]">Administración global</h1>
             <p className="mt-1 text-sm text-[#aab2bc]">
               Acceso restringido a superadmin para gestionar roles y revisar el estado de usuarios.
@@ -52,7 +52,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <ShieldCheck className="h-3 w-3" />
               <span>Superadmin</span>
             </Badge>
-            <Link href="/dashboard" className="yt-btn-secondary inline-flex items-center gap-2">
+            <Link href="/dashboard" className="tym-btn-secondary inline-flex items-center gap-2">
               <ExternalLink className="h-4 w-4" />
               Volver al dashboard
             </Link>
@@ -79,7 +79,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <RoleManagementCard />
             <RoleAuditPanel items={recentRoleChanges} />
             <section className="tm-surface-strong rounded-[2rem] border border-white/10 p-5 shadow-[0_24px_100px_-56px_rgba(0,0,0,0.9)]">
-              <p className="yt-overline text-[#8ff0ff]">Guía operativa</p>
+              <p className="tym-overline text-[#8ff0ff]">Guía operativa</p>
               <div className="mt-3 space-y-3 text-sm leading-6 text-[#b8c0cb]">
                 <p>
                   Usa el listado para ubicar usuarios por email, username o rol. La búsqueda y la paginación se resuelven en el servidor.

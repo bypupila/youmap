@@ -14,7 +14,7 @@ export function RoleAuditPanel({ items }: RoleAuditPanelProps) {
       <CardHeader className="border-b border-white/10 px-5 pb-4 pt-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="yt-overline text-[#8ff0ff]">Trazabilidad</p>
+            <p className="tym-overline text-[#8ff0ff]">Trazabilidad</p>
             <CardTitle className="mt-1 text-[16px] font-semibold text-[#f5f7fb]">Cambios recientes de rol</CardTitle>
             <p className="mt-1 text-sm text-[#aab2bc]">
               Historial persistido de las últimas modificaciones hechas desde la app.
@@ -26,7 +26,7 @@ export function RoleAuditPanel({ items }: RoleAuditPanelProps) {
           </Badge>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/api/admin/user-role-audit/export" className="yt-btn-secondary inline-flex items-center gap-2 text-[12px]">
+          <Link href="/api/admin/user-role-audit/export" className="tym-btn-secondary inline-flex items-center gap-2 text-[12px]">
             Exportar CSV
           </Link>
         </div>

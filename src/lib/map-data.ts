@@ -56,6 +56,7 @@ interface RawLocationRow {
   comment_count: number | string | null;
   duration_seconds: number | string | null;
   is_short: boolean | null;
+  made_for_kids: boolean | null;
   is_travel: boolean | null;
   travel_score: number | string | null;
   travel_signals: string[] | null;
@@ -64,6 +65,8 @@ interface RawLocationRow {
   recording_lat: number | string | null;
   recording_lng: number | string | null;
   recording_location_description: string | null;
+  youtube_data_refreshed_at: string | null;
+  youtube_data_expires_at: string | null;
   published_at: string | null;
   travel_type: string | null;
   location_status: string | null;
@@ -115,7 +118,10 @@ function normalizeDemoVideoRows(): TravelVideoLocation[] {
     location_evidence: { source: "demo_seed" },
     needs_manual_reason: null,
     is_short: false,
+    made_for_kids: null,
     is_travel: true,
+    youtube_data_refreshed_at: null,
+    youtube_data_expires_at: null,
   }));
 }
 
@@ -132,7 +138,10 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
       location_score: video.location_score || video.confidence_score || 0.75,
       needs_manual_reason: video.needs_manual_reason || null,
       is_short: false,
+      made_for_kids: null,
       is_travel: true,
+      youtube_data_refreshed_at: null,
+      youtube_data_expires_at: null,
     }));
     return {
       channel: local.channel,
@@ -152,7 +161,10 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
       location_score: video.location_score || video.confidence_score || 0.75,
       needs_manual_reason: video.needs_manual_reason || null,
       is_short: false,
+      made_for_kids: null,
       is_travel: true,
+      youtube_data_refreshed_at: null,
+      youtube_data_expires_at: null,
     }));
     return {
       channel: local.channel,
@@ -230,6 +242,7 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         v.comment_count,
         v.duration_seconds,
         v.is_short,
+        v.made_for_kids,
         v.is_travel,
         v.travel_score,
         v.travel_signals,
@@ -238,6 +251,8 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         v.recording_lat,
         v.recording_lng,
         v.recording_location_description,
+        v.youtube_data_refreshed_at,
+        v.youtube_data_expires_at,
         v.published_at,
         v.travel_type,
         v.location_status,
@@ -312,6 +327,7 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         comment_count: Number(row.comment_count || 0) || null,
         duration_seconds: Number(row.duration_seconds || 0) || null,
         is_short: Boolean(row.is_short),
+        made_for_kids: typeof row.made_for_kids === "boolean" ? row.made_for_kids : null,
         is_travel: row.is_travel !== false,
         travel_score: Number(row.travel_score || 0) || null,
         travel_signals: Array.isArray(row.travel_signals) ? row.travel_signals : [],
@@ -320,6 +336,8 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         recording_lat: Number(row.recording_lat || 0) || null,
         recording_lng: Number(row.recording_lng || 0) || null,
         recording_location_description: row.recording_location_description || null,
+        youtube_data_refreshed_at: row.youtube_data_refreshed_at || null,
+        youtube_data_expires_at: row.youtube_data_expires_at || null,
         travel_type: row.travel_type,
         country_code: row.country_code,
         country_name: row.country_name || row.country_code,

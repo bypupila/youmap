@@ -56,7 +56,7 @@ export function RoleManagementCard() {
       <CardHeader className="border-b border-white/10 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="yt-overline text-[#8ff0ff]">Superadmin</p>
+            <p className="tym-overline text-[#8ff0ff]">Superadmin</p>
             <CardTitle className="mt-1 text-[15px] font-semibold text-[#f5f7fb]">Administrar roles</CardTitle>
           </div>
           <Badge variant="outline" className="border-[#8ff0ff]/25 bg-[#8ff0ff]/10 text-[11px] text-[#b9f7ff]">
@@ -103,7 +103,7 @@ export function RoleManagementCard() {
             })}
           </div>
 
-          <Button type="submit" className="w-full bg-[#c91f18] hover:bg-[#e03128]" disabled={isSaving}>
+          <Button type="submit" className="w-full bg-[#e1543a] hover:bg-[#ee6b49]" disabled={isSaving}>
             {isSaving ? "Guardando..." : "Actualizar rol"}
           </Button>
         </form>

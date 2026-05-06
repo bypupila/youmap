@@ -1,10 +1,13 @@
 import { createHash, randomUUID } from "crypto";
 import { cookies, headers } from "next/headers";
+import type { NextResponse } from "next/server";
 import type { TravelVideoLocation } from "@/lib/types";
 import { sql } from "@/lib/neon";
 import { getPostHogClient } from "@/lib/posthog-server";
 
-export const MAP_VOTER_COOKIE = "travelmap_voter";
+export const MAP_VOTER_COOKIE = "travelyourmap_voter";
+export const LEGACY_MAP_VOTER_COOKIE = "travelmap_voter";
+export const MAP_VOTER_COOKIE_NAMES = [MAP_VOTER_COOKIE, LEGACY_MAP_VOTER_COOKIE] as const;
 export const MAP_POLL_COUNTRY_VOTE_CITY = "__country__";
 export const MAP_POLL_DEFAULT_MODE: MapPollMode = "country_city";
 
@@ -92,6 +95,8 @@ interface PollVoteRow {
   city: string;
   votes: number | string;
 }
+
+type CookieStore = Awaited<ReturnType<typeof cookies>>;
 
 export class MapPollVoteError extends Error {
   status: number;
@@ -233,11 +238,42 @@ export function hashValue(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+export function getMapVoterCookieInfo(cookieStore: CookieStore) {
+  for (const cookieName of MAP_VOTER_COOKIE_NAMES) {
+    const value = String(cookieStore.get(cookieName)?.value || "").trim();
+    if (value) {
+      return { raw: value, cookieName };
+    }
+  }
+  return null;
+}
+
+export function getMapVoterFingerprintFromCookieStore(cookieStore: CookieStore) {
+  const info = getMapVoterCookieInfo(cookieStore);
+  return info ? hashValue(info.raw) : null;
+}
+
+export function setMapVoterCookies(response: NextResponse, raw: string) {
+  for (const cookieName of MAP_VOTER_COOKIE_NAMES) {
+    response.cookies.set(cookieName, raw, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
+}
+
 export async function getOrCreateVoterFingerprint() {
   const cookieStore = await cookies();
-  const existing = String(cookieStore.get(MAP_VOTER_COOKIE)?.value || "").trim();
+  const existing = getMapVoterCookieInfo(cookieStore);
   if (existing) {
-    return { raw: existing, hashed: hashValue(existing), shouldSetCookie: false };
+    return {
+      raw: existing.raw,
+      hashed: hashValue(existing.raw),
+      shouldSetCookie: existing.cookieName !== MAP_VOTER_COOKIE,
+    };
   }
 
   const generated = randomUUID();

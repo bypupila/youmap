@@ -62,11 +62,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   if (!payload && sessionUserRole === "superadmin" && !previewSession && !isDemoMode) {
     return (
       <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(201,31,24,0.18),transparent_40%),linear-gradient(180deg,rgba(17,20,22,0.98),rgba(11,13,15,0.94))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(225, 84, 58,0.18),transparent_40%),linear-gradient(180deg,rgba(17,20,22,0.98),rgba(11,13,15,0.94))]" />
         <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl items-center justify-center px-4 py-8">
           <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_minmax(340px,380px)]">
             <section className="tm-surface-strong rounded-[2rem] border border-white/10 p-6 shadow-[0_30px_120px_-60px_rgba(0,0,0,0.9)]">
-              <p className="yt-overline text-[#8ff0ff]">Superadmin</p>
+              <p className="tym-overline text-[#8ff0ff]">Superadmin</p>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#f5f7fb]">Panel global de control</h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-[#b8c0cb]">
                 No necesitas abrir un mapa para cambiar roles. Desde aquí puedes administrar usuarios por email,
@@ -87,7 +87,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <div className="lg:self-start">
               <RoleManagementCard />
               <div className="mt-4">
-                <Link href="/admin" className="yt-btn-secondary inline-flex w-full items-center justify-center gap-2">
+                <Link href="/admin" className="tym-btn-secondary inline-flex w-full items-center justify-center gap-2">
                   Abrir panel global
                 </Link>
               </div>
@@ -143,7 +143,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <div className="pointer-events-auto">
             <RoleManagementCard />
             <div className="mt-3">
-              <Link href="/admin" className="yt-btn-secondary inline-flex w-full items-center justify-center gap-2">
+              <Link href="/admin" className="tym-btn-secondary inline-flex w-full items-center justify-center gap-2">
                 Abrir panel global
               </Link>
             </div>

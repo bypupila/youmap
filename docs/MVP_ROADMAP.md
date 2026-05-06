@@ -1,10 +1,10 @@
-# Roadmap MVP - TravelMap / YOUMAP
+# Roadmap MVP - TravelYourMap
 
 Auditoria realizada el 2026-04-23 sobre el repo local y las rutas principales.
 
 ## Estado actual
 
-TravelMap ya tiene la base de MVP: landing, onboarding, auth, dashboard/mapa, perfil publico, explore, billing Polar, importacion YouTube, Neon y sponsors. El producto compila y el contrato de entorno local pasa validacion.
+TravelYourMap ya tiene la base de MVP: landing, onboarding, auth, dashboard/mapa, perfil publico, explore, billing Polar, importacion YouTube, Neon y sponsors. El producto compila y el contrato de entorno local pasa validacion.
 
 Validaciones ejecutadas:
 
@@ -265,4 +265,3 @@ El MVP queda listo para lanzar cuando:
 - El mapa publico tiene URL estable, metadata propia y no muestra herramientas owner a visitantes.
 - No hay CTAs de QA, rutas example ni placeholders visibles en rutas publicas.
 - Build, lint, env validation y smoke responsive pasan antes de deploy.
-

@@ -70,7 +70,7 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
 
   if (error || !stats) {
     return (
-      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-200">
+      <div className="rounded-2xl border border-[#ff5a3d]/30 bg-[#ff5a3d]/10 p-6 text-sm text-[#ffd3cb]">
         Error cargando analytics: {error || "sin datos"}
       </div>
     );

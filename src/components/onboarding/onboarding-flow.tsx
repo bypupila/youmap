@@ -101,6 +101,8 @@ type OnboardingCopy = {
   unavailablePlanCopy: string;
   importRealStatsNote: string;
   importDemoStatsNote: string;
+  acceptTermsLabel: string;
+  acceptTermsRequired: string;
 };
 
 const localizedPlanDetails: Record<OnboardingLocale, Record<PlanDefinition["slug"], LocalizedPlanDetails>> = {
@@ -174,7 +176,7 @@ const localizedPlanDetails: Record<OnboardingLocale, Record<PlanDefinition["slug
 
 const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
   es: {
-    topbarEyebrow: "YouMap",
+    topbarEyebrow: "TravelYourMap",
     topbarTitle: "Onboarding",
     searchPlaceholder: "Busca videos, países o creadores",
     workflowPill: "Flujo del creador",
@@ -285,11 +287,13 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     ],
     unavailablePlanBadge: "Próximamente",
     unavailablePlanCopy: "No disponible por el momento.",
-    importRealStatsNote: "Videos y views vienen del canal real (sin API key). Países se mantienen demo hasta completar importación.",
+    importRealStatsNote: "Videos y views vienen del canal real vía YouTube Data API oficial. Países se mantienen demo hasta completar importación.",
     importDemoStatsNote: "La vista usa ejemplo visual. El loader ejecuta la importación real después de Polar.",
+    acceptTermsLabel: "Acepto los Términos y la Política de Privacidad de TravelYourMap, y reconozco que el producto usa YouTube API Services.",
+    acceptTermsRequired: "Debes aceptar términos y privacidad para continuar.",
   },
   en: {
-    topbarEyebrow: "YouMap",
+    topbarEyebrow: "TravelYourMap",
     topbarTitle: "Onboarding",
     searchPlaceholder: "Search across videos, countries, or creators",
     workflowPill: "Creator flow",
@@ -400,8 +404,10 @@ const onboardingCopy: Record<OnboardingLocale, OnboardingCopy> = {
     ],
     unavailablePlanBadge: "Coming soon",
     unavailablePlanCopy: "Not available for now.",
-    importRealStatsNote: "Videos and views come from the real channel (no API key). Countries stay demo until import finishes.",
+    importRealStatsNote: "Videos and views come from the real channel via the official YouTube Data API. Countries stay demo until import finishes.",
     importDemoStatsNote: "This view uses visual sample data while real import runs after Polar.",
+    acceptTermsLabel: "I accept TravelYourMap Terms and Privacy Policy, and acknowledge that this product uses YouTube API Services.",
+    acceptTermsRequired: "You must accept terms and privacy to continue.",
   },
 };
 
@@ -431,6 +437,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   const [channelValidationMessage, setChannelValidationMessage] = useState<string | null>(null);
   const [channelValidationMetrics, setChannelValidationMetrics] = useState<ChannelValidationMetrics | null>(null);
   const [activationState, setActivationState] = useState<ActivationState>("idle");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const didHydrateQueryState = useRef(false);
 
   const copy = onboardingCopy[locale];
@@ -513,6 +520,10 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
       router.push(`/dashboard?channelId=${DEMO_CHANNEL_SLUG}&demo=1`);
       return;
     }
+    if (!acceptTerms) {
+      setStepError(copy.acceptTermsRequired);
+      return;
+    }
 
     const checkoutSlug = resolveCheckoutPlanSlug(selectedPlan);
     if (!checkoutSlug) {
@@ -540,6 +551,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
             selectedPlan,
             channelUrl: channelDraft.channelUrl.trim() || null,
             youtubeChannelId: channelValidationMetrics?.youtubeChannelId || null,
+            acceptTerms,
             activateWithoutPayment: false,
           }),
         });
@@ -579,6 +591,10 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
       router.push(`/dashboard?channelId=${DEMO_CHANNEL_SLUG}&demo=1`);
       return;
     }
+    if (!acceptTerms) {
+      setStepError(copy.acceptTermsRequired);
+      return;
+    }
 
     setActivationState("registering");
     setStepError(null);
@@ -600,6 +616,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
             selectedPlan,
             channelUrl: channelDraft.channelUrl.trim() || null,
             youtubeChannelId: channelValidationMetrics?.youtubeChannelId || null,
+            acceptTerms,
             activateWithoutPayment: true,
             deferImportToProcessing: true,
           }),
@@ -725,6 +742,10 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
       setStep((current) => (current + 1) as OnboardingStep);
       return;
     }
+    if (!acceptTerms) {
+      setStepError(copy.acceptTermsRequired);
+      return;
+    }
     await activateAndOpenCheckout();
   }
 
@@ -790,7 +811,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
           hideSearch
           actions={
             <>
-              <Link href={demoMapPath} className="yt-btn-primary">
+              <Link href={demoMapPath} className="tym-btn-primary">
                 {copy.demoMapLabel}
               </Link>
             </>
@@ -810,7 +831,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
               className="pointer-events-auto rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(25,28,31,0.96),rgba(18,21,23,0.92))] shadow-[0_36px_100px_-52px_rgba(0,0,0,0.92)] backdrop-blur"
             >
               <div className="border-b border-white/10 px-6 py-5 text-center sm:px-8">
-                <p className="yt-overline text-[#aaaaaa]">{currentMeta.eyebrow}</p>
+                <p className="tym-overline text-[#aaaaaa]">{currentMeta.eyebrow}</p>
                 <h1 className="mx-auto mt-2 max-w-3xl text-[30px] leading-[34px] font-bold tracking-tight text-[#f1f1f1] sm:text-[38px] sm:leading-[42px]">
                   {currentMeta.title}
                 </h1>
@@ -838,6 +859,8 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
                   channelValidationMessage,
                   stepError,
                   activationState,
+                  acceptTerms,
+                  setAcceptTerms,
                   onActivateWithoutPaymentForTest: activateWithoutPaymentForTest,
                 })}
               </div>
@@ -901,6 +924,8 @@ function renderStepBody(
     channelValidationMessage: string | null;
     stepError: string | null;
     activationState: ActivationState;
+    acceptTerms: boolean;
+    setAcceptTerms: (value: boolean) => void;
     onActivateWithoutPaymentForTest: () => Promise<void>;
   }
 ) {
@@ -917,7 +942,7 @@ function renderStepBody(
           const Icon = feature.icon;
           return (
             <div key={feature.title} className="flex flex-col items-center rounded-[28px] border border-white/10 bg-[#212121] p-6 text-center">
-              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(255,0,0,0.14)] text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(255, 90, 61,0.14)] text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <Icon size={30} weight="regular" />
               </div>
               <p className="text-[16px] leading-[22px] font-medium text-[#f1f1f1]">{feature.title}</p>
@@ -959,7 +984,7 @@ function renderStepBody(
       <div className="space-y-5">
         <div className="rounded-[28px] border border-white/10 bg-[#212121] p-5">
           <div className="mx-auto max-w-3xl text-center">
-            <p className="yt-overline text-[#aaaaaa]">{ctx.copy.importStatusEyebrow}</p>
+            <p className="tym-overline text-[#aaaaaa]">{ctx.copy.importStatusEyebrow}</p>
             <p className="mt-2 text-[22px] leading-8 font-semibold text-[#f1f1f1]">{ctx.copy.importStatusTitle}</p>
             <p className="onboarding-description mt-3 text-[14px] leading-6">{ctx.copy.importStatusBody}</p>
           </div>
@@ -977,7 +1002,7 @@ function renderStepBody(
     return (
       <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="rounded-[28px] border border-white/10 bg-[#212121] p-5">
-          <p className="yt-overline text-[#aaaaaa]">{ctx.copy.analyticsCountryPerformance}</p>
+          <p className="tym-overline text-[#aaaaaa]">{ctx.copy.analyticsCountryPerformance}</p>
           <div className="mt-5 space-y-4">
             {ctx.analytics.top_countries.slice(0, 5).map((country, index) => (
               <div key={country.country_name}>
@@ -987,7 +1012,7 @@ function renderStepBody(
                     {country.video_count} {ctx.copy.metricMappedVideos}
                   </span>
                 </div>
-                <div className="yt-progress">
+                <div className="tym-progress">
                   <span style={{ width: `${Math.max(18, 100 - index * 12)}%` }} />
                 </div>
               </div>
@@ -1014,7 +1039,7 @@ function renderStepBody(
             </div>
             <p className="text-[16px] font-medium text-[#f1f1f1]">{sponsor.brand}</p>
             <p className="onboarding-description mt-2 text-[13px] leading-5">{ctx.copy.sponsorsDescription}</p>
-            <button type="button" className="yt-btn-secondary mt-5 w-full border border-black/10 bg-white text-black hover:bg-white hover:text-black">
+            <button type="button" className="tym-btn-secondary mt-5 w-full border border-black/10 bg-white text-black hover:bg-white hover:text-black">
               {ctx.copy.sponsorsConnect}
             </button>
           </div>
@@ -1026,8 +1051,8 @@ function renderStepBody(
   if (step === 5) {
     return (
       <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[28px] border border-[rgba(255,0,0,0.24)] bg-[rgba(255,0,0,0.12)] p-6">
-          <p className="yt-overline text-[#ff8b8b]">{ctx.copy.fanVoteEyebrow}</p>
+        <div className="rounded-[28px] border border-[rgba(255, 90, 61,0.24)] bg-[rgba(255, 90, 61,0.12)] p-6">
+          <p className="tym-overline text-[#ff8b8b]">{ctx.copy.fanVoteEyebrow}</p>
           <h3 className="mt-2 text-[26px] leading-[30px] font-bold text-[#f1f1f1]">{ctx.copy.fanVoteTitle}</h3>
           <p className="onboarding-description mt-3 max-w-xl text-[14px] leading-6">{ctx.copy.fanVoteDescription}</p>
         </div>
@@ -1042,7 +1067,7 @@ function renderStepBody(
                 <span className="text-[14px] font-medium text-[#f1f1f1]">{country}</span>
                 <span className="text-[12px] text-[#aaaaaa]">{score}%</span>
               </div>
-              <div className="yt-progress">
+              <div className="tym-progress">
                 <span style={{ width: `${score}%` }} />
               </div>
             </div>
@@ -1077,13 +1102,13 @@ function renderStepBody(
               className={cn(
                 "h-full rounded-[28px] border p-5 text-left transition-colors",
                 unavailable && "cursor-not-allowed border-white/10 bg-[#1b1b1b] opacity-70",
-                !unavailable && active && "border-[rgba(255,0,0,0.36)] bg-[rgba(255,0,0,0.12)]",
+                !unavailable && active && "border-[rgba(255, 90, 61,0.36)] bg-[rgba(255, 90, 61,0.12)]",
                 !unavailable && !active && "border-white/10 bg-[#212121] hover:bg-[#272727]"
               )}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="yt-overline text-[#aaaaaa]">{localizedPlan.name}</p>
+                  <p className="tym-overline text-[#aaaaaa]">{localizedPlan.name}</p>
                   <p className="mt-2 text-[24px] leading-[26px] font-bold text-[#f1f1f1]">{localizedPlan.price}</p>
                 </div>
                 {badgeLabel ? <Badge variant={unavailable ? "outline" : "secondary"}>{badgeLabel}</Badge> : null}
@@ -1103,14 +1128,33 @@ function renderStepBody(
           );
         })}
       </div>
-      <div className="rounded-2xl border border-[rgba(255,0,0,0.16)] bg-[rgba(255,0,0,0.08)] px-4 py-3 text-[13px] text-[#f1f1f1]">
+      <div className="rounded-2xl border border-[rgba(255, 90, 61,0.16)] bg-[rgba(255, 90, 61,0.08)] px-4 py-3 text-[13px] text-[#f1f1f1]">
         {ctx.copy.trialBadge} · {ctx.copy.trialNote}
       </div>
+      <label className="flex items-start gap-2 rounded-xl border border-white/10 bg-[#1b1b1b] px-3 py-2 text-[12px] text-[#d8dee6]">
+        <input
+          type="checkbox"
+          checked={ctx.acceptTerms}
+          onChange={(event) => ctx.setAcceptTerms(event.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-white/20 bg-[#0d1015]"
+        />
+        <span>
+          {ctx.copy.acceptTermsLabel}{" "}
+          <Link href="/terms" className="text-[#f5f7fb] underline underline-offset-2">
+            Terms
+          </Link>{" "}
+          /{" "}
+          <Link href="/privacy" className="text-[#f5f7fb] underline underline-offset-2">
+            Privacy
+          </Link>
+          .
+        </span>
+      </label>
       {showTestNoPaymentPlan ? (
         <div className="rounded-xl border border-[#ffd27a]/25 bg-[rgba(255,210,122,0.08)] px-3 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="yt-overline text-[#ffd27a]">{ctx.copy.testWithoutPayment}</p>
+              <p className="tym-overline text-[#ffd27a]">{ctx.copy.testWithoutPayment}</p>
               <p className="mt-1 text-[11px] leading-4 text-[#e7d7b1]">{ctx.copy.testWithoutPaymentHint}</p>
             </div>
             <Button

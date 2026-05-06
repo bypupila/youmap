@@ -2,7 +2,7 @@
 
 ## Overview
 
-TravelMap se divide en cuatro capas:
+TravelYourMap se divide en cuatro capas:
 
 1. Presentacion.
 2. Estado del producto.

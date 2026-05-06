@@ -16,6 +16,7 @@ import {
   formatVideoPlace,
   getYouTubeHref,
 } from "@/components/map/video-viewer-utils";
+import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
@@ -52,14 +53,16 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
   function openYouTubeVideo() {
     if (!currentVideo || !youtubeHref) return;
 
-    posthog.capture("video_youtube_opened", {
-      video_id: currentVideo.youtube_video_id,
-      video_title: currentVideo.title,
-      country_code: currentVideo.country_code,
-      country_name: currentVideo.country_name,
-    });
-    activity.markVideoOpened(currentVideo.youtube_video_id);
-    window.open(youtubeHref, "_blank", "noopener,noreferrer");
+    if (!currentVideo.made_for_kids) {
+      posthog.capture("video_youtube_opened", {
+        video_id: currentVideo.youtube_video_id,
+        video_title: currentVideo.title,
+        country_code: currentVideo.country_code,
+        country_name: currentVideo.country_name,
+      });
+      activity.markVideoOpened(currentVideo.youtube_video_id);
+    }
+    window.open(youtubeHref, "_blank", "noopener");
   }
 
   return (
@@ -98,57 +101,43 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
           <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1">
             <section className="min-h-0 border-b border-white/10 px-4 py-4 lg:border-b-0 lg:border-r lg:px-5 lg:py-5">
               <div className="flex h-full min-h-0 flex-col">
-                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/35 shadow-[0_24px_70px_-38px_rgba(0,0,0,0.92)]">
-                  <div className="aspect-video max-h-[32dvh] lg:max-h-none">
-                    {currentVideo?.thumbnail_url ? (
-                      <Image
-                        src={toCompactYouTubeThumbnail(currentVideo.thumbnail_url) || currentVideo.thumbnail_url}
-                        alt={currentVideo.title}
-                        width={1280}
-                        height={720}
-                        sizes="(min-width: 1280px) 520px, (min-width: 1024px) 48vw, calc(100vw - 2rem)"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-white/[0.04] text-[13px] text-[#9da5ae]">
-                        Miniatura no disponible
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={openYouTubeVideo}
-                    disabled={!currentVideo}
-                    className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-[#ff0000] text-white shadow-[0_18px_44px_-18px_rgba(255,0,0,0.95)] transition hover:scale-105 hover:bg-[#e03128] active:scale-95 disabled:opacity-50"
-                    aria-label="Abrir video en YouTube"
-                  >
-                    <Play size={24} weight="fill" className="translate-x-0.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => go(-1)}
-                    className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white backdrop-blur-md transition hover:bg-black/75 active:scale-95"
-                    aria-label="Video anterior"
-                  >
-                    <CaretLeft size={18} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => go(1)}
-                    className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white backdrop-blur-md transition hover:bg-black/75 active:scale-95"
-                    aria-label="Siguiente video"
-                  >
-                    <CaretRight size={18} />
-                  </button>
-
-                  <div className="absolute left-3 top-3 inline-flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-full border border-white/10 bg-black/60 px-3 py-1.5 text-[12px] text-white backdrop-blur-md">
+                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/35 p-2 shadow-[0_24px_70px_-38px_rgba(0,0,0,0.92)]">
+                  <div className="absolute left-4 top-4 z-[2] inline-flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full border border-white/10 bg-black/65 px-3 py-1.5 text-[12px] text-white backdrop-blur-md">
                     <span>{countryCodeToFlag(currentVideo?.country_code)}</span>
                     <span className="truncate font-medium">{currentVideo?.country_name || currentVideo?.country_code || "Destino"}</span>
                     <span className="text-white/45">/</span>
                     <span>{currentIndex + 1} de {Math.max(1, orderedVideos.length)}</span>
                   </div>
+                  <YouTubeEmbedPlayer
+                    videoId={currentVideo?.youtube_video_id || null}
+                    title={currentVideo?.title || "Video seleccionado"}
+                    youtubeHref={youtubeHref}
+                    onOpenInYouTube={openYouTubeVideo}
+                    isMadeForKids={Boolean(currentVideo?.made_for_kids)}
+                    frameClassName="max-h-[32dvh] lg:max-h-none"
+                  />
+                </div>
+
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => go(-1)}
+                    className="flex h-9 min-w-[116px] items-center justify-center gap-1 rounded-md border border-white/10 bg-black/45 px-3 text-[12px] text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95"
+                    aria-label="Video anterior"
+                  >
+                    <CaretLeft size={16} />
+                    Anterior
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => go(1)}
+                    className="flex h-9 min-w-[116px] items-center justify-center gap-1 rounded-md border border-white/10 bg-black/45 px-3 text-[12px] text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95"
+                    aria-label="Siguiente video"
+                  >
+                    Siguiente
+                    <CaretRight size={16} />
+                  </button>
                 </div>
 
                 <div className="mt-4 min-w-0">
@@ -161,7 +150,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
                       <Clock size={13} />
                       {formatVideoDate(currentVideo?.published_at)}
                     </span>
-                    <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] shadow-[0_12px_30px_-16px_rgba(255,0,0,0.9)]", currentSeen ? "bg-[#ff0000] text-white" : "bg-white text-[#c91f18]")}>
+                    <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] shadow-[0_12px_30px_-16px_rgba(255, 90, 61,0.9)]", currentSeen ? "bg-[#ff5a3d] text-white" : "bg-white text-[#e1543a]")}>
                       {currentSeen ? <CheckCircle size={13} weight="fill" /> : null}
                       {currentSeen ? "Visto" : "Nuevo"}
                     </span>
@@ -246,7 +235,7 @@ function VideoRow({
       className={cn(
         "group flex w-full gap-2 rounded-xl border p-2 text-left transition hover:bg-white/[0.07] active:scale-[0.99]",
         active
-          ? "border-[rgba(255,0,0,0.32)] bg-[rgba(255,0,0,0.12)]"
+          ? "border-[rgba(255, 90, 61,0.32)] bg-[rgba(255, 90, 61,0.12)]"
           : "border-white/10 bg-white/[0.035]"
       )}
     >
@@ -275,7 +264,7 @@ function VideoRow({
         </span>
       </span>
 
-      <span className={cn("mt-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", seen ? "bg-white/10 text-[#f4f7fb]" : "bg-[rgba(255,0,0,0.16)] text-[#ffb7b3]")}>
+      <span className={cn("mt-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", seen ? "bg-white/10 text-[#f4f7fb]" : "bg-[rgba(255, 90, 61,0.16)] text-[#ffb7b3]")}>
         {seen ? "Visto" : "Nuevo"}
       </span>
     </button>

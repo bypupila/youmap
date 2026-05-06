@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
+import { invalidateExpiredYouTubeStatistics } from "@/lib/youtube-data-governance";
 import { processNextQueuedYoutubeImportRun, processYoutubeImportRunById } from "@/lib/youtube-import";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,12 @@ export async function POST(request: Request) {
           requestedByUserId: userId || null,
         });
 
-    return NextResponse.json(result);
+    const governanceSweep = await invalidateExpiredYouTubeStatistics();
+
+    return NextResponse.json({
+      ...result,
+      governanceSweep,
+    });
   } catch (error) {
     console.error("[api/youtube/import/worker]", error);
     return NextResponse.json(

@@ -30,17 +30,17 @@ export function FloatingTopBar({
   hideSearch = false,
 }: FloatingTopBarProps) {
   return (
-    <div className={cn("mx-auto grid w-full grid-cols-1 gap-3 yt-navbar tm-refraction pointer-events-auto md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center", className)}>
-      <div className="yt-logo-lockup min-w-0 shrink-0">
+    <div className={cn("mx-auto grid w-full grid-cols-1 gap-3 tym-navbar tm-refraction pointer-events-auto md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center", className)}>
+      <div className="tym-logo-lockup min-w-0 shrink-0">
         <Link
           href="/"
           aria-label="Go to homepage"
-          className="yt-logo-badge cursor-pointer transition-transform duration-200 hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="tym-logo-badge cursor-pointer transition-transform duration-200 hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {logoBadgeContent || <GlobeHemisphereWest size={20} weight="duotone" />}
         </Link>
         <div className="min-w-0">
-          <p className="yt-overline">{eyebrow}</p>
+          <p className="tym-overline">{eyebrow}</p>
           <p className="truncate text-[15px] font-medium text-foreground">{title}</p>
         </div>
       </div>
@@ -48,7 +48,7 @@ export function FloatingTopBar({
       {centerContent || searchInput || !hideSearch ? (
         <div className="w-full md:justify-self-center md:px-4">
           {searchInput || centerContent || (
-            <div className="yt-search platform-shimmer" aria-hidden="true">
+            <div className="tym-search platform-shimmer" aria-hidden="true">
               <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
                 <MagnifyingGlass size={16} />
               </div>
@@ -80,7 +80,7 @@ export function MetricPill({ text, className }: { text: string; className?: stri
 
 export function SignalPill({ text, className }: { text: string; className?: string }) {
   return (
-    <div className={cn("yt-chip bg-white/[0.06] text-foreground", className)}>
+    <div className={cn("tym-chip bg-white/[0.06] text-foreground", className)}>
       <span className="platform-signal-dot h-2 w-2 rounded-full bg-primary" />
       <span>{text}</span>
     </div>

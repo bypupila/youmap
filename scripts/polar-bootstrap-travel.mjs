@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Bootstrap Polar for TravelMap:
+ * Bootstrap Polar for TravelYourMap:
  * - exports organizations/products snapshot
  * - creates NEW recurring products for starter/pro/creator_plus
  * - updates Neon subscription_plans with created product/price IDs
@@ -129,21 +129,21 @@ async function main() {
     {
       slug: "starter",
       projectKey: "travel_starter_monthly",
-      name: `TravelMap Starter Monthly (${dateStamp})`,
+      name: `TravelYourMap Starter Monthly (${dateStamp})`,
       description: "Creator plan for individual travel creators.",
       amountUsdCents: 2900,
     },
     {
       slug: "pro",
       projectKey: "travel_pro_monthly",
-      name: `TravelMap Pro Monthly (${dateStamp})`,
+      name: `TravelYourMap Pro Monthly (${dateStamp})`,
       description: "Pro plan with sponsor hub and advanced analytics.",
       amountUsdCents: 7900,
     },
     {
       slug: "creator_plus",
       projectKey: "travel_creator_plus_monthly",
-      name: `TravelMap Creator Plus Monthly (${dateStamp})`,
+      name: `TravelYourMap Creator Plus Monthly (${dateStamp})`,
       description: "Portfolio plan for agencies and multi-channel teams.",
       amountUsdCents: 19900,
     },

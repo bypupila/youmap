@@ -15,7 +15,7 @@
       "slug": "starter",
       "productId": "4dfa4344-c9f3-4a26-bf65-7046aad8d99e",
       "priceId": "a6fc2939-aead-42f1-a28e-dc4f60854091",
-      "productName": "TravelMap Starter Monthly (2026-04-19)",
+      "productName": "TravelYourMap Starter Monthly (2026-04-19)",
       "amount": 2900,
       "currency": "usd"
     },
@@ -23,7 +23,7 @@
       "slug": "pro",
       "productId": "3a0d3c6b-a853-4bc8-b472-1a919ee2606e",
       "priceId": "6323cdc5-2b7e-44ef-adbf-c7b5596100b4",
-      "productName": "TravelMap Pro Monthly (2026-04-19)",
+      "productName": "TravelYourMap Pro Monthly (2026-04-19)",
       "amount": 7900,
       "currency": "usd"
     },
@@ -31,7 +31,7 @@
       "slug": "creator_plus",
       "productId": "d92c7238-77c5-4bf5-a4f7-0d1109a7a429",
       "priceId": "c8906072-ad98-4f20-9f96-8fe131863ea4",
-      "productName": "TravelMap Creator Plus Monthly (2026-04-19)",
+      "productName": "TravelYourMap Creator Plus Monthly (2026-04-19)",
       "amount": 19900,
       "currency": "usd"
     }

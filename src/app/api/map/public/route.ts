@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
-import { getOrCreateVoterFingerprint } from "@/lib/map-polls";
+import { getOrCreateVoterFingerprint, setMapVoterCookies } from "@/lib/map-polls";
 import { loadPublicMapPayload, normalizeChannelHandle } from "@/lib/map-public";
 
 export const dynamic = "force-dynamic";
@@ -30,13 +30,7 @@ export async function GET(request: Request) {
 
     const response = NextResponse.json(payload);
     if (fingerprint.shouldSetCookie) {
-      response.cookies.set("travelmap_voter", fingerprint.raw, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365,
-      });
+      setMapVoterCookies(response, fingerprint.raw);
     }
     return response;
   } catch (error) {

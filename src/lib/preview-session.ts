@@ -16,7 +16,7 @@ export interface PreviewSessionData {
   skippedVideos: number;
 }
 
-const PREVIEW_DIR = path.join(tmpdir(), "travelmap-preview-sessions");
+const PREVIEW_DIR = path.join(tmpdir(), "travelyourmap-preview-sessions");
 
 export async function createPreviewSession(
   input: Omit<PreviewSessionData, "id" | "created_at">

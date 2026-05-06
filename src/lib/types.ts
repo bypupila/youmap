@@ -11,6 +11,7 @@ export interface TravelVideo {
   comment_count?: number | null;
   duration_seconds?: number | null;
   is_short?: boolean | null;
+  made_for_kids?: boolean | null;
   is_travel?: boolean | null;
   travel_score?: number | null;
   travel_signals?: string[] | null;
@@ -19,6 +20,8 @@ export interface TravelVideo {
   recording_lat?: number | null;
   recording_lng?: number | null;
   recording_location_description?: string | null;
+  youtube_data_refreshed_at?: string | null;
+  youtube_data_expires_at?: string | null;
   travel_type?: string | null;
   city?: string | null;
   region?: string | null;

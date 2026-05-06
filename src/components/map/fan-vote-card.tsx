@@ -46,7 +46,7 @@ type RankedCity = {
   votes: number;
 };
 
-const POPUP_SESSION_KEY_PREFIX = "travelmap_poll_popup_v1";
+const POPUP_SESSION_KEY_PREFIX = "travelyourmap_poll_popup_v1";
 
 export function FanVoteCard({
   channelId,
@@ -519,7 +519,7 @@ export function FanVoteCard({
         <CardHeader className="border-b border-white/10">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="yt-overline text-[#ff8b8b]">Fan vote</p>
+              <p className="tym-overline text-[#ff8b8b]">Fan vote</p>
               <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">
                 {poll?.title || "La audiencia puede votar el siguiente destino"}
               </CardTitle>
@@ -550,7 +550,7 @@ export function FanVoteCard({
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
-                      <div className="h-full rounded-full bg-[rgba(255,0,0,0.78)]" style={{ width: `${width}%` }} />
+                      <div className="h-full rounded-full bg-[rgba(255, 90, 61,0.78)]" style={{ width: `${width}%` }} />
                     </div>
                   </div>
                 );
@@ -561,7 +561,7 @@ export function FanVoteCard({
               Votacion activa. Vota para participar y ver resultados cuando cierre.
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-[rgba(255,0,0,0.22)] bg-[rgba(255,0,0,0.08)] px-4 py-3 text-[12px] text-[#ffb4b4]">
+            <div className="rounded-2xl border border-dashed border-[rgba(255, 90, 61,0.22)] bg-[rgba(255, 90, 61,0.08)] px-4 py-3 text-[12px] text-[#ffb4b4]">
               {viewer.isOwner ? "Todavia no hay una votacion activa o en borrador." : "El creador todavia no publico una votacion para este mundo."}
             </div>
           )}
@@ -584,7 +584,7 @@ export function FanVoteCard({
             <button
               type="button"
               onClick={goToViewerLogin}
-              className="w-full rounded-2xl border border-[rgba(255,0,0,0.28)] bg-[rgba(255,0,0,0.1)] px-4 py-3 text-left text-[12px] text-[#ffb4b4] transition hover:bg-[rgba(255,0,0,0.14)]"
+              className="w-full rounded-2xl border border-[rgba(255, 90, 61,0.28)] bg-[rgba(255, 90, 61,0.1)] px-4 py-3 text-left text-[12px] text-[#ffb4b4] transition hover:bg-[rgba(255, 90, 61,0.14)]"
             >
               Inicia sesion como viewer para desbloquear estadisticas completas de la votacion.
             </button>
@@ -639,7 +639,7 @@ export function FanVoteCard({
                     className={cn(
                       "rounded-xl border px-3 py-2 text-[12px]",
                       form.pollMode === "country"
-                        ? "border-[rgba(255,0,0,0.34)] bg-[rgba(255,0,0,0.14)] text-[#f1f1f1]"
+                        ? "border-[rgba(255, 90, 61,0.34)] bg-[rgba(255, 90, 61,0.14)] text-[#f1f1f1]"
                         : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
                     )}
                   >
@@ -651,7 +651,7 @@ export function FanVoteCard({
                     className={cn(
                       "rounded-xl border px-3 py-2 text-[12px]",
                       form.pollMode === "country_city"
-                        ? "border-[rgba(255,0,0,0.34)] bg-[rgba(255,0,0,0.14)] text-[#f1f1f1]"
+                        ? "border-[rgba(255, 90, 61,0.34)] bg-[rgba(255, 90, 61,0.14)] text-[#f1f1f1]"
                         : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
                     )}
                   >
@@ -675,7 +675,7 @@ export function FanVoteCard({
                 onClick={() => setForm((current) => ({ ...current, showPopup: !current.showPopup }))}
                 className={cn(
                   "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-colors",
-                  form.showPopup ? "border-[rgba(255,0,0,0.28)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
+                  form.showPopup ? "border-[rgba(255, 90, 61,0.28)] bg-[rgba(255, 90, 61,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
                 )}
               >
                 <span>Mostrar popup al entrar</span>
@@ -713,7 +713,7 @@ export function FanVoteCard({
                                 className={cn(
                                   "rounded-full border px-3 py-1.5 text-[12px] transition-colors",
                                   active
-                                    ? "border-[rgba(255,0,0,0.34)] bg-[rgba(255,0,0,0.14)] text-[#f1f1f1]"
+                                    ? "border-[rgba(255, 90, 61,0.34)] bg-[rgba(255, 90, 61,0.14)] text-[#f1f1f1]"
                                     : "border-white/10 bg-white/[0.02] text-[#aaaaaa]"
                                 )}
                               >
@@ -847,7 +847,7 @@ export function FanVoteCard({
                           }}
                           className={cn(
                             "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors",
-                            active ? "border-[rgba(255,0,0,0.28)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
+                            active ? "border-[rgba(255, 90, 61,0.28)] bg-[rgba(255, 90, 61,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
                           )}
                         >
                           <span>{label}</span>
@@ -871,7 +871,7 @@ export function FanVoteCard({
                             onClick={() => setSelectedCity(city.city)}
                             className={cn(
                               "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors",
-                              active ? "border-[rgba(255,0,0,0.28)] bg-[rgba(255,0,0,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
+                              active ? "border-[rgba(255, 90, 61,0.28)] bg-[rgba(255, 90, 61,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
                             )}
                           >
                             <span>{city.city}</span>
@@ -889,7 +889,7 @@ export function FanVoteCard({
           <div className="border-t border-white/10 px-5 py-4">
             {voteError ? <p className="mb-2 text-[12px] text-[#ff9d9d]">{voteError}</p> : null}
             {mustVote ? (
-              <p className="mb-3 rounded-2xl border border-[rgba(255,0,0,0.2)] bg-[rgba(255,0,0,0.08)] px-4 py-3 text-[12px] leading-5 text-[#ffb4b4]">
+              <p className="mb-3 rounded-2xl border border-[rgba(255, 90, 61,0.2)] bg-[rgba(255, 90, 61,0.08)] px-4 py-3 text-[12px] leading-5 text-[#ffb4b4]">
                 Esta ventana se queda abierta hasta que votes.
               </p>
             ) : null}

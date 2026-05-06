@@ -29,7 +29,6 @@ import {
   Video,
   WarningCircle,
   X,
-  YoutubeLogo,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -147,6 +146,12 @@ type SponsorInput = {
   country_code: string | null;
 };
 
+type YouTubeDataHealth = {
+  latestRefreshedAt: string | null;
+  staleVideos: number;
+  trackedVideos: number;
+};
+
 type MapShellProps = {
   channel: TravelChannel;
   channelId: string | null;
@@ -159,6 +164,7 @@ type MapShellProps = {
   pollState: MapPollRecord | null;
   hideLivePollMetrics: boolean;
   sponsors: MapRailSponsor[];
+  youtubeDataHealth: YouTubeDataHealth;
   headerEyebrow?: string;
   countryBuckets: CountryBucket[];
   selectedCountryCode: string | null;
@@ -402,6 +408,27 @@ export function MapExperience({
     () => buildDestinationCandidates(pollState, countryBuckets),
     [countryBuckets, pollState]
   );
+  const youtubeDataHealth = useMemo<YouTubeDataHealth>(() => {
+    const now = Date.now();
+    let latestRefreshedMs = 0;
+    let staleVideos = 0;
+    let trackedVideos = 0;
+
+    for (const video of items) {
+      const refreshedAtMs = video.youtube_data_refreshed_at ? new Date(video.youtube_data_refreshed_at).getTime() : 0;
+      const expiresAtMs = video.youtube_data_expires_at ? new Date(video.youtube_data_expires_at).getTime() : 0;
+      if (!refreshedAtMs && !expiresAtMs) continue;
+      trackedVideos += 1;
+      if (refreshedAtMs > latestRefreshedMs) latestRefreshedMs = refreshedAtMs;
+      if (expiresAtMs > 0 && expiresAtMs <= now) staleVideos += 1;
+    }
+
+    return {
+      latestRefreshedAt: latestRefreshedMs > 0 ? new Date(latestRefreshedMs).toISOString() : null,
+      staleVideos,
+      trackedVideos,
+    };
+  }, [items]);
   const resolvedViewMode: MapViewMode = viewMode || (viewer.isOwner ? "creator" : "viewer");
   const isDemoMode = resolvedViewMode === "demo";
   const canUseAdminPanels = resolvedViewMode === "creator" || resolvedViewMode === "demo" || viewer.isOwner;
@@ -656,6 +683,7 @@ export function MapExperience({
     pollState,
     hideLivePollMetrics,
     sponsors: sponsorItems,
+    youtubeDataHealth,
     headerEyebrow,
     countryBuckets,
     selectedCountryCode,
@@ -917,9 +945,9 @@ function MobileMapMenu({
 
             <div className="mt-auto space-y-2">
               {youtubeUrl ? (
-                <a href={youtubeUrl} target="_blank" rel="noreferrer" className="flex h-10 items-center justify-center gap-2 rounded-xl bg-[#c91f18] text-[12px] font-semibold text-white">
-                  <YoutubeLogo size={15} weight="fill" />
-                  Ver canal
+                <a href={youtubeUrl} target="_blank" rel="noreferrer" className="flex h-10 items-center justify-center gap-2 rounded-xl bg-[#e1543a] text-[12px] font-semibold text-white">
+                  <ArrowSquareOut size={15} />
+                  Abrir en YouTube
                 </a>
               ) : null}
               <Link href={mapUrl} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]">
@@ -955,7 +983,7 @@ function MobileMenuButton({
     <>
       <Icon size={17} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {count ? <span className="rounded-md bg-[#c91f18] px-1.5 py-0.5 text-[10px] font-semibold text-white">{Math.min(999, count)}</span> : null}
+      {count ? <span className="rounded-md bg-[#e1543a] px-1.5 py-0.5 text-[10px] font-semibold text-white">{Math.min(999, count)}</span> : null}
     </>
   );
 
@@ -1048,7 +1076,7 @@ function MobileMapView({
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-[430px] flex-col">
       <div className="pointer-events-auto flex h-9 items-center justify-between">
-        <span className="max-w-[104px] truncate text-[12px] font-semibold text-[#c8d0d8]">YOUMAP</span>
+        <span className="max-w-[104px] truncate text-[12px] font-semibold text-[#c8d0d8]">TravelYourMap</span>
         <h1 className="text-[17px] font-semibold text-[#f5f7fb]">Mapa</h1>
         <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full text-white" aria-label={`Abrir acciones de ${channel.channel_name}`} onClick={() => setMobileMenuOpen(true)}>
           <List size={21} />
@@ -1060,18 +1088,18 @@ function MobileMapView({
           <button
             key={option}
             type="button"
-            className="yt-nav-pill min-h-8 shrink-0 rounded-lg border-white/10 bg-[#07101a]/78 px-4 text-[12px]"
+            className="tym-nav-pill min-h-8 shrink-0 rounded-lg border-white/10 bg-[#07101a]/78 px-4 text-[12px]"
             data-active={option === windowFilter ? "true" : "false"}
             onClick={() => setWindowFilter(option)}
           >
             {option === "all" ? "Todos" : "Visitados"}
           </button>
         ))}
-        <button type="button" className="yt-nav-pill min-h-8 shrink-0 rounded-lg border-white/10 bg-[#07101a]/78 px-4 text-[12px]" onClick={() => selectCountry(destinationCandidates[0]?.country_code || null)}>
+        <button type="button" className="tym-nav-pill min-h-8 shrink-0 rounded-lg border-white/10 bg-[#07101a]/78 px-4 text-[12px]" onClick={() => selectCountry(destinationCandidates[0]?.country_code || null)}>
           <MapPin size={13} weight="fill" className="text-[#8b3dff]" />
           Pendientes
         </button>
-        <button type="button" className="yt-nav-pill min-h-8 shrink-0 rounded-lg border-white/10 bg-[#07101a]/78 px-4 text-[12px]" onClick={() => selectCountry(countryBuckets[0]?.country_code || null)}>
+        <button type="button" className="tym-nav-pill min-h-8 shrink-0 rounded-lg border-white/10 bg-[#07101a]/78 px-4 text-[12px]" onClick={() => selectCountry(countryBuckets[0]?.country_code || null)}>
           <Star size={13} weight="fill" className="text-[#f5b82e]" />
           Destacados
         </button>
@@ -1227,15 +1255,15 @@ function MobileBrandHeader({ channel }: { channel: TravelChannel }) {
       <span className="h-10 w-10" aria-hidden="true" />
 
       <div className="flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(255,0,0,0.72)] bg-[rgba(255,0,0,0.1)] text-[#ff342d]">
-          <YoutubeLogo size={23} weight="fill" />
+        <span className="flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(255, 90, 61,0.72)] bg-[rgba(255, 90, 61,0.1)] text-[#ff6a4e]">
+          <Video size={23} weight="fill" />
         </span>
         <span className="min-w-0">
-          <span className="block text-[10px] font-semibold uppercase leading-3 tracking-[0.18em] text-[#c8d0d8]">World by</span>
+          <span className="block text-[10px] font-semibold uppercase leading-3 tracking-[0.18em] text-[#c8d0d8]">TravelYourMap</span>
           <span className="block max-w-[170px] truncate text-[16px] font-semibold uppercase leading-5 text-[#f7f8fa]">{channel.channel_name}</span>
-          <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-[#ff342d]">
-            <YoutubeLogo size={12} weight="fill" />
-            YouTube
+          <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-[#ff6a4e]">
+            <Video size={12} weight="fill" />
+            Conectado a YouTube
           </span>
         </span>
       </div>
@@ -1250,7 +1278,7 @@ function MobileBrandHeader({ channel }: { channel: TravelChannel }) {
 function MobileSectionHeader({ title }: { title: string }) {
   return (
     <header className="flex h-10 items-center justify-between">
-      <span className="text-[12px] font-semibold text-[#c8d0d8]">YOUMAP</span>
+      <span className="text-[12px] font-semibold text-[#c8d0d8]">TravelYourMap</span>
       <h1 className="text-[18px] font-semibold text-[#f5f7fb]">{title}</h1>
       <span className="h-9 w-9" />
     </header>
@@ -1310,7 +1338,7 @@ function MobileActionBar({
           Compartir
         </button>
       )}
-      <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg bg-[#c91f18] text-[12px] font-semibold text-white" onClick={copyShareUrl}>
+      <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg bg-[#e1543a] text-[12px] font-semibold text-white" onClick={copyShareUrl}>
         {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
         {copyState === "copied" ? "Copiado" : "Copiar link"}
       </button>
@@ -1335,7 +1363,7 @@ function MobileSuggestedDestinations({
       <div className="mt-3 grid grid-cols-4 gap-2">
         {candidates.slice(0, 4).map((candidate) => (
           <button key={candidate.country_code} type="button" className="min-w-0 rounded-lg border border-white/10 bg-white/[0.035] p-1.5 text-left" onClick={() => onSelect(candidate.country_code)}>
-            <span className="flex aspect-square items-center justify-center rounded-md bg-[linear-gradient(135deg,rgba(255,0,0,0.36),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover text-[11px] font-semibold text-white">
+            <span className="flex aspect-square items-center justify-center rounded-md bg-[linear-gradient(135deg,rgba(255, 90, 61,0.36),rgba(17,28,42,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover text-[11px] font-semibold text-white">
               {formatCountryCode(candidate.country_code)}
             </span>
             <span className="mt-1 block truncate text-[10px] font-semibold text-[#f5f7fb]">{candidate.country_name}</span>
@@ -1377,13 +1405,13 @@ function MobileBottomNav({
           <button
             key={item.id}
             type="button"
-            className={cn("relative flex min-w-0 flex-1 flex-col items-center gap-1 text-[10px] font-medium", active ? "text-[#ff342d]" : "text-[#c6cdd5]")}
+            className={cn("relative flex min-w-0 flex-1 flex-col items-center gap-1 text-[10px] font-medium", active ? "text-[#ff6a4e]" : "text-[#c6cdd5]")}
             onClick={() => setActiveTab(item.id)}
           >
             <span className="relative">
               <Icon size={22} weight={active ? "fill" : "regular"} />
               {item.badge ? (
-                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e32822] px-1 text-[9px] font-bold text-white">
+                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e1543a] px-1 text-[9px] font-bold text-white">
                   {Math.min(99, item.badge)}
                 </span>
               ) : null}
@@ -1438,16 +1466,16 @@ function MapSidebar({
   return (
     <>
       <aside className="pointer-events-auto hidden w-[72px] shrink-0 border-r border-white/10 bg-[#060a11]/95 px-2 py-3 backdrop-blur-2xl lg:flex lg:flex-col xl:w-[184px] xl:px-3 xl:py-4">
-          <Link href={mapUrl} className="mb-4 flex items-center justify-center gap-3 rounded-2xl px-1 py-1.5 transition-colors hover:bg-white/[0.04] xl:mb-5 xl:justify-start xl:px-2">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[rgba(255,0,0,0.55)] bg-[rgba(255,0,0,0.12)] text-[#ff3b3b] xl:h-12 xl:w-12">
-            <YoutubeLogo size={22} weight="fill" />
+        <Link href={mapUrl} className="mb-4 flex items-center justify-center gap-3 rounded-2xl px-1 py-1.5 transition-colors hover:bg-white/[0.04] xl:mb-5 xl:justify-start xl:px-2">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[rgba(255, 90, 61,0.55)] bg-[rgba(255, 90, 61,0.12)] text-[#ff6a4e] xl:h-12 xl:w-12">
+            <Video size={22} weight="fill" />
           </span>
           <span className="hidden min-w-0 xl:block">
-            <span className="block text-[10px] font-semibold uppercase leading-3 tracking-[0.16em] text-[#c8d0d8]">World by</span>
+            <span className="block text-[10px] font-semibold uppercase leading-3 tracking-[0.16em] text-[#c8d0d8]">TravelYourMap</span>
             <span className="block truncate text-[15px] font-semibold leading-5 text-[#f6f7f8]">{channel.channel_name}</span>
-            <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-[#ff3b3b]">
-              <YoutubeLogo size={12} weight="fill" />
-              YouTube
+            <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-[#ff6a4e]">
+              <Video size={12} weight="fill" />
+              Conectado a YouTube
             </span>
           </span>
         </Link>
@@ -1473,9 +1501,9 @@ function MapSidebar({
               </a>
             ) : null}
             {youtubeUrl ? (
-              <a href={youtubeUrl} target="_blank" rel="noreferrer" className="mt-3 flex h-9 items-center justify-center gap-2 rounded-lg bg-[#c91f18] text-[12px] font-semibold text-white transition hover:bg-[#e03128]">
-                <YoutubeLogo size={14} weight="fill" />
-                Ver canal
+              <a href={youtubeUrl} target="_blank" rel="noreferrer" className="mt-3 flex h-9 items-center justify-center gap-2 rounded-lg bg-[#e1543a] text-[12px] font-semibold text-white transition hover:bg-[#ee6b49]">
+                <ArrowSquareOut size={14} />
+                Abrir en YouTube
               </a>
             ) : null}
           </div>
@@ -1546,7 +1574,7 @@ function MapTopBar({
     <header className="pointer-events-auto z-[370] px-4 py-3 xl:px-5">
       <div className="mx-auto grid min-h-[52px] w-full grid-cols-1 gap-3 rounded-xl border border-white/10 bg-[#07101a]/86 p-2 shadow-[0_28px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="yt-search h-10 min-h-10 w-full max-w-none rounded-xl border-white/10 bg-white/[0.04]">
+          <div className="tym-search h-10 min-h-10 w-full max-w-none rounded-xl border-white/10 bg-white/[0.04]">
             <div className="flex h-full items-center pl-4 text-[13px] text-muted-foreground">
               <MagnifyingGlass size={16} />
             </div>
@@ -1577,7 +1605,7 @@ function MapTopBar({
               </Link>
             </Button>
           ) : null}
-          <Button type="button" size="sm" className="shrink-0 bg-[#c91f18] hover:bg-[#e03128]" onClick={copyShareUrl}>
+          <Button type="button" size="sm" className="shrink-0 bg-[#e1543a] hover:bg-[#ee6b49]" onClick={copyShareUrl}>
             {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
             {copyState === "copied" ? "Copiado" : "Copiar canal"}
           </Button>
@@ -1595,6 +1623,7 @@ function MapOverviewRail({
   countryBuckets,
   selectedCountryCode,
   selectedCountryName,
+  youtubeDataHealth,
   selectCountry,
   videosRailRef,
 }: MapShellProps) {
@@ -1608,6 +1637,16 @@ function MapOverviewRail({
               <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[#aab2bc]">
                 {selectedCountryCode ? `Foco activo: ${selectedCountryName || selectedCountryCode}.` : "Resumen operativo de videos, paises y ciudades detectadas."}
               </p>
+              {youtubeDataHealth.trackedVideos > 0 ? (
+                <p className="mt-1 text-[10px] leading-4 text-[#8f98a3]">
+                  {youtubeDataHealth.latestRefreshedAt
+                    ? `YouTube API actualizado: ${formatIsoDateTime(youtubeDataHealth.latestRefreshedAt)}`
+                    : "YouTube API pendiente de primera actualización."}
+                  {youtubeDataHealth.staleVideos > 0
+                    ? ` · ${youtubeDataHealth.staleVideos} video(s) pendiente(s) de refresh.`
+                    : " · Estado fresco."}
+                </p>
+              ) : null}
             </div>
             <ChannelAvatar channel={channel} size="sm" />
           </div>
@@ -1637,7 +1676,7 @@ function MapOverviewRail({
                       onClick={() => selectCountry(bucket.country_code)}
                       className={cn(
                         "w-full rounded-lg border p-2 text-left transition",
-                        isActive ? "border-[#ff3f38]/60 bg-[rgba(201,31,24,0.12)]" : "border-white/10 bg-white/[0.035] hover:bg-white/[0.07]"
+                        isActive ? "border-[#ff3f38]/60 bg-[rgba(225, 84, 58,0.12)]" : "border-white/10 bg-white/[0.035] hover:bg-white/[0.07]"
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1692,7 +1731,7 @@ function MapCenterStage({
           <button
             key={option}
             type="button"
-            className="yt-nav-pill min-h-8 shrink-0 px-4 text-[12px]"
+            className="tym-nav-pill min-h-8 shrink-0 px-4 text-[12px]"
             data-active={option === windowFilter ? "true" : "false"}
             onClick={() => setWindowFilter(option)}
           >
@@ -1724,7 +1763,7 @@ function MapCenterStage({
             exit={{ opacity: 0, y: 8 }}
             className="pointer-events-auto absolute left-1/2 top-16 z-[335] -translate-x-1/2"
           >
-            <button type="button" onClick={() => selectCountry(null)} className="yt-btn-secondary min-h-9 rounded-xl bg-[#07101a]/90 px-3 text-[12px] backdrop-blur">
+            <button type="button" onClick={() => selectCountry(null)} className="tym-btn-secondary min-h-9 rounded-xl bg-[#07101a]/90 px-3 text-[12px] backdrop-blur">
               Salir de {selectedCountryName || selectedCountryCode}
             </button>
           </motion.div>
@@ -1909,7 +1948,7 @@ function DestinationCard({
                 <Clock size={15} />
                 {destination.source === "poll" ? "Votacion activa" : "Basado en videos"}
               </span>
-              <Button type="button" size="sm" className="bg-[#c91f18] hover:bg-[#e03128]" onClick={() => onSelect?.(destination.country_code)}>
+              <Button type="button" size="sm" className="bg-[#e1543a] hover:bg-[#ee6b49]" onClick={() => onSelect?.(destination.country_code)}>
                 <Plus size={14} />
                 Ver foco
               </Button>
@@ -1980,7 +2019,7 @@ function OperationsCard({
       </CardHeader>
       <CardContent className="space-y-3 px-3 pb-3 pt-3">
         {pendingManual.length > 0 ? (
-          <button type="button" onClick={onMissing} className="w-full rounded-lg border border-[rgba(255,0,0,0.24)] bg-[rgba(255,0,0,0.09)] px-3 py-3 text-left">
+          <button type="button" onClick={onMissing} className="w-full rounded-lg border border-[rgba(255, 90, 61,0.24)] bg-[rgba(255, 90, 61,0.09)] px-3 py-3 text-left">
             <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#ffaaa5]">
               <WarningCircle size={15} />
               Videos faltantes
@@ -2188,7 +2227,7 @@ function BrandInquiryCta({
                 minLength={20}
                 maxLength={1200}
                 placeholder="Producto a promocionar, destino, formato esperado, fechas y cualquier condicion comercial."
-                className="h-28 w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[13px] text-[#f5f7fb] outline-none ring-red-500/45 placeholder:text-[#7e8792] focus-visible:ring-2"
+                className="h-28 w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[13px] text-[#f5f7fb] outline-none ring-[#ff5a3d]/45 placeholder:text-[#7e8792] focus-visible:ring-2"
               />
             </label>
 
@@ -2447,7 +2486,7 @@ function SidebarItem({ item, mobile = false }: { item: SidebarNavItem; mobile?: 
       <Icon size={17} className="shrink-0" />
       <span className={cn("min-w-0 flex-1 truncate", !mobile && "lg:hidden xl:block")}>{item.label}</span>
       {item.count ? (
-        <span className={cn("rounded-md bg-[#c91f18] px-1.5 py-0.5 text-[10px] font-semibold text-white", !mobile && "lg:hidden xl:inline-flex")}>
+        <span className={cn("rounded-md bg-[#e1543a] px-1.5 py-0.5 text-[10px] font-semibold text-white", !mobile && "lg:hidden xl:inline-flex")}>
           {item.count}
         </span>
       ) : null}
@@ -2485,7 +2524,7 @@ function ChannelAvatar({ channel, size, thumbnailUrlOverride = null }: { channel
 
 function VideoThumb({ video, className }: { video: TravelVideoLocation; className?: string }) {
   return (
-    <span className={cn("yt-video-thumb relative shrink-0", className)}>
+    <span className={cn("tym-video-thumb relative shrink-0", className)}>
       {video.thumbnail_url ? (
         <Image
           src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
@@ -2495,7 +2534,7 @@ function VideoThumb({ video, className }: { video: TravelVideoLocation; classNam
           className="object-cover"
         />
       ) : (
-        <span className="flex h-full w-full flex-col items-center justify-center bg-[linear-gradient(135deg,rgba(255,0,0,0.2),rgba(12,20,31,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover text-[10px] text-[#cfd6df]">
+        <span className="flex h-full w-full flex-col items-center justify-center bg-[linear-gradient(135deg,rgba(255, 90, 61,0.2),rgba(12,20,31,0.92)),url('https://unpkg.com/three-globe/example/img/night-sky.png')] bg-cover text-[10px] text-[#cfd6df]">
           <Play size={15} weight="fill" className="mb-1 text-white" />
           <span className="rounded bg-black/35 px-1.5 py-0.5 font-semibold">{formatCountryCode(video.country_code)}</span>
         </span>
@@ -2518,7 +2557,7 @@ function ProgressRing({ percent }: { percent: number }) {
   return (
     <div
       className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-[16px] font-semibold text-[#ff4b42]"
-      style={{ background: `conic-gradient(#ff342d ${normalized * 3.6}deg, rgba(255,255,255,0.12) 0deg)` }}
+      style={{ background: `conic-gradient(#ff6a4e ${normalized * 3.6}deg, rgba(255,255,255,0.12) 0deg)` }}
     >
       <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#07101a]">{normalized}%</span>
     </div>
@@ -2622,6 +2661,18 @@ function getInitialMobileTab(): MobileMapTab {
 function formatExactNumber(value: number) {
   if (!value) return "0";
   return Number(value).toLocaleString("en-US");
+}
+
+function formatIsoDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "sin fecha";
+  return date.toLocaleString("es-ES", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatNumber(value: number) {

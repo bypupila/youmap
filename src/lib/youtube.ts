@@ -1,12 +1,10 @@
 import { readRequiredEnv, sanitizeEnvValue } from "@/lib/env";
 import { detectCatalogPlaces, NON_TRAVEL_PLAYLIST_KEYWORDS, normalizeForLookup, TRAVEL_KEYWORDS } from "@/lib/video-location-catalog";
-import { loadPublicChannelFeedVideos, validateYouTubeChannelWithoutApiKey } from "@/lib/youtube-public";
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
-const PUBLIC_FEED_PLAYLIST_PREFIX = "public_feed:";
-const publicFeedVideoCache = new Map<string, Omit<YouTubeVideoRecord, "youtube_video_id">>();
 const playlistSignalCache = new Map<string, { expiresAt: number; signals: Map<string, YouTubePlaylistGeoSignal[]> }>();
 const PLAYLIST_SIGNAL_CACHE_TTL_MS = 10 * 60 * 1000;
+const NON_AUTHORIZED_DATA_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface YouTubeChannelResolution {
   youtube_channel_id: string;
@@ -14,6 +12,8 @@ export interface YouTubeChannelResolution {
   channel_handle: string | null;
   thumbnail_url: string | null;
   subscriber_count: number | null;
+  total_video_count: number | null;
+  total_view_count: number | null;
   description: string | null;
   uploads_playlist_id: string;
   published_at: string | null;
@@ -38,9 +38,12 @@ export interface YouTubeVideoRecord {
   comment_count: number | null;
   duration_seconds: number | null;
   is_short: boolean;
+  made_for_kids: boolean | null;
   recording_lat: number | null;
   recording_lng: number | null;
   recording_location_description: string | null;
+  youtube_data_refreshed_at: string;
+  youtube_data_expires_at: string;
   raw: unknown;
 }
 
@@ -81,6 +84,9 @@ interface YouTubeVideoItem {
   contentDetails?: {
     duration?: string;
   };
+  status?: {
+    madeForKids?: boolean;
+  };
   recordingDetails?: {
     location?: {
       latitude?: number;
@@ -105,6 +111,8 @@ interface YouTubeChannelItem {
   };
   statistics?: {
     subscriberCount?: string;
+    videoCount?: string;
+    viewCount?: string;
   };
   contentDetails?: {
     relatedPlaylists?: {
@@ -139,15 +147,6 @@ function parseIsoDurationToSeconds(duration?: string) {
   );
 }
 
-function createPublicFeedPlaylistId(channelId: string) {
-  return `${PUBLIC_FEED_PLAYLIST_PREFIX}${channelId}`;
-}
-
-function extractChannelIdFromPublicFeedPlaylistId(playlistId: string) {
-  if (!playlistId.startsWith(PUBLIC_FEED_PLAYLIST_PREFIX)) return null;
-  return sanitizeEnvValue(playlistId.slice(PUBLIC_FEED_PLAYLIST_PREFIX.length)) || null;
-}
-
 function isYouTubeShort(params: { durationSeconds: number | null; title?: string; description?: string }) {
   const { durationSeconds, title, description } = params;
   if (typeof durationSeconds === "number" && Number.isFinite(durationSeconds) && durationSeconds <= 60) {
@@ -180,6 +179,12 @@ export interface YouTubePlaylistGeoSignal {
   description: string | null;
   classification: PlaylistSignalClassification;
   matchedPlaces: ReturnType<typeof detectCatalogPlaces>;
+}
+
+export function getYouTubeDataLifecycle(referenceDate: Date = new Date()) {
+  const refreshedAt = referenceDate.toISOString();
+  const expiresAt = new Date(referenceDate.getTime() + NON_AUTHORIZED_DATA_TTL_MS).toISOString();
+  return { refreshedAt, expiresAt };
 }
 
 function getYoutubeApiKey() {
@@ -266,6 +271,8 @@ function toChannelResolution(channel: YouTubeChannelItem | null | undefined, fal
       channel.snippet?.thumbnails?.default?.url ||
       null,
     subscriber_count: channel.statistics?.subscriberCount ? Number(channel.statistics.subscriberCount) : null,
+    total_video_count: channel.statistics?.videoCount ? Number(channel.statistics.videoCount) : null,
+    total_view_count: channel.statistics?.viewCount ? Number(channel.statistics.viewCount) : null,
     description: channel.snippet?.description || null,
     uploads_playlist_id: uploadsPlaylistId,
     published_at: channel.snippet?.publishedAt || null,
@@ -364,38 +371,10 @@ export async function resolveYouTubeChannel(input: string): Promise<YouTubeChann
     }
   }
 
-  try {
-    const publicChannel = await validateYouTubeChannelWithoutApiKey(input);
-    const handleFromCanonical = (() => {
-      try {
-        const parts = new URL(publicChannel.canonicalUrl).pathname.split("/").filter(Boolean);
-        if (parts[0]?.startsWith("@")) return parts[0];
-        return null;
-      } catch {
-        return null;
-      }
-    })();
-
-    return {
-      youtube_channel_id: publicChannel.channelId,
-      channel_name: publicChannel.channelName,
-      channel_handle: handleFromCanonical,
-      thumbnail_url: null,
-      subscriber_count: null,
-      description: null,
-      uploads_playlist_id: createPublicFeedPlaylistId(publicChannel.channelId),
-      published_at: null,
-      raw: {
-        source: "youtube_public_fallback",
-        canonical_url: publicChannel.canonicalUrl,
-      },
-    };
-  } catch (error) {
-    lastError = error instanceof Error ? error : new Error(String(error));
-  }
-
   if (lastError) throw lastError;
-  throw new Error("No pudimos resolver el canal de YouTube. Usa un enlace a /channel/... o /@handle.");
+  throw new Error(
+    "No pudimos resolver el canal con YouTube Data API. Usa un enlace /channel/... o /@handle y verifica YOUTUBE_API_KEY."
+  );
 }
 
 export async function getChannelImportReadiness(channel: Pick<YouTubeChannelResolution, "uploads_playlist_id">): Promise<ChannelImportReadiness> {
@@ -454,49 +433,6 @@ export async function getChannelImportReadiness(channel: Pick<YouTubeChannelReso
 }
 
 export async function loadUploadsPlaylistVideos(playlistId: string) {
-  const publicFeedChannelId = extractChannelIdFromPublicFeedPlaylistId(playlistId);
-  if (publicFeedChannelId) {
-    const feedVideos = await loadPublicChannelFeedVideos(publicFeedChannelId);
-    for (const video of feedVideos) {
-      publicFeedVideoCache.set(video.videoId, {
-        title: video.title,
-        description: video.description,
-        thumbnail_url: video.thumbnailUrl,
-        published_at: video.publishedAt,
-        view_count: null,
-        like_count: null,
-        comment_count: null,
-        duration_seconds: null,
-        is_short: isYouTubeShort({
-          durationSeconds: null,
-          title: video.title,
-          description: video.description || "",
-        }),
-        recording_lat: null,
-        recording_lng: null,
-        recording_location_description: null,
-        raw: { source: "youtube_public_feed" },
-      });
-    }
-
-    return feedVideos.map((video) => ({
-      contentDetails: {
-        videoId: video.videoId,
-        videoPublishedAt: video.publishedAt || undefined,
-      },
-      snippet: {
-        title: video.title,
-        description: video.description || undefined,
-        publishedAt: video.publishedAt || undefined,
-        thumbnails: {
-          high: video.thumbnailUrl ? { url: video.thumbnailUrl } : undefined,
-          medium: video.thumbnailUrl ? { url: video.thumbnailUrl } : undefined,
-          default: video.thumbnailUrl ? { url: video.thumbnailUrl } : undefined,
-        },
-      },
-    } satisfies YouTubePlaylistItem));
-  }
-
   const videos: YouTubePlaylistItem[] = [];
   let pageToken: string | undefined;
 
@@ -520,49 +456,17 @@ export async function loadUploadsPlaylistVideos(playlistId: string) {
 
 export async function loadVideoDetails(videoIds: string[]) {
   const details = new Map<string, YouTubeVideoRecord>();
-  const allFromPublicFeedCache = videoIds.every((videoId) => publicFeedVideoCache.has(videoId));
-
-  if (allFromPublicFeedCache) {
-    for (const videoId of videoIds) {
-      const cached = publicFeedVideoCache.get(videoId);
-      if (!cached) continue;
-      details.set(videoId, {
-        youtube_video_id: videoId,
-        ...cached,
-      });
-    }
-    return details;
-  }
 
   for (let index = 0; index < videoIds.length; index += 50) {
     const batch = videoIds.slice(index, index + 50);
-    let response: {
+    const response = await youtubeFetch<{
       items?: YouTubeVideoItem[];
-    } | null = null;
-    try {
-      response = await youtubeFetch<{
-        items?: YouTubeVideoItem[];
-      }>("videos", {
-        part: "snippet,statistics,contentDetails,recordingDetails",
-        id: batch.join(","),
-        maxResults: batch.length,
-      });
-    } catch (error) {
-      const batchFromPublicFeedCache = batch.every((videoId) => publicFeedVideoCache.has(videoId));
-      if (!batchFromPublicFeedCache) {
-        throw error;
-      }
-
-      for (const videoId of batch) {
-        const cached = publicFeedVideoCache.get(videoId);
-        if (!cached) continue;
-        details.set(videoId, {
-          youtube_video_id: videoId,
-          ...cached,
-        });
-      }
-      continue;
-    }
+    }>("videos", {
+      part: "snippet,statistics,contentDetails,recordingDetails,status",
+      id: batch.join(","),
+      maxResults: batch.length,
+    });
+    const lifecycle = getYouTubeDataLifecycle();
 
     for (const video of response?.items || []) {
       if (!video.id) continue;
@@ -587,11 +491,15 @@ export async function loadVideoDetails(videoIds: string[]) {
         comment_count: video.statistics?.commentCount ? Number(video.statistics.commentCount) : null,
         duration_seconds: durationSeconds,
         is_short: isShort,
+        made_for_kids:
+          typeof video.status?.madeForKids === "boolean" ? video.status.madeForKids : null,
         recording_lat:
           typeof video.recordingDetails?.location?.latitude === "number" ? Number(video.recordingDetails.location.latitude) : null,
         recording_lng:
           typeof video.recordingDetails?.location?.longitude === "number" ? Number(video.recordingDetails.location.longitude) : null,
         recording_location_description: video.recordingDetails?.locationDescription || null,
+        youtube_data_refreshed_at: lifecycle.refreshedAt,
+        youtube_data_expires_at: lifecycle.expiresAt,
         raw: video,
       });
     }

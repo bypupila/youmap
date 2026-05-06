@@ -88,7 +88,7 @@ export function AdminUsersPanel({ users, query, page, totalPages, totalCount }: 
       <CardHeader className="border-b border-white/10 px-5 pb-4 pt-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="yt-overline text-[#8ff0ff]">Directorio</p>
+            <p className="tym-overline text-[#8ff0ff]">Directorio</p>
             <CardTitle className="mt-1 text-[16px] font-semibold text-[#f5f7fb]">Usuarios y roles</CardTitle>
             <p className="mt-1 text-sm text-[#aab2bc]">
               Busca por nombre, email o rol y cambia permisos sin salir del panel.
@@ -121,11 +121,11 @@ export function AdminUsersPanel({ users, query, page, totalPages, totalCount }: 
             />
           </label>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" className="bg-[#c91f18] hover:bg-[#e03128]">
+            <Button type="submit" className="bg-[#e1543a] hover:bg-[#ee6b49]">
               Buscar
             </Button>
             {query ? (
-              <Link href="/admin" className="yt-btn-secondary inline-flex items-center justify-center">
+              <Link href="/admin" className="tym-btn-secondary inline-flex items-center justify-center">
                 Limpiar
               </Link>
             ) : null}
@@ -184,7 +184,7 @@ export function AdminUsersPanel({ users, query, page, totalPages, totalCount }: 
                           type="button"
                           variant={active ? "default" : "outline"}
                           className={
-                            active ? "bg-[#c91f18] hover:bg-[#e03128]" : "border-white/10 bg-white/[0.04] text-[#e8edf3]"
+                            active ? "bg-[#e1543a] hover:bg-[#ee6b49]" : "border-white/10 bg-white/[0.04] text-[#e8edf3]"
                           }
                           disabled={isPending || active}
                           onClick={() => void applyRole(user, role)}
@@ -251,7 +251,7 @@ function PageLink({
   }
 
   return (
-    <Link href={href} className="yt-btn-secondary inline-flex h-10 items-center justify-center px-4 text-[12px]">
+    <Link href={href} className="tym-btn-secondary inline-flex h-10 items-center justify-center px-4 text-[12px]">
       {children}
     </Link>
   );

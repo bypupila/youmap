@@ -22,8 +22,8 @@ export async function geocodeLocation(query: string): Promise<GeocodeMatch | nul
   url.searchParams.set("limit", "1");
 
   const contactEmail = sanitizeEnvValue(process.env.NOMINATIM_EMAIL);
-  const fallbackContact = sanitizeEnvValue(process.env.NEXT_PUBLIC_APP_URL || "travelmap.local");
-  const userAgentName = sanitizeEnvValue(process.env.NOMINATIM_USER_AGENT || "TravelMap");
+  const fallbackContact = sanitizeEnvValue(process.env.NEXT_PUBLIC_APP_URL || "travelyourmap.local");
+  const userAgentName = sanitizeEnvValue(process.env.NOMINATIM_USER_AGENT || "TravelYourMap");
   const contactForHeaders = contactEmail || fallbackContact;
   if (contactEmail) {
     url.searchParams.set("email", contactEmail);
@@ -87,8 +87,8 @@ export async function geocodeCoordinates(lat: number, lng: number): Promise<Geoc
   url.searchParams.set("addressdetails", "1");
 
   const contactEmail = sanitizeEnvValue(process.env.NOMINATIM_EMAIL);
-  const fallbackContact = sanitizeEnvValue(process.env.NEXT_PUBLIC_APP_URL || "travelmap.local");
-  const userAgentName = sanitizeEnvValue(process.env.NOMINATIM_USER_AGENT || "TravelMap");
+  const fallbackContact = sanitizeEnvValue(process.env.NEXT_PUBLIC_APP_URL || "travelyourmap.local");
+  const userAgentName = sanitizeEnvValue(process.env.NOMINATIM_USER_AGENT || "TravelYourMap");
   const contactForHeaders = contactEmail || fallbackContact;
   if (contactEmail) {
     url.searchParams.set("email", contactEmail);

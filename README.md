@@ -1,6 +1,6 @@
-# TravelMap - BY PUPILA
+# TravelYourMap - BY PUPILA
 
-TravelMap convierte un canal de viajes en un globo 3D interactivo con analytics, sponsors contextuales y una URL pública por creador.
+TravelYourMap convierte un canal de viajes en un globo 3D interactivo con analytics, sponsors contextuales y una URL pública por creador.
 
 ## Estado actual
 
@@ -105,7 +105,7 @@ Bootstrap recomendado para este proyecto (crea productos nuevos y sincroniza IDs
 npm run polar:bootstrap
 ```
 
-Regla operativa: en esta cuenta de Polar, este proyecto nunca debe modificar productos existentes de otros proyectos; siempre debe crear productos nuevos dedicados para TravelMap.
+Regla operativa: en esta cuenta de Polar, este proyecto nunca debe modificar productos existentes de otros proyectos; siempre debe crear productos nuevos dedicados para TravelYourMap.
 
 Verificacion rapida local:
 

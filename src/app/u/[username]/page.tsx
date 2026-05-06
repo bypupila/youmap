@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { MapExperience } from "@/components/map/map-experience";
 import { getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
-import { MAP_VOTER_COOKIE, hashValue } from "@/lib/map-polls";
+import { getMapVoterFingerprintFromCookieStore } from "@/lib/map-polls";
 import { loadPublicMapPayload } from "@/lib/map-public";
 import { DEMO_CHANNEL_ID, isDemoUsername } from "@/lib/demo-data";
 
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: PublicMapPageProps): Promise<
 
   if (!payload) {
     return {
-      title: "Mapa público | TravelMap",
+      title: "Mapa público | TravelYourMap",
       description: "Mapa interactivo con videos geolocalizados de creadores de viaje.",
       alternates: {
         canonical: `${siteUrl}/u/${encodeURIComponent(resolvedParams.username)}`,
@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: PublicMapPageProps): Promise<
   }
 
   const canonicalHandle = payload.channel.canonicalHandle || resolvedParams.username;
-  const title = `${payload.channel.channel_name} | Mapa de viajes en TravelMap`;
+  const title = `${payload.channel.channel_name} | Mapa de viajes en TravelYourMap`;
   const description = `Explora ${payload.summary.total_videos} videos de ${payload.channel.channel_name} en ${payload.summary.total_countries} países con mapa interactivo.`;
   const canonicalUrl = `${siteUrl}/u/${encodeURIComponent(canonicalHandle)}`;
 
@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: PublicMapPageProps): Promise<
       description,
       type: "website",
       url: canonicalUrl,
-      siteName: "TravelMap - BY PUPILA",
+      siteName: "TravelYourMap - BY PUPILA",
     },
     twitter: {
       card: "summary_large_image",
@@ -62,11 +62,10 @@ export async function generateMetadata({ params }: PublicMapPageProps): Promise<
 export default async function PublicMapPage({ params }: PublicMapPageProps) {
   const resolvedParams = await params;
   const cookieStore = await cookies();
-  const voterCookie = String(cookieStore.get(MAP_VOTER_COOKIE)?.value || "").trim();
   const payload = await loadPublicMapPayload({
     identifier: resolvedParams.username,
     viewerUserId: await getValidSessionUserIdFromServerCookies(),
-    voterFingerprint: voterCookie ? hashValue(voterCookie) : null,
+    voterFingerprint: getMapVoterFingerprintFromCookieStore(cookieStore),
   });
 
   if (!payload) {

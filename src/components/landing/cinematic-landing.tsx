@@ -185,7 +185,7 @@ export function CinematicLanding() {
 
       <header className="absolute inset-x-0 top-0 z-[320] px-4 py-3 pointer-events-auto">
         <FloatingTopBar
-          eyebrow="YOUMAP - BY PUPILA"
+          eyebrow="TravelYourMap - BY PUPILA"
           title={copy.topTitle}
           searchPlaceholder={copy.searchPlaceholder}
           className="pointer-events-auto relative z-[321]"
@@ -194,17 +194,17 @@ export function CinematicLanding() {
               <div className="hidden items-center gap-2 md:flex">
                 <button
                   type="button"
-                  className="yt-nav-pill relative z-[322] pointer-events-auto"
+                  className="tym-nav-pill relative z-[322] pointer-events-auto"
                   data-active={locale === "en"}
                   onClick={() => setLocale("en")}
                 >
                   EN
                 </button>
-                <button type="button" className="yt-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "es"} onClick={() => setLocale("es")}>
+                <button type="button" className="tym-nav-pill relative z-[322] pointer-events-auto" data-active={locale === "es"} onClick={() => setLocale("es")}>
                   ES
                 </button>
               </div>
-              <Link href="/auth" className="yt-btn-primary relative z-[322] pointer-events-auto">
+              <Link href="/auth" className="tym-btn-primary relative z-[322] pointer-events-auto">
                 Acceder
               </Link>
             </>
@@ -226,14 +226,14 @@ export function CinematicLanding() {
               ))}
             </div>
 
-            <p className="yt-overline mb-4">Cartografia editorial para creadores de viaje</p>
-            <h1 className="yt-display max-w-[10ch]">
+            <p className="tym-overline mb-4">Cartografia editorial para creadores de viaje</p>
+            <h1 className="tym-display max-w-[10ch]">
               {copy.headline}
             </h1>
             <p className="mt-5 max-w-[58ch] text-base leading-7 text-muted-foreground">{copy.body}</p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href={onboardingPath} className="yt-btn-primary relative z-[322] pointer-events-auto">
+              <Link href={onboardingPath} className="tym-btn-primary relative z-[322] pointer-events-auto">
                 {copy.ctaPrimary}
               </Link>
             </div>
@@ -261,7 +261,7 @@ export function CinematicLanding() {
             className="w-full min-w-0 lg:pl-[6vw]"
           >
             <Link href={mapPath} className="pointer-events-auto relative z-[322] block w-full rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(24,28,31,0.96),rgba(18,21,23,0.92))] p-4 shadow-[0_36px_100px_-52px_rgba(0,0,0,0.88)] backdrop-blur transition-transform duration-300 hover:-translate-y-1">
-              <div className="yt-video-thumb aspect-video bg-[radial-gradient(circle_at_30%_30%,#2c2c2c,#111)]">
+              <div className="tym-video-thumb aspect-video bg-[radial-gradient(circle_at_30%_30%,#2c2c2c,#111)]">
                 <MiniMapModel videoLocations={mapVideos} />
               </div>
 
@@ -276,7 +276,7 @@ export function CinematicLanding() {
                   </p>
                   <p className="mt-1 text-[12px] leading-4 text-muted-foreground">{activeCreator.handle}</p>
                 </div>
-                <span className="ml-auto inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground shadow-[0_20px_45px_-24px_rgba(255,0,0,0.78)] transition-transform duration-200 hover:-translate-y-[1px]">
+                <span className="ml-auto inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground shadow-[0_20px_45px_-24px_rgba(255, 90, 61,0.78)] transition-transform duration-200 hover:-translate-y-[1px]">
                   {copy.ctaDemo}
                 </span>
               </div>

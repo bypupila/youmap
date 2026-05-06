@@ -138,7 +138,7 @@ function TopVideoCard({ video, onOpenVideo }: { video: TravelVideoLocation; onOp
   return (
     <button type="button" onClick={() => onOpenVideo(video)} className="w-full overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.08]">
       <div className="flex items-center gap-2 px-2.5 py-2">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[rgba(255,0,0,0.16)] text-[#ffb7b3]">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[rgba(255, 90, 61,0.16)] text-[#ffb7b3]">
           <TrendUp size={16} />
         </span>
         <span className="min-w-0 flex-1">
@@ -174,7 +174,7 @@ function ActivityStatButton({
       data-active={active ? "true" : "false"}
       className={cn(
         "rounded-lg border px-2.5 py-2 text-left transition hover:bg-white/[0.07] active:scale-[0.99]",
-        active ? "border-[rgba(255,0,0,0.34)] bg-[rgba(255,0,0,0.12)]" : "border-white/10 bg-white/[0.035]"
+        active ? "border-[rgba(255, 90, 61,0.34)] bg-[rgba(255, 90, 61,0.12)]" : "border-white/10 bg-white/[0.035]"
       )}
     >
       <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-[#8f98a3]">

@@ -4,7 +4,7 @@
   "products": [
     {
       "id": "d92c7238-77c5-4bf5-a4f7-0d1109a7a429",
-      "name": "TravelMap Creator Plus Monthly (2026-04-19)",
+      "name": "TravelYourMap Creator Plus Monthly (2026-04-19)",
       "is_archived": false,
       "is_recurring": true,
       "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
@@ -22,7 +22,7 @@
     },
     {
       "id": "3a0d3c6b-a853-4bc8-b472-1a919ee2606e",
-      "name": "TravelMap Pro Monthly (2026-04-19)",
+      "name": "TravelYourMap Pro Monthly (2026-04-19)",
       "is_archived": false,
       "is_recurring": true,
       "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",
@@ -40,7 +40,7 @@
     },
     {
       "id": "4dfa4344-c9f3-4a26-bf65-7046aad8d99e",
-      "name": "TravelMap Starter Monthly (2026-04-19)",
+      "name": "TravelYourMap Starter Monthly (2026-04-19)",
       "is_archived": false,
       "is_recurring": true,
       "organization_id": "bea08701-be9d-4943-9fa3-68069d7995ac",

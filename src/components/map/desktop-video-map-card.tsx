@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import {
   BookmarkSimple,
   CaretLeft,
@@ -9,7 +8,6 @@ import {
   Clock,
   Eye,
   MapPin,
-  Play,
   Star,
   X,
 } from "@phosphor-icons/react";
@@ -24,9 +22,9 @@ import {
   formatVideoPlace,
   getYouTubeHref,
 } from "@/components/map/video-viewer-utils";
+import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 
 interface DesktopVideoMapCardProps {
   videos: TravelVideoLocation[];
@@ -67,14 +65,16 @@ export function DesktopVideoMapCard({
   function openYouTubeVideo() {
     if (!youtubeHref) return;
 
-    posthog.capture("video_youtube_opened", {
-      video_id: selectedVideo.youtube_video_id,
-      video_title: selectedVideo.title,
-      country_code: selectedVideo.country_code,
-      country_name: selectedVideo.country_name,
-    });
-    activity.markVideoOpened(selectedVideo.youtube_video_id);
-    window.open(youtubeHref, "_blank", "noopener,noreferrer");
+    if (!selectedVideo.made_for_kids) {
+      posthog.capture("video_youtube_opened", {
+        video_id: selectedVideo.youtube_video_id,
+        video_title: selectedVideo.title,
+        country_code: selectedVideo.country_code,
+        country_name: selectedVideo.country_name,
+      });
+      activity.markVideoOpened(selectedVideo.youtube_video_id);
+    }
+    window.open(youtubeHref, "_blank", "noopener");
   }
 
   return (
@@ -97,53 +97,43 @@ export function DesktopVideoMapCard({
       </header>
 
       <div className="p-2">
-        <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/35">
-          <div className="aspect-[16/8.7]">
-            {selectedVideo.thumbnail_url ? (
-              <Image
-                src={toCompactYouTubeThumbnail(selectedVideo.thumbnail_url) || selectedVideo.thumbnail_url}
-                alt={selectedVideo.title}
-                width={640}
-                height={360}
-                sizes="(min-width: 1536px) 480px, (min-width: 1280px) 380px, 340px"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-white/[0.04] text-[12px] text-[#9da5ae]">
-                Miniatura no disponible
-              </div>
-            )}
-          </div>
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.06),rgba(0,0,0,0.62))]" />
-          <button
-            type="button"
-            onClick={openYouTubeVideo}
-            className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-[#ff0000] text-white shadow-[0_18px_44px_-18px_rgba(255,0,0,0.95)] transition hover:scale-105 hover:bg-[#e03128] active:scale-95 xl:h-14 xl:w-14"
-            aria-label="Abrir video en YouTube"
-          >
-            <Play size={24} weight="fill" className="translate-x-0.5" />
-          </button>
+        <div className="rounded-xl border border-white/10 bg-black/35 p-2">
+          <YouTubeEmbedPlayer
+            videoId={selectedVideo.youtube_video_id}
+            title={selectedVideo.title}
+            youtubeHref={youtubeHref}
+            onOpenInYouTube={openYouTubeVideo}
+            isMadeForKids={Boolean(selectedVideo.made_for_kids)}
+          />
+        </div>
+
+        <div className="mt-2 flex items-center justify-center gap-2">
           <button
             type="button"
             onClick={() => go(-1)}
-            className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white backdrop-blur-md transition hover:bg-black/75 active:scale-95"
+            className="flex h-8 min-w-[96px] items-center justify-center gap-1 rounded-md border border-white/10 bg-black/45 px-2 text-[11px] text-white backdrop-blur-md transition hover:bg-black/75 active:scale-95"
             aria-label="Video anterior"
           >
-            <CaretLeft size={17} />
+            <CaretLeft size={15} />
+            Anterior
           </button>
           <button
             type="button"
             onClick={() => go(1)}
-            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white backdrop-blur-md transition hover:bg-black/75 active:scale-95"
+            className="flex h-8 min-w-[96px] items-center justify-center gap-1 rounded-md border border-white/10 bg-black/45 px-2 text-[11px] text-white backdrop-blur-md transition hover:bg-black/75 active:scale-95"
             aria-label="Siguiente video"
           >
-            <CaretRight size={17} />
+            Siguiente
+            <CaretRight size={15} />
           </button>
-          <span className={cn("absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] shadow-[0_12px_30px_-16px_rgba(255,0,0,0.9)]", isSeen ? "bg-[#ff0000] text-white" : "bg-white text-[#c91f18]")}>
+        </div>
+
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] shadow-[0_12px_30px_-16px_rgba(255, 90, 61,0.9)]", isSeen ? "bg-[#ff5a3d] text-white" : "bg-white text-[#e1543a]")}>
             {isSeen ? <CheckCircle size={12} weight="fill" /> : null}
             {isSeen ? "Visto" : "Nuevo"}
           </span>
-          <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-1 text-[10px] font-medium text-white">
+          <span className="rounded bg-black/70 px-1.5 py-1 text-[10px] font-medium text-white">
             {formatVideoDuration(selectedVideo.duration_seconds)}
           </span>
         </div>
@@ -169,7 +159,7 @@ export function DesktopVideoMapCard({
               aria-label={isSaved ? "Quitar de guardados" : "Guardar video"}
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-lg border transition active:scale-95",
-                isSaved ? "border-[rgba(255,0,0,0.36)] bg-[rgba(255,0,0,0.18)] text-[#ffb7b3]" : "border-white/10 bg-white/[0.04] text-[#dce4ed] hover:bg-white/[0.08]"
+                isSaved ? "border-[rgba(255, 90, 61,0.36)] bg-[rgba(255, 90, 61,0.18)] text-[#ffb7b3]" : "border-white/10 bg-white/[0.04] text-[#dce4ed] hover:bg-white/[0.08]"
               )}
             >
               <BookmarkSimple size={14} weight={isSaved ? "fill" : "regular"} />
@@ -180,7 +170,7 @@ export function DesktopVideoMapCard({
               aria-label={isFeatured ? "Quitar destacado" : "Destacar video"}
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-lg border transition active:scale-95",
-                isFeatured ? "border-[rgba(255,0,0,0.36)] bg-[rgba(255,0,0,0.18)] text-[#ffb7b3]" : "border-white/10 bg-white/[0.04] text-[#dce4ed] hover:bg-white/[0.08]"
+                isFeatured ? "border-[rgba(255, 90, 61,0.36)] bg-[rgba(255, 90, 61,0.18)] text-[#ffb7b3]" : "border-white/10 bg-white/[0.04] text-[#dce4ed] hover:bg-white/[0.08]"
               )}
             >
               <Star size={14} weight={isFeatured ? "fill" : "regular"} />

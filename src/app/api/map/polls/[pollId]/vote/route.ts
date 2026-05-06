@@ -3,9 +3,9 @@ import { z } from "zod";
 import {
   getOrCreateVoterFingerprint,
   getRequestHashes,
-  MAP_VOTER_COOKIE,
   MapPollVoteError,
   recordMapPollVote,
+  setMapVoterCookies,
 } from "@/lib/map-polls";
 
 export const dynamic = "force-dynamic";
@@ -33,13 +33,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pol
 
     const response = NextResponse.json({ poll });
     if (fingerprint.shouldSetCookie) {
-      response.cookies.set(MAP_VOTER_COOKIE, fingerprint.raw, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365,
-      });
+      setMapVoterCookies(response, fingerprint.raw);
     }
 
     return response;

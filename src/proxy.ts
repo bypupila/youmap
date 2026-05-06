@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE_NAMES } from "@/lib/auth-session";
 
-const SESSION_COOKIE_NAME = "travelmap_session";
 const VANITY_HOSTS = new Set(["youmap.bypupila.com", "www.youmap.bypupila.com"]);
 const RESERVED_PATHS = new Set(["", "admin", "auth", "dashboard", "onboarding", "pricing", "explore", "map", "api", "u", "_next", "monitoring"]);
 
@@ -18,7 +18,7 @@ export async function proxy(request: NextRequest) {
   const isDemoMode = request.nextUrl.searchParams.get("demo") === "1";
   if (isDemoMode) return NextResponse.next();
 
-  const hasSession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
+  const hasSession = SESSION_COOKIE_NAMES.some((cookieName) => Boolean(request.cookies.get(cookieName)?.value));
   if (pathname.startsWith("/dashboard") && !hasSession) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";

@@ -29,6 +29,16 @@ function processVideosInBatches<T>(items: T[], concurrency: number, worker: (ite
   );
 }
 
+function buildVideoSourcePayload(details: Awaited<ReturnType<typeof loadVideoDetails>> extends Map<string, infer T> ? T : never) {
+  return {
+    ingestion: "youtube_data_api_v3",
+    fetched_at: details.youtube_data_refreshed_at,
+    expires_at: details.youtube_data_expires_at,
+    made_for_kids: details.made_for_kids ?? null,
+    has_recording_details: typeof details.recording_lat === "number" && typeof details.recording_lng === "number",
+  } satisfies Record<string, unknown>;
+}
+
 async function getManualQueue(channelId: string): Promise<ManualVerificationItem[]> {
   const data = await sql<Array<{
     id: string;
@@ -90,9 +100,12 @@ async function upsertVideoSkeleton(input: {
       comment_count,
       duration_seconds,
       is_short,
+      made_for_kids,
       recording_lat,
       recording_lng,
       recording_location_description,
+      youtube_data_refreshed_at,
+      youtube_data_expires_at,
       location_status,
       playlist_signals,
       geo_hints,
@@ -111,9 +124,12 @@ async function upsertVideoSkeleton(input: {
       ${input.details?.comment_count ?? null},
       ${input.details?.duration_seconds ?? null},
       ${Boolean(input.details?.is_short)},
+      ${input.details?.made_for_kids ?? null},
       ${input.details?.recording_lat ?? null},
       ${input.details?.recording_lng ?? null},
       ${input.details?.recording_location_description ?? null},
+      ${input.details?.youtube_data_refreshed_at || now},
+      ${input.details?.youtube_data_expires_at || now},
       'processing',
       '[]'::jsonb,
       '[]'::jsonb,
@@ -131,9 +147,12 @@ async function upsertVideoSkeleton(input: {
       comment_count = excluded.comment_count,
       duration_seconds = excluded.duration_seconds,
       is_short = excluded.is_short,
+      made_for_kids = excluded.made_for_kids,
       recording_lat = excluded.recording_lat,
       recording_lng = excluded.recording_lng,
       recording_location_description = excluded.recording_location_description,
+      youtube_data_refreshed_at = excluded.youtube_data_refreshed_at,
+      youtube_data_expires_at = excluded.youtube_data_expires_at,
       source_payload = excluded.source_payload,
       updated_at = excluded.updated_at
     returning id
@@ -221,7 +240,7 @@ export async function syncChannelIncremental(input: { channelId: string }): Prom
         youtubeVideoId,
         details,
         sourcePayload: {
-          video_details: details.raw || null,
+          ...buildVideoSourcePayload(details),
         },
       });
 

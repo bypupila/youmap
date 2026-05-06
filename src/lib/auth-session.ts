@@ -2,7 +2,9 @@ import { createHmac, timingSafeEqual } from "crypto";
 import type { NextResponse } from "next/server";
 import { sanitizeEnvValue } from "@/lib/env";
 
-export const SESSION_COOKIE_NAME = "travelmap_session";
+export const SESSION_COOKIE_NAME = "travelyourmap_session";
+export const LEGACY_SESSION_COOKIE_NAME = "travelmap_session";
+export const SESSION_COOKIE_NAMES = [SESSION_COOKIE_NAME, LEGACY_SESSION_COOKIE_NAME] as const;
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 function encodeBase64Url(input: Buffer | string) {
@@ -50,6 +52,26 @@ function parseCookieValue(cookieHeader: string | null, name: string) {
   return null;
 }
 
+function parseCookieValueFromNames(cookieHeader: string | null, names: readonly string[]) {
+  for (const name of names) {
+    const value = parseCookieValue(cookieHeader, name);
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function getCookieValueFromStore(cookieStore: { get(name: string): { value?: string } | undefined }, names: readonly string[]) {
+  for (const name of names) {
+    const value = String(cookieStore.get(name)?.value || "").trim();
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+}
+
 export function createSessionToken(userId: string, ttlSeconds = DEFAULT_SESSION_TTL_SECONDS) {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const payload = {
@@ -64,6 +86,18 @@ export function createSessionToken(userId: string, ttlSeconds = DEFAULT_SESSION_
 
 export function getSessionUserIdFromToken(token: string | null | undefined) {
   return getSessionPayloadFromToken(token)?.sub || null;
+}
+
+export function getSessionTokenFromCookieHeader(cookieHeader: string | null) {
+  return parseCookieValueFromNames(cookieHeader, SESSION_COOKIE_NAMES);
+}
+
+export function getSessionPayloadFromCookieHeader(cookieHeader: string | null) {
+  return getSessionPayloadFromToken(getSessionTokenFromCookieHeader(cookieHeader));
+}
+
+export function getSessionTokenFromCookieStore(cookieStore: { get(name: string): { value?: string } | undefined }) {
+  return getCookieValueFromStore(cookieStore, SESSION_COOKIE_NAMES);
 }
 
 export function getSessionPayloadFromToken(token: string | null | undefined) {
@@ -98,26 +132,30 @@ export function getSessionPayloadFromToken(token: string | null | undefined) {
 }
 
 export function getSessionUserIdFromCookieHeader(cookieHeader: string | null) {
-  const token = parseCookieValue(cookieHeader, SESSION_COOKIE_NAME);
-  return getSessionUserIdFromToken(token);
+  return getSessionUserIdFromToken(getSessionTokenFromCookieHeader(cookieHeader));
 }
 
 export function setSessionCookie(response: NextResponse, userId: string) {
-  response.cookies.set(SESSION_COOKIE_NAME, createSessionToken(userId), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: DEFAULT_SESSION_TTL_SECONDS,
-  });
+  const token = createSessionToken(userId);
+  for (const cookieName of SESSION_COOKIE_NAMES) {
+    response.cookies.set(cookieName, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: DEFAULT_SESSION_TTL_SECONDS,
+    });
+  }
 }
 
 export function clearSessionCookie(response: NextResponse) {
-  response.cookies.set(SESSION_COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
+  for (const cookieName of SESSION_COOKIE_NAMES) {
+    response.cookies.set(cookieName, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+  }
 }

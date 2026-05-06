@@ -5,14 +5,14 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Explorar creadores por destino | TravelMap",
-  description: "Explora países, creadores y videos con una experiencia visual inspirada en YouTube.",
+  title: "Explorar creadores por destino | TravelYourMap",
+  description: "Explora países, creadores y videos con una vista editorial centrada en destinos y rutas.",
   openGraph: {
-    title: "Explorar creadores por destino | TravelMap",
+    title: "Explorar creadores por destino | TravelYourMap",
     description: "Directorio visual de creadores y videos por destino para discovery y SEO.",
     type: "website",
     url: `${siteUrl}/explore`,
-    siteName: "TravelMap - BY PUPILA",
+    siteName: "TravelYourMap - BY PUPILA",
   },
 };
 

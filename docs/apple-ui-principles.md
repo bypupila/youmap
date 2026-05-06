@@ -1,4 +1,4 @@
-# Apple UI Principles translated to TravelMap
+# Apple UI Principles translated to TravelYourMap
 
 Este documento transforma principios de Apple a reglas ejecutables en nuestra plataforma web.
 
@@ -14,27 +14,27 @@ Este documento transforma principios de Apple a reglas ejecutables en nuestra pl
 
 1. Diseñar con detalle sistémico.
 - Apple enfatiza que los "smallest details" impactan la calidad total.
-- Regla TravelMap: eliminar estilos ad-hoc por pantalla y centralizar en componentes/tokens.
+- Regla TravelYourMap: eliminar estilos ad-hoc por pantalla y centralizar en componentes/tokens.
 
 2. Lenguaje visual cohesivo, adaptivo y expresivo.
 - Apple describe la nueva base como "cohesive, adaptive and expressive".
-- Regla TravelMap: una sola semántica de superficies (`tm-surface`, `tm-surface-strong`) y jerarquía textual común.
+- Regla TravelYourMap: una sola semántica de superficies (`tm-surface`, `tm-surface-strong`) y jerarquía textual común.
 
 3. Estructura y continuidad como pilares.
 - Apple separa explícitamente diseño en "Design Language", "Structure" y "Continuity".
-- Regla TravelMap: `FloatingTopBar` + `MapExperience` como patrón estable entre landing, onboarding, dashboard, explore, map y perfil.
+- Regla TravelYourMap: `FloatingTopBar` + `MapExperience` como patrón estable entre landing, onboarding, dashboard, explore, map y perfil.
 
 4. Tipografía para jerarquía y legibilidad.
 - Apple HIG: la tipografía transmite jerarquía; Dynamic Type mejora legibilidad/confort.
-- Regla TravelMap: escala tipográfica fija por nivel (`tm-kicker`, `tm-title-display`, cuerpo) y componentes que no dependen de tamaños arbitrarios.
+- Regla TravelYourMap: escala tipográfica fija por nivel (`tm-kicker`, `tm-title-display`, cuerpo) y componentes que no dependen de tamaños arbitrarios.
 
 5. Interfaces visualmente accesibles.
 - Apple recomienda color pensado, texto legible y UI adaptable a tamaños de contenido/dispositivo.
-- Regla TravelMap: tokens semánticos, contraste en overlays, y migración de paneles largos a `Sheet` en mobile.
+- Regla TravelYourMap: tokens semánticos, contraste en overlays, y migración de paneles largos a `Sheet` en mobile.
 
 6. Inclusión: múltiples modos de interacción y personalización.
 - Apple recomienda soporte multisensorial, personalización y APIs de accesibilidad.
-- Regla TravelMap: `Dialog`/`Sheet` con títulos accesibles, controles consistentes y foco visible por token `--ring`.
+- Regla TravelYourMap: `Dialog`/`Sheet` con títulos accesibles, controles consistentes y foco visible por token `--ring`.
 
 ## Parámetros implementados
 

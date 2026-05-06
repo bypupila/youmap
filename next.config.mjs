@@ -15,7 +15,7 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "connect-src 'self' https: wss:",
-  "frame-src 'self'"
+  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com"
 ].join("; ");
 
 /** @type {import('next').NextConfig} */

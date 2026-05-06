@@ -19,6 +19,7 @@ const payloadSchema = z.object({
   selectedPlan: z.string().trim().min(2, "Selecciona un plan."),
   channelUrl: z.string().min(3).optional().nullable(),
   youtubeChannelId: z.string().min(8).optional().nullable(),
+  acceptTerms: z.boolean().optional().default(false),
   activateWithoutPayment: z.boolean().optional().default(false),
   deferImportToProcessing: z.boolean().optional().default(false),
 });
@@ -35,6 +36,7 @@ function buildValidationMessage(error: z.ZodError) {
   if (field === "password") return "La contraseña debe tener al menos 8 caracteres.";
   if (field === "selectedPlan") return "Selecciona un plan para continuar.";
   if (field === "channelUrl" || field === "youtubeChannelId") return "Revisa el canal de YouTube e inténtalo de nuevo.";
+  if (field === "acceptTerms") return "Debes aceptar términos y privacidad para continuar.";
 
   return firstIssue.message || fallback;
 }
@@ -108,6 +110,14 @@ export async function POST(request: Request) {
     const email = normalizeEmail(payload.email);
     const displayName = payload.displayName.trim();
     const selectedPlan = payload.selectedPlan.trim();
+    if (!payload.acceptTerms) {
+      return NextResponse.json(
+        {
+          error: "Debes aceptar términos y privacidad para continuar.",
+        },
+        { status: 400 }
+      );
+    }
 
     if (!isValidUsername(username)) {
       return NextResponse.json(
@@ -178,6 +188,7 @@ export async function POST(request: Request) {
         completed_steps,
         selected_plan,
         youtube_channel_id,
+        accepted_terms_at,
         is_complete,
         demo_mode,
         last_seen_at,
@@ -189,6 +200,7 @@ export async function POST(request: Request) {
         array['welcome', 'youtube']::text[],
         ${selectedPlan},
         ${channelInput},
+        ${nowIso},
         false,
         false,
         ${nowIso},
@@ -200,6 +212,7 @@ export async function POST(request: Request) {
         completed_steps = excluded.completed_steps,
         selected_plan = excluded.selected_plan,
         youtube_channel_id = excluded.youtube_channel_id,
+        accepted_terms_at = excluded.accepted_terms_at,
         is_complete = excluded.is_complete,
         demo_mode = excluded.demo_mode,
         last_seen_at = excluded.last_seen_at,

@@ -60,7 +60,7 @@ export default function AuthPage() {
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
       <div className="platform-grid-glow pointer-events-none absolute inset-0" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,0,0,0.18),transparent_24%),radial-gradient(circle_at_84%_14%,rgba(255,0,0,0.12),transparent_26%),linear-gradient(180deg,rgba(17,20,22,0.92),rgba(17,20,22,0.76))]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255, 90, 61,0.18),transparent_24%),radial-gradient(circle_at_84%_14%,rgba(255, 90, 61,0.12),transparent_26%),linear-gradient(180deg,rgba(17,20,22,0.92),rgba(17,20,22,0.76))]" />
       <div className="relative z-10 mx-auto grid min-h-[100dvh] max-w-[1400px] items-center gap-8 px-4 py-10 lg:grid-cols-[0.92fr_1.08fr] lg:px-6">
         <section className="order-2 lg:order-1">
           <div className="max-w-[38rem]">
@@ -71,12 +71,12 @@ export default function AuthPage() {
             <p className="mt-5 max-w-[60ch] text-base leading-7 text-muted-foreground">
               {authIntent === "viewer"
                 ? "Accede como viewer para participar en votaciones y desbloquear estadísticas avanzadas en los mapas públicos."
-                : "TravelMap convierte el catálogo del canal en una experiencia editorial: rutas, países, sponsors y una URL pública lista para ventas o discovery."}
+                : "TravelYourMap convierte el catálogo del canal en una experiencia editorial: rutas, países, sponsors y una URL pública lista para ventas o discovery."}
             </p>
           </div>
 
           <div className="mt-6">
-            <Link href="/" className="yt-btn-secondary">
+            <Link href="/" className="tym-btn-secondary">
               Volver al inicio
             </Link>
           </div>
@@ -85,14 +85,14 @@ export default function AuthPage() {
         <section className="order-1 tm-surface-strong rounded-[2rem] p-6 sm:p-8 lg:order-2 lg:ml-auto lg:w-full lg:max-w-[38rem]">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <p className="yt-overline">{authIntent === "viewer" ? "Cuenta Viewer" : "Cuenta TravelMap"}</p>
+              <p className="tym-overline">{authIntent === "viewer" ? "Cuenta Viewer" : "Cuenta TravelYourMap"}</p>
               <h2 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-foreground">Acceso de cuenta</h2>
             </div>
             <Badge variant="secondary">Login</Badge>
           </div>
 
           <div className="mb-6 flex flex-wrap gap-2">
-            <button type="button" className="yt-nav-pill" data-active="true" aria-current="true">
+            <button type="button" className="tym-nav-pill" data-active="true" aria-current="true">
               Iniciar sesión
             </button>
           </div>
@@ -133,6 +133,17 @@ export default function AuthPage() {
           ) : (
             <p className="mt-5 text-sm text-muted-foreground">Este acceso es para viewers del mapa público. El alta de creator se gestiona por onboarding y checkout.</p>
           )}
+          <p className="mt-4 text-xs text-muted-foreground">
+            Al usar este producto aceptas nuestros <Link href="/terms" className="underline underline-offset-2">Términos</Link> y{" "}
+            <Link href="/privacy" className="underline underline-offset-2">Privacidad</Link>, además de los{" "}
+            <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener" className="underline underline-offset-2">
+              Términos de YouTube
+            </a>
+            .
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            TravelYourMap no está afiliado, patrocinado ni respaldado por YouTube ni por Google.
+          </p>
         </section>
       </div>
     </main>

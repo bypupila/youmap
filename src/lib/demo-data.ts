@@ -7,7 +7,7 @@ export const DEMO_CHANNEL_SLUG = "demo-channel";
 export const DEMO_USER = {
   id: "00000000-0000-4000-8000-000000000001",
   username: DEMO_USERNAME,
-  email: "demo@travelmap.local",
+  email: "demo@travelyourmap.local",
   displayName: "Pupila Nomad",
 };
 
