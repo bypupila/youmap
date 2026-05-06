@@ -18,7 +18,7 @@
     "user:set-role": "node scripts/set-user-role.mjs"
   },
   "dependencies": {
-    "@google/genai": "^1.13.0",
+    "@google/genai": "^1.52.0",
     "@neondatabase/serverless": "^1.0.1",
     "@phosphor-icons/react": "^2.1.10",
     "@polar-sh/sdk": "^0.6.0",
