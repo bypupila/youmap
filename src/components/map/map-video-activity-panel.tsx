@@ -47,15 +47,11 @@ export function MapVideoActivityPanel({
   });
 
   return (
-    <aside className="pointer-events-auto flex max-h-[min(50dvh,410px)] min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/88 text-sm text-white shadow-[0_28px_90px_-48px_rgba(0,0,0,0.94)] backdrop-blur-2xl">
+    <aside className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/88 text-sm text-white shadow-[0_28px_90px_-48px_rgba(0,0,0,0.94)] backdrop-blur-2xl">
       <header className="shrink-0 border-b border-white/10 px-3 py-2.5">
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#ff6b64]">
           {canUseAdminPanels ? "Estadisticas del mapa" : "Tu actividad"}
         </p>
-        <h2 className="mt-0.5 truncate text-[13px] font-semibold text-[#f4f7fb]">
-          {canUseAdminPanels ? "Rendimiento y curaduria" : "Videos vistos y guardados"}
-        </h2>
-        <p className="mt-1 text-[10px] leading-4 text-[#8f98a3]">Datos locales en este navegador.</p>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:thin]" data-map-scroll="true">

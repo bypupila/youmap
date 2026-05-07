@@ -9,7 +9,6 @@ import {
   CaretRight,
   CheckCircle,
   Clock,
-  ArrowSquareOut,
   Eye,
   MapPin,
   Star,
@@ -230,28 +229,18 @@ export function DesktopVideoMapCard({
               </span>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={openYouTubeVideo}
-            disabled={!youtubeHref}
-            className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#e8edf4] transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Abrir en YouTube"
-          >
-            {isOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube"}
-            <ArrowSquareOut size={12} />
-          </button>
         </div>
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-[#aab2bc]">
-          <p className="flex min-w-0 items-center gap-1.5">
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11.5px] text-[#aab2bc]">
+          <p className="flex min-w-0 items-center justify-center gap-1.5">
             <MapPin size={13} className="shrink-0" />
             <span className="truncate">{formatVideoPlace(selectedVideo)}</span>
           </p>
-          <p className="flex items-center gap-1.5">
+          <p className="flex items-center justify-center gap-1.5">
             <Eye size={13} />
             {formatCompactNumber(Number(selectedVideo.view_count || 0))} vistas
           </p>
-          <p className="flex shrink-0 items-center gap-1.5">
+          <p className="flex shrink-0 items-center justify-center gap-1.5">
             <Clock size={13} />
             {formatVideoDate(selectedVideo.published_at)}
           </p>

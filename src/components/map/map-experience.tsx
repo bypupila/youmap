@@ -43,6 +43,7 @@ import { MissingVideosDialog } from "@/components/map/missing-videos-dialog";
 import { useLocalVideoActivity } from "@/components/map/video-activity";
 import type { VideoActivityController, VideoActivityTab } from "@/components/map/video-activity";
 import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
+import { countryCodeToFlag, getVideoCityLabel } from "@/components/map/video-viewer-utils";
 import { TravelGlobe } from "@/components/travel-globe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -467,14 +468,7 @@ export function MapExperience({
     };
   }, [items, pendingManual.length, summary]);
 
-  const cityCount = useMemo(() => {
-    const cities = new Set<string>();
-    for (const video of items) {
-      const key = String(video.city || video.location_label || "").trim().toLowerCase();
-      if (key) cities.add(key);
-    }
-    return cities.size;
-  }, [items]);
+  const cityCount = useMemo(() => buildCityBuckets(items).length, [items]);
 
   const destinationCandidates = useMemo(
     () => buildDestinationCandidates(pollState, countryBuckets),
@@ -1915,8 +1909,8 @@ function MapOverviewRail({
             <div className="flex min-w-0 items-center gap-3">
               <ChannelAvatar channel={channel} size="sm" />
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8f98a3]">{isDemoMode ? "Mapa demo" : "Mapa del canal"}</p>
-                <CardTitle className="truncate text-[15px] font-semibold text-[#f5f7fb]">{channel.channel_name}</CardTitle>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8f98a3]">Travel Your Map</p>
+                <CardTitle className="truncate text-[15px] font-semibold text-[#f5f7fb]">{getCreatorDisplayName(channel.channel_name)}</CardTitle>
               </div>
             </div>
             <div className="text-right">
@@ -2016,13 +2010,16 @@ function MapOverviewRail({
                         isActive ? "border-[#ff3f38]/60 bg-[rgba(225, 84, 58,0.12)]" : "border-white/10 bg-white/[0.035] hover:bg-white/[0.07]"
                       )}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate text-[12px] font-semibold text-[#f4f7fb]">{bucket.country_name}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <CountryCodeMark code={bucket.country_code} compact />
+                          <p className="truncate text-[12px] font-semibold text-[#f4f7fb]">{bucket.country_name}</p>
+                        </div>
                         <Badge variant="outline" className="h-5 rounded-full border-white/15 bg-white/[0.04] px-2 text-[10px] leading-none text-[#d5dbe2]">
                           {bucket.count}
                         </Badge>
                       </div>
-                      <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{bucket.cities.length} ciudad(es) detectadas</p>
+                      {bucket.cities.length > 0 ? <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{bucket.cities.length} ciudad(es) detectadas</p> : null}
                     </button>
                   );
                 })
@@ -2069,6 +2066,15 @@ function MapCenterStage({
             {option === "all" ? "Todos" : `${option}d`}
           </button>
         ))}
+        {selectedCountryCode ? (
+          <button
+            type="button"
+            onClick={goBackLocationFilter}
+            className="tym-nav-pill min-h-8 shrink-0 rounded-lg border border-[rgba(255,90,61,0.45)] bg-transparent px-4 text-[12px] text-[#ff6b64] hover:bg-[rgba(255,90,61,0.08)]"
+          >
+            Volver
+          </button>
+        ) : null}
       </div>
 
       <div className="pointer-events-auto absolute right-3 top-1/2 z-[330] hidden -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/86 backdrop-blur-2xl md:flex">
@@ -2085,21 +2091,6 @@ function MapCenterStage({
           {rotationEnabled ? <Pause size={16} weight="fill" /> : <Play size={16} weight="fill" />}
         </button>
       </div>
-
-      <AnimatePresence>
-        {selectedCountryCode ? (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            className="pointer-events-auto absolute left-1/2 top-16 z-[335] -translate-x-1/2"
-          >
-            <button type="button" onClick={goBackLocationFilter} className="tym-btn-secondary min-h-9 rounded-xl bg-[#07101a]/90 px-3 text-[12px] backdrop-blur">
-              Volver
-            </button>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
 
       <div className="pointer-events-none absolute inset-x-0 top-16 bottom-[138px] z-[430] hidden px-4 lg:block xl:px-5">
         <div className="flex h-full items-center justify-center">
@@ -2313,12 +2304,11 @@ function DestinationCard({
 function FanVoteSummary({ candidates, onSelect }: { candidates: DestinationCandidate[]; onSelect: (countryCode: string | null) => void }) {
   return (
     <Card className="tm-surface-strong rounded-2xl">
-      <CardHeader className="flex-row items-center justify-between px-4 pb-2 pt-4">
-        <CardTitle className="text-[16px] font-semibold text-[#f5f7fb]">Fan vote activo</CardTitle>
-        <Badge variant="outline" className="bg-white/[0.04] text-[11px]">Top destinos</Badge>
+      <CardHeader className="flex-row items-center justify-center px-4 pb-2 pt-4">
+        <CardTitle className="text-center text-[16px] font-semibold text-[#f5f7fb]">Fan vote activo</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 px-4 pb-4">
-        {candidates.slice(0, 4).map((candidate, index) => (
+        {candidates.slice(0, 3).map((candidate, index) => (
           <button key={candidate.country_code} type="button" onClick={() => onSelect(candidate.country_code)} className="flex w-full items-center gap-3 rounded-xl bg-white/[0.035] px-3 py-2 text-left transition hover:bg-white/[0.07]">
             <span className="w-4 text-right text-[14px] font-semibold text-[#f5b82e]">{index + 1}</span>
             <CountryCodeMark code={candidate.country_code} compact />
@@ -3150,8 +3140,8 @@ function VideoThumb({ video, className }: { video: TravelVideoLocation; classNam
 
 function CountryCodeMark({ code, compact = false }: { code?: string | null; compact?: boolean }) {
   return (
-    <span className={cn("flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white text-[#07101a] font-bold", compact ? "h-7 w-7 text-[10px]" : "h-11 w-11 text-[12px]")}>
-      {formatCountryCode(code)}
+    <span className={cn("flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white text-[#07101a] font-bold", compact ? "h-7 w-7 text-[12px]" : "h-11 w-11 text-[18px]")}>
+      {countryCodeToFlag(code)}
     </span>
   );
 }
@@ -3200,7 +3190,7 @@ function buildCountryBuckets(videos: TravelVideoLocation[]) {
     };
     row.count += 1;
     row.views += Number(video.view_count || 0);
-    const city = String(video.city || video.location_label || "").trim();
+    const city = getVideoCityLabel(video);
     if (city) {
       const existing = row.cities.find((entry) => entry.name === city);
       if (existing) {
@@ -3254,7 +3244,7 @@ function buildChannelUrl(channel: TravelChannel) {
 }
 
 function formatPlace(video: TravelVideoLocation) {
-  return [video.city, video.country_name || video.country_code].filter(Boolean).join(", ") || "Ubicacion mapeada";
+  return [getVideoCityLabel(video), video.country_name || video.country_code].filter(Boolean).join(", ") || "Ubicacion mapeada";
 }
 
 function formatCountryCode(countryCode?: string | null) {
@@ -3263,7 +3253,7 @@ function formatCountryCode(countryCode?: string | null) {
 }
 
 function getVideoCityKey(video: TravelVideoLocation) {
-  return String(video.city || video.location_label || "").trim();
+  return getVideoCityLabel(video) || "";
 }
 
 function buildCityBuckets(videos: TravelVideoLocation[]) {
@@ -3289,6 +3279,15 @@ function getInitialMobileTab(): MobileMapTab {
 function formatExactNumber(value: number) {
   if (!value) return "0";
   return Number(value).toLocaleString("en-US");
+}
+
+function getCreatorDisplayName(channelName: string) {
+  return (
+    String(channelName || "")
+      .split("·")
+      .map((part) => part.trim())
+      .find(Boolean) || channelName
+  );
 }
 
 function formatIsoDateTime(value: string) {

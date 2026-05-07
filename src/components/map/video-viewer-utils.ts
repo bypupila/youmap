@@ -140,9 +140,34 @@ export function sortRecentVideos(a: TravelVideoLocation, b: TravelVideoLocation)
   return bTime - aTime;
 }
 
+function normalizeLocationToken(value?: string | null) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+export function getVideoCityLabel(video?: TravelVideoLocation | null) {
+  if (!video) return null;
+  const city = String(video.city || "").trim();
+  if (!city) return null;
+  if (video.location_precision !== "city") return null;
+
+  const normalizedCity = normalizeLocationToken(city);
+  if (!normalizedCity) return null;
+
+  const normalizedCountryName = normalizeLocationToken(video.country_name || "");
+  const normalizedCountryCode = normalizeLocationToken(video.country_code || "");
+  if (normalizedCity === normalizedCountryName || normalizedCity === normalizedCountryCode) return null;
+
+  return city;
+}
+
 export function formatVideoPlace(video?: TravelVideoLocation | null) {
   if (!video) return "Ubicacion mapeada";
-  return [video.city, video.country_name || video.country_code].filter(Boolean).join(", ") || "Ubicacion mapeada";
+  const city = getVideoCityLabel(video);
+  return [city, video.country_name || video.country_code].filter(Boolean).join(", ") || "Ubicacion mapeada";
 }
 
 export function formatCompactNumber(value: number) {

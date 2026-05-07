@@ -81,6 +81,9 @@ export function TravelGlobe({
   const didApplyInitialSelection = useRef(false);
   const didApplyFocusSelection = useRef<string | null>(null);
   const didApplyFocusVideo = useRef<string | null>(null);
+  const hoveredPointRef = useRef<GlobePoint | null>(null);
+  const countryHoverTimerRef = useRef<number | null>(null);
+  const pendingCountryHoverCodeRef = useRef<string | null>(null);
   const rotationPointOfViewRef = useRef({ lat: 20, lng: -10, altitude: 2.3 });
   const rotationEnabled = controlledRotationEnabled ?? internalRotationEnabled;
 
@@ -300,6 +303,56 @@ export function TravelGlobe({
   }, [activePoint, onActiveVideoChange]);
 
   useEffect(() => {
+    hoveredPointRef.current = hoveredPoint;
+  }, [hoveredPoint]);
+
+  const clearCountryHoverSelection = useCallback(() => {
+    if (countryHoverTimerRef.current !== null) {
+      window.clearTimeout(countryHoverTimerRef.current);
+    }
+    countryHoverTimerRef.current = null;
+    pendingCountryHoverCodeRef.current = null;
+  }, []);
+
+  const selectCountryFromPolygon = useCallback(
+    (countryCode: string) => {
+      clearCountryHoverSelection();
+      const candidate = buildCountrySelectionPoint(videoLocations, countryCode);
+      if (!candidate) return;
+      onCountrySelect?.(countryCode.toUpperCase());
+      updateRotationEnabled(false);
+      setSelectedPoint(candidate);
+      const nextView = { lat: candidate.lat, lng: candidate.lng, altitude: pointMode === "video" ? 0.72 : 1.2 };
+      rotationPointOfViewRef.current = nextView;
+      globeRef.current?.pointOfView(nextView, 850);
+    },
+    [clearCountryHoverSelection, onCountrySelect, pointMode, updateRotationEnabled, videoLocations]
+  );
+
+  const scheduleCountryHoverSelection = useCallback(
+    (countryCode: string) => {
+      const normalized = String(countryCode || "").toUpperCase();
+      if (!normalized) return;
+      if (hoveredPointRef.current) return;
+
+      if (pendingCountryHoverCodeRef.current === normalized && countryHoverTimerRef.current !== null) return;
+
+      clearCountryHoverSelection();
+      pendingCountryHoverCodeRef.current = normalized;
+      countryHoverTimerRef.current = window.setTimeout(() => {
+        if (pendingCountryHoverCodeRef.current !== normalized) return;
+        if (hoveredPointRef.current) return;
+        selectCountryFromPolygon(normalized);
+      }, 3000);
+    },
+    [clearCountryHoverSelection, selectCountryFromPolygon]
+  );
+
+  useEffect(() => {
+    return () => clearCountryHoverSelection();
+  }, [clearCountryHoverSelection]);
+
+  useEffect(() => {
     return () => {
       disposeGlobeResources(globeRef.current);
       globeRef.current = undefined;
@@ -307,6 +360,7 @@ export function TravelGlobe({
   }, []);
 
   function handlePointSelection(selected: GlobePoint) {
+    clearCountryHoverSelection();
     updateRotationEnabled(false);
     setSelectedPoint(selected);
 
@@ -317,16 +371,6 @@ export function TravelGlobe({
 
     focusCountryOnGlobe(selected);
     onPinnedVideoChange?.(null);
-  }
-
-  function handleCountryPolygonSelection(polygon: object | null) {
-    if (!polygon) return;
-    const countryCode = resolveCountryCodeFromPolygon(polygon, countryNameIndex);
-    if (!countryCode) return;
-
-    onCountrySelect?.(countryCode);
-    updateRotationEnabled(false);
-    setHoveredPoint(null);
   }
 
   return (
@@ -371,16 +415,15 @@ export function TravelGlobe({
                   setHoveredPolygonName(name || null);
                   const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, countryNameIndex) : null;
                   setHoveredPolygonCode(code);
+                  if (!code || hoveredPointRef.current) {
+                    clearCountryHoverSelection();
+                    return;
+                  }
+                  scheduleCountryHoverSelection(code);
                 }
               : undefined
           }
-          onPolygonClick={
-            interactive
-              ? (polygon) => {
-                  handleCountryPolygonSelection((polygon as object | null) || null);
-                }
-              : undefined
-          }
+          onPolygonClick={interactive ? () => clearCountryHoverSelection() : undefined}
           pointsData={pointsData}
           pointLat={(d) => (d as GlobePoint).lat}
           pointLng={(d) => (d as GlobePoint).lng}
@@ -398,9 +441,15 @@ export function TravelGlobe({
           htmlElement={(d) =>
             createFlagPinElement(d as GlobePoint, {
               onClick: (point) => handlePointSelection(point),
-              onHoverStart: (point) => setHoveredPoint(point),
+              onHoverStart: (point) => {
+                clearCountryHoverSelection();
+                setHoveredPoint(point);
+              },
               onHoverEnd: (point) => {
                 setHoveredPoint((previous) => (previous?.point_id === point.point_id ? null : previous));
+                if (hoveredPolygonCode) {
+                  scheduleCountryHoverSelection(hoveredPolygonCode);
+                }
               },
             }, interactive)
           }
@@ -424,14 +473,16 @@ export function TravelGlobe({
           onPointHover={
             interactive
               ? (point) => {
-                  const hovered = (point as GlobePoint | undefined) || null;
-                  setHoveredPoint(hovered);
-                }
+                const hovered = (point as GlobePoint | undefined) || null;
+                setHoveredPoint(hovered);
+                if (hovered) clearCountryHoverSelection();
+              }
               : undefined
           }
           onGlobeClick={
             interactive
               ? () => {
+                  clearCountryHoverSelection();
                   updateRotationEnabled(false);
                   setHoveredPoint(null);
                   setHoveredPolygonName(null);
@@ -778,6 +829,7 @@ function createFlagPinElement(
   marker.style.background = "rgba(4,7,14,0.78)";
   marker.style.border = "1px solid rgba(255,255,255,0.24)";
   marker.style.boxShadow = "0 6px 16px rgba(2,6,23,0.45)";
+  marker.style.zIndex = point.kind === "video" ? "6" : "4";
   marker.style.fontSize = "13px";
   marker.textContent = countryCodeToFlag(point.country_code);
 
