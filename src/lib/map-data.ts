@@ -125,6 +125,17 @@ function normalizeDemoVideoRows(): TravelVideoLocation[] {
   }));
 }
 
+function resolveLatestExtractionAt(videos: TravelVideoLocation[]) {
+  let latest = 0;
+  for (const video of videos) {
+    const extractedMs = video.youtube_data_refreshed_at ? new Date(video.youtube_data_refreshed_at).getTime() : 0;
+    const publishedMs = video.published_at ? new Date(video.published_at).getTime() : 0;
+    const candidate = Math.max(extractedMs, publishedMs);
+    if (Number.isFinite(candidate) && candidate > latest) latest = candidate;
+  }
+  return latest > 0 ? new Date(latest).toISOString() : null;
+}
+
 export async function loadMapDataByChannelId(channelId: string): Promise<MapDataPayload | null> {
   if (!channelId) return null;
 
@@ -144,7 +155,10 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
       youtube_data_expires_at: null,
     }));
     return {
-      channel: local.channel,
+      channel: {
+        ...local.channel,
+        last_synced_at: local.channel.last_synced_at || resolveLatestExtractionAt(rows),
+      },
       videoLocations: rows,
       manualQueue: [],
       summary: computeSummary(rows, []),
@@ -167,7 +181,10 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
       youtube_data_expires_at: null,
     }));
     return {
-      channel: local.channel,
+      channel: {
+        ...local.channel,
+        last_synced_at: local.channel.last_synced_at || resolveLatestExtractionAt(rows),
+      },
       videoLocations: rows,
       manualQueue: [],
       summary: computeSummary(rows, []),
@@ -178,7 +195,10 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
     const demoRows = normalizeDemoVideoRows();
     const summary = computeSummary(demoRows, []);
     return {
-      channel: DEMO_CHANNEL,
+      channel: {
+        ...DEMO_CHANNEL,
+        last_synced_at: DEMO_CHANNEL.last_synced_at || resolveLatestExtractionAt(demoRows),
+      },
       videoLocations: demoRows,
       manualQueue: [],
       summary,
@@ -205,7 +225,21 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
       thumbnail_url,
       subscriber_count,
       youtube_channel_id,
-      last_synced_at
+      coalesce(
+        last_synced_at,
+        (
+          select max(r.finished_at)
+          from public.map_sync_runs r
+          where r.channel_id = public.channels.id
+            and r.status = 'completed'
+        ),
+        (
+          select max(r.finished_at)
+          from public.channel_import_runs r
+          where r.channel_id = public.channels.id
+            and r.status = 'completed'
+        )
+      ) as last_synced_at
     from public.channels
     where id = ${channelId}
     limit 1

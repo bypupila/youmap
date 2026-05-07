@@ -415,6 +415,16 @@ async function loadPrimaryLocations(channelId: string) {
   } satisfies TravelVideoLocation));
 }
 
+async function registerChannelExtractionDate(channelId: string, extractedAt: string) {
+  await sql`
+    update public.channels
+    set
+      last_synced_at = ${extractedAt},
+      updated_at = ${extractedAt}
+    where id = ${channelId}
+  `;
+}
+
 export async function importYoutubeChannelPreview(channelUrl: string): Promise<ImportYoutubeChannelResult> {
   const source = await resolveYouTubeChannel(channelUrl);
   const channelId = randomUUID();
@@ -750,6 +760,8 @@ export async function importYoutubeChannel({
     });
 
     const normalizedLocations = await withRetry(() => loadPrimaryLocations(uploadChannel.id), 2);
+    const extractionRecordedAt = new Date().toISOString();
+    await registerChannelExtractionDate(uploadChannel.id, extractionRecordedAt);
 
     const channel: TravelChannel = {
       id: uploadChannel.id,
@@ -758,6 +770,7 @@ export async function importYoutubeChannel({
       channel_handle: uploadChannel.channel_handle,
       thumbnail_url: uploadChannel.thumbnail_url,
       subscriber_count: uploadChannel.subscriber_count,
+      last_synced_at: extractionRecordedAt,
     };
 
     await sql`
@@ -774,12 +787,13 @@ export async function importYoutubeChannel({
           channel: source,
           stage: "completed",
           progress: 1,
+          extraction_recorded_at: extractionRecordedAt,
           providerErrors,
           importConcurrency,
           maxVideosPerRun,
         })}::jsonb,
-        finished_at = ${new Date().toISOString()},
-        updated_at = ${new Date().toISOString()}
+        finished_at = ${extractionRecordedAt},
+        updated_at = ${extractionRecordedAt}
       where id = ${importRunId}
     `;
 

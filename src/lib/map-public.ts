@@ -1,6 +1,6 @@
 import { normalizeUsername } from "@/lib/auth-identifiers";
 import { getSessionUserById, type AppUserRole, userIsSuperAdmin } from "@/lib/current-user";
-import { DEMO_CHANNEL, DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG, DEMO_USERNAME, getDemoSponsorByCountry, isDemoUsername } from "@/lib/demo-data";
+import { DEMO_CHANNEL, DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG, DEMO_USERNAME, isDemoUsername } from "@/lib/demo-data";
 import { loadMapDataByChannelId, type MapDataPayload } from "@/lib/map-data";
 import { buildPollOptionsFromVideos, loadMapPoll, type MapPollRecord } from "@/lib/map-polls";
 import { sql } from "@/lib/neon";
@@ -154,26 +154,39 @@ async function resolvePublicChannel(identifier: string): Promise<PublicChannelRo
 
 async function loadSponsorsForUser(userId: string, fallbackKey: string | null) {
   if (userId === DEMO_CHANNEL.user_id) {
-    const demoSponsors = [
-      { ...getDemoSponsorByCountry(null), country_codes: ["GLOBAL"] },
-      { ...getDemoSponsorByCountry("JP"), country_codes: ["JP"] },
-      { ...getDemoSponsorByCountry("AR"), country_codes: ["AR"] },
-      { ...getDemoSponsorByCountry("MA"), country_codes: ["MA"] },
-    ];
-    return demoSponsors.map((sponsor) => ({
-      ...sponsor,
-      logo_url:
-        sponsor.brand_name === "Booking.com"
-          ? "/brands/booking.svg"
-          : sponsor.brand_name === "GetYourGuide"
-            ? "/brands/getyourguide.svg"
-            : sponsor.brand_name === "IATI Seguros"
-              ? "/brands/iati.svg"
-              : sponsor.brand_name === "Airbnb"
-                ? "/brands/airbnb.svg"
-                : null,
-      isExample: true,
-    }));
+    const catalogSponsors = await sql<Array<{
+      id: string;
+      brand_name: string;
+      logo_url: string | null;
+      description: string | null;
+      discount_code: string | null;
+      affiliate_url: string | null;
+      country_codes: string[] | null;
+    }>>`
+      select
+        s.id,
+        s.brand_name,
+        s.logo_url,
+        s.description,
+        s.discount_code,
+        s.affiliate_url,
+        array_remove(array_agg(distinct sgr.country_code), null) as country_codes
+      from public.sponsors s
+      left join public.sponsor_geo_rules sgr on sgr.sponsor_id = s.id
+      where s.active = true
+      group by s.id
+      order by s.created_at desc
+      limit 60
+    `;
+
+    if (catalogSponsors.length > 0) {
+      return catalogSponsors.map((sponsor) => ({
+        ...sponsor,
+        country_codes: sponsor.country_codes || [],
+      }));
+    }
+
+    return EXAMPLE_SPONSORS;
   }
 
   const sponsors = await sql<Array<{

@@ -319,6 +319,7 @@ export async function syncChannelIncremental(input: { channelId: string }): Prom
           videos_verified_manual: 0,
           excluded_shorts: excludedShorts,
           excluded_non_travel: excludedNonTravel,
+          extraction_recorded_at: finishedAt,
           manual_queue: manualQueue.length,
         })}::jsonb,
         finished_at = ${finishedAt},
