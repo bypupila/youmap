@@ -44,6 +44,7 @@ import { useLocalVideoActivity } from "@/components/map/video-activity";
 import type { VideoActivityController, VideoActivityTab } from "@/components/map/video-activity";
 import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 import { countryCodeToFlag, getVideoCityLabel } from "@/components/map/video-viewer-utils";
+import { getDemoSponsorByCountry } from "@/lib/demo-data";
 import { TravelGlobe } from "@/components/travel-globe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,14 @@ const SPONSOR_INQUIRY_STATUS_LABEL: Record<SponsorInquiryStatus, string> = {
   won: "Ganado",
   lost: "Perdido",
 };
+const MAP_BACK_BUTTON_CLASS =
+  "inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-[rgba(255,90,61,0.45)] bg-[rgba(255,90,61,0.08)] px-4 text-[12px] text-[#ff6b64] transition hover:bg-[rgba(255,90,61,0.14)]";
+const DEMO_SPONSOR_FALLBACK: MapRailSponsor[] = [
+  { ...getDemoSponsorByCountry(null), country_codes: ["GLOBAL"], logo_url: "/brands/booking.svg", isExample: true },
+  { ...getDemoSponsorByCountry("JP"), country_codes: ["JP"], logo_url: "/brands/getyourguide.svg", isExample: true },
+  { ...getDemoSponsorByCountry("AR"), country_codes: ["AR"], logo_url: "/brands/iati.svg", isExample: true },
+  { ...getDemoSponsorByCountry("MA"), country_codes: ["MA"], logo_url: "/brands/airbnb.svg", isExample: true },
+];
 
 interface PollOptionInput {
   country_code: string;
@@ -503,6 +512,14 @@ export function MapExperience({
   const hideLivePollMetrics = Boolean(
     pollState && pollState.status === "live" && !viewer.isOwner && !viewer.isAuthenticated
   );
+
+  useEffect(() => {
+    if (!isDemoMode) return;
+    if (sponsors.length > 0) return;
+    if (sponsorItems.length > 0) return;
+    setSponsorItems(DEMO_SPONSOR_FALLBACK);
+    demoSponsorsBaselineRef.current = DEMO_SPONSOR_FALLBACK;
+  }, [isDemoMode, sponsorItems.length, sponsors.length]);
   const shellViewer: MapViewerContext = canUseAdminPanels
     ? {
         ...viewer,
@@ -1046,7 +1063,7 @@ function MapAppShell(props: MapShellProps) {
     <>
       <MobileMapShell {...props} mobileTab={mobileTab} setMobileTab={setMobileTab} />
 
-      <div className="pointer-events-none absolute inset-0 z-[320] hidden min-h-0 lg:grid lg:grid-cols-1">
+      <div className="pointer-events-none absolute inset-0 z-[620] hidden min-h-0 lg:grid lg:grid-cols-1">
         <main className="pointer-events-none relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]">
           <MapTopBar {...props} />
 
@@ -1073,7 +1090,7 @@ function MobileMapShell({
   setMobileTab: Dispatch<SetStateAction<MobileMapTab>>;
 }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-[330] flex min-h-0 flex-col overflow-hidden bg-[#04080f]/35 lg:hidden">
+    <div className="pointer-events-none absolute inset-0 z-[630] flex min-h-0 flex-col overflow-hidden bg-[#04080f]/35 lg:hidden">
       <div
         className={cn(
           "min-h-0 flex-1 px-4 pb-24 pt-5",
@@ -1113,6 +1130,7 @@ function MobileMapMenu({
   setMissingVideosOpen,
   copyShareUrl,
   copyState,
+  isDemoMode,
   selectCountry,
   setMobileTab,
 }: MapShellProps & { setMobileTab: Dispatch<SetStateAction<MobileMapTab>> }) {
@@ -1179,10 +1197,12 @@ function MobileMapMenu({
                 <MapPin size={15} />
                 Abrir mapa publico
               </Link>
-              <button type="button" className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]" onClick={copyShareUrl}>
-                {copyState === "copied" ? <Check size={15} /> : <Copy size={15} />}
-                {copyState === "copied" ? "Enlace copiado" : "Copiar enlace"}
-              </button>
+              {!isDemoMode ? (
+                <button type="button" className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]" onClick={copyShareUrl}>
+                  {copyState === "copied" ? <Check size={15} /> : <Copy size={15} />}
+                  {copyState === "copied" ? "Enlace copiado" : "Copiar enlace"}
+                </button>
+              ) : null}
             </div>
           </motion.aside>
         </motion.div>
@@ -1526,9 +1546,9 @@ function MobileStatsGrid({
   className?: string;
 }) {
   return (
-    <div className={cn("grid grid-cols-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.035]", className)}>
+    <div className={cn("grid overflow-hidden rounded-lg border border-white/10 bg-white/[0.035]", cityCount > 0 ? "grid-cols-3" : "grid-cols-2", className)}>
       <OverviewMetric label="Paises" value={resolvedSummary.total_countries} tone="white" />
-      <OverviewMetric label="Ciudades" value={cityCount} tone="white" />
+      {cityCount > 0 ? <OverviewMetric label="Ciudades" value={cityCount} tone="white" /> : null}
       <OverviewMetric label="Videos" value={resolvedSummary.total_videos} tone="red" />
     </div>
   );
@@ -1542,6 +1562,7 @@ function MobileActionBar({
   copyState,
   copyShareUrl,
   setMissingVideosOpen,
+  isDemoMode,
 }: MapShellProps) {
   return (
     <div className="grid grid-cols-3 gap-2 pt-2">
@@ -1564,15 +1585,23 @@ function MobileActionBar({
           Videos faltantes
         </button>
       ) : (
-        <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.055] text-[12px] font-medium text-[#f5f7fb]" onClick={copyShareUrl}>
-          <LinkSimple size={14} />
-          Compartir
-        </button>
+        !isDemoMode ? (
+          <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.055] text-[12px] font-medium text-[#f5f7fb]" onClick={copyShareUrl}>
+            <LinkSimple size={14} />
+            Compartir
+          </button>
+        ) : (
+          <span />
+        )
       )}
-      <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg bg-[#e1543a] text-[12px] font-semibold text-white" onClick={copyShareUrl}>
-        {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
-        {copyState === "copied" ? "Copiado" : "Copiar link"}
-      </button>
+      {!isDemoMode ? (
+        <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-lg bg-[#e1543a] text-[12px] font-semibold text-white" onClick={copyShareUrl}>
+          {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
+          {copyState === "copied" ? "Copiado" : "Copiar link"}
+        </button>
+      ) : (
+        <span />
+      )}
     </div>
   );
 }
@@ -1803,6 +1832,7 @@ function MapTopBar({
   searchQuery,
   setSearchQuery,
   locateFirstSearchResult,
+  youtubeDataHealth,
   viewer,
   copyShareUrl,
   copyState,
@@ -1815,9 +1845,10 @@ function MapTopBar({
   headerEyebrow,
 }: MapShellProps) {
   const panelHref = viewer.adminUrl ? `${viewer.adminUrl}${viewer.adminUrl.includes("?") ? "&" : "?"}panel=creator` : null;
+  const lastExtractionAt = channel.last_synced_at || youtubeDataHealth.latestRefreshedAt || null;
 
   return (
-    <header className="pointer-events-auto z-[370] px-4 py-3 xl:px-5">
+    <header className="pointer-events-auto z-[690] px-4 py-3 xl:px-5">
       <div className="mx-auto grid min-h-[52px] w-full grid-cols-1 gap-3 rounded-xl border border-white/10 bg-[#07101a]/86 p-2 shadow-[0_28px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[rgba(255,0,0,0.55)] bg-[rgba(255,0,0,0.12)] text-[#ff3b3b]">
@@ -1836,6 +1867,15 @@ function MapTopBar({
               placeholder="Buscar destinos o videos"
               className="h-full border-0 bg-transparent px-3 text-[13px] text-foreground shadow-none focus-visible:ring-0"
             />
+          </div>
+          <div className="hidden shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-right sm:block">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#8f98a3]">Última extracción</p>
+            <p className="mt-0.5 text-[11px] leading-4 text-[#d8dee6]">
+              {lastExtractionAt ? formatIsoDateTime(lastExtractionAt) : "Sin dato"}
+            </p>
+            {youtubeDataHealth.staleVideos > 0 ? (
+              <p className="text-[10px] leading-4 text-[#ffb7b3]">{youtubeDataHealth.staleVideos} sin refresh</p>
+            ) : null}
           </div>
         </div>
 
@@ -1861,10 +1901,12 @@ function MapTopBar({
               {isPreviewingViewer ? "Volver al Creator" : "Vista del Viewer"}
             </Button>
           ) : null}
-          <Button type="button" size="sm" className="shrink-0 bg-[#e1543a] hover:bg-[#ee6b49]" onClick={copyShareUrl}>
-            {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
-            {copyState === "copied" ? "Copiado" : isDemoMode ? "Compartir Demo" : "Copiar canal"}
-          </Button>
+          {!isDemoMode ? (
+            <Button type="button" size="sm" className="shrink-0 bg-[#e1543a] hover:bg-[#ee6b49]" onClick={copyShareUrl}>
+              {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
+              {copyState === "copied" ? "Copiado" : "Copiar canal"}
+            </Button>
+          ) : null}
           <Button asChild size="sm" variant="outline" className="shrink-0">
             <Link href="/onboarding">
               <Plus size={14} />
@@ -1890,8 +1932,6 @@ function MapOverviewRail({
   selectedCountryCityBuckets,
   selectedCountryVideos,
   selectedCityVideos,
-  youtubeDataHealth,
-  isDemoMode,
   selectCountry,
   selectCity,
   goBackLocationFilter,
@@ -1905,7 +1945,7 @@ function MapOverviewRail({
     <aside ref={videosRailRef} className="pointer-events-auto order-2 min-h-0 lg:order-none lg:overflow-hidden">
       <Card className="tm-surface-strong flex min-h-[420px] flex-col rounded-xl border-white/10 lg:h-full">
         <CardHeader className="border-b border-white/10 px-3 pb-3 pt-3">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <ChannelAvatar channel={channel} size="sm" />
               <div className="min-w-0">
@@ -1913,27 +1953,25 @@ function MapOverviewRail({
                 <CardTitle className="truncate text-[15px] font-semibold text-[#f5f7fb]">{getCreatorDisplayName(channel.channel_name)}</CardTitle>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8f98a3]">
-                {isDemoMode ? "Última actualización demo" : "Última actualización"}
-              </p>
-              <p className="mt-0.5 text-[11px] leading-4 text-[#d8dee6]">
-                {youtubeDataHealth.latestRefreshedAt ? formatIsoDateTime(youtubeDataHealth.latestRefreshedAt) : "Sin dato"}
-              </p>
-              {youtubeDataHealth.staleVideos > 0 ? <p className="text-[10px] leading-4 text-[#ffb7b3]">{youtubeDataHealth.staleVideos} video(s) requieren refresh.</p> : null}
-            </div>
           </div>
         </CardHeader>
 
         <CardContent className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-3">
-          <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
+          <div className={cn("grid overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]", cityCount > 0 ? "grid-cols-3" : "grid-cols-2")}>
             <OverviewMetric label="Paises" value={resolvedSummary.total_countries} tone="white" />
-            <OverviewMetric label="Ciudades" value={cityCount} tone="white" />
+            {cityCount > 0 ? <OverviewMetric label="Ciudades" value={cityCount} tone="white" /> : null}
             <OverviewMetric label="Videos" value={resolvedSummary.total_videos} tone="red" />
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-3">
-            <h2 className="text-[13px] font-semibold text-[#f5f7fb]">{hasCountrySelection ? "Filtro activo" : "Paises"}</h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="text-[13px] font-semibold text-[#f5f7fb]">{hasCountrySelection ? "Filtro activo" : "Paises"}</h2>
+              {hasCountrySelection ? (
+                <button type="button" className={cn("tym-nav-pill min-h-8", MAP_BACK_BUTTON_CLASS)} onClick={goBackLocationFilter}>
+                  Volver
+                </button>
+              ) : null}
+            </div>
             <Badge variant="outline" className="bg-white/[0.04] text-[11px] text-[#c6cdd5]">
               {hasCountrySelection ? activeLocationCount : countryBuckets.length}
             </Badge>
@@ -1943,25 +1981,17 @@ function MapOverviewRail({
             <div className="space-y-3 pr-2">
               {hasCountrySelection ? (
                 <>
-                  <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8f98a3]">
-                          {hasCityDrilldown ? "Ciudad activa" : "Pais activo"}
-                        </p>
-                        <p className="truncate text-[13px] font-semibold text-[#f4f7fb]">
+                  <div className="rounded-lg border border-white/10 bg-white/[0.035] p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <CountryCodeMark code={selectedCountryCode} compact />
+                        <p className="truncate text-[12px] font-semibold text-[#f4f7fb]">
                           {hasCityDrilldown ? `${selectedCountryName || selectedCountryCode} · ${selectedCityDisplayName}` : selectedCountryName || selectedCountryCode}
                         </p>
                       </div>
-                      <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 border-white/10 bg-white/[0.04] text-[11px]" onClick={goBackLocationFilter}>
-                        Volver
-                      </Button>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#aab2bc]">
-                      <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1">{activeLocationCount} videos</span>
-                      {hasCityDrilldown ? (
-                        <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1">{selectedCityVideos.length} en la ciudad</span>
-                      ) : null}
+                      <Badge variant="outline" className="h-5 shrink-0 rounded-full border-white/15 bg-black/20 px-2 text-[10px] text-[#d5dbe2]">
+                        {activeLocationCount}
+                      </Badge>
                     </div>
                   </div>
 
@@ -2040,6 +2070,7 @@ function MapCenterStage({
   windowFilter,
   setWindowFilter,
   activeLocationVideos,
+  activeVideo,
   pinnedVideo,
   videoActivity,
   closePinnedVideo,
@@ -2050,11 +2081,13 @@ function MapCenterStage({
   rotationEnabled,
 }: MapShellProps) {
   const relatedCountryCode = String(pinnedVideo?.country_code || selectedCountryCode || "").toUpperCase();
-  const suggestedVideos = activeLocationVideos.slice().sort(sortRecentVideos).slice(0, 6);
+  const suggestedVideos = activeLocationVideos.slice().sort(sortRecentVideos);
+  const hoverPreviewVideo =
+    activeVideo && (!pinnedVideo || activeVideo.youtube_video_id !== pinnedVideo.youtube_video_id) ? activeVideo : null;
 
   return (
     <section className="pointer-events-none relative order-1 min-h-[520px] overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] lg:order-none lg:min-h-0">
-      <div className="pointer-events-auto absolute left-1/2 top-3 z-[340] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-xl border border-white/10 bg-[#07101a]/88 p-1.5 backdrop-blur-2xl">
+      <div className="pointer-events-auto absolute left-1/2 top-3 z-[660] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-xl border border-white/10 bg-[#07101a]/88 p-1.5 backdrop-blur-2xl">
         {(["all", "365", "90", "30"] as FilterWindow[]).map((option) => (
           <button
             key={option}
@@ -2070,14 +2103,14 @@ function MapCenterStage({
           <button
             type="button"
             onClick={goBackLocationFilter}
-            className="tym-nav-pill min-h-8 shrink-0 rounded-lg border border-[rgba(255,90,61,0.45)] bg-transparent px-4 text-[12px] text-[#ff6b64] hover:bg-[rgba(255,90,61,0.08)]"
+            className={cn("tym-nav-pill min-h-8 shrink-0", MAP_BACK_BUTTON_CLASS)}
           >
             Volver
           </button>
         ) : null}
       </div>
 
-      <div className="pointer-events-auto absolute right-3 top-1/2 z-[330] hidden -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/86 backdrop-blur-2xl md:flex">
+      <div className="pointer-events-auto absolute right-3 top-1/2 z-[650] hidden -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/86 backdrop-blur-2xl md:flex">
         <button type="button" className="flex h-10 w-10 items-center justify-center text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => { goBackLocationFilter(); issueGlobeCommand("reset_view"); }} aria-label="Volver al filtro anterior">
           <House size={16} />
         </button>
@@ -2092,7 +2125,30 @@ function MapCenterStage({
         </button>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-16 bottom-[138px] z-[430] hidden px-4 lg:block xl:px-5">
+      {hoverPreviewVideo ? (
+        <div className="pointer-events-none absolute left-1/2 top-16 z-[670] hidden w-[min(340px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/92 shadow-[0_26px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl lg:block">
+          <div className="relative h-[140px] w-full overflow-hidden">
+            {hoverPreviewVideo.thumbnail_url ? (
+              <Image
+                src={toCompactYouTubeThumbnail(hoverPreviewVideo.thumbnail_url) || hoverPreviewVideo.thumbnail_url}
+                alt={hoverPreviewVideo.title}
+                fill
+                sizes="340px"
+                className="object-cover"
+              />
+            ) : (
+              <div className="h-full w-full bg-white/[0.06]" />
+            )}
+            <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.74))]" />
+            <div className="absolute inset-x-0 bottom-0 p-3">
+              <p className="line-clamp-2 text-[12px] font-semibold leading-5 text-[#f5f7fb]">{hoverPreviewVideo.title}</p>
+              <p className="mt-1 text-[10px] text-[#c7d0d9]">{countryCodeToFlag(hoverPreviewVideo.country_code)} {formatPlace(hoverPreviewVideo)}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="pointer-events-none absolute inset-x-0 top-16 bottom-[138px] z-[740] hidden px-4 lg:block xl:px-5">
         <div className="flex h-full items-center justify-center">
           <div className="pointer-events-none w-full max-w-[480px]">
             <DesktopVideoMapCard
@@ -2113,7 +2169,7 @@ function MapCenterStage({
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[330] px-2 pb-2 md:px-3 md:pb-3 lg:px-4 lg:pb-4">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[680] px-2 pb-2 md:px-3 md:pb-3 lg:px-4 lg:pb-4">
         <SuggestedDestinations
           videos={suggestedVideos}
           relatedCountryCode={relatedCountryCode || null}
@@ -2162,6 +2218,7 @@ function MapRightRail({
 }: MapShellProps) {
   const hasLivePoll = Boolean(pollState && pollState.status === "live");
   const showDestinationWinner = Boolean(hasLivePoll && pollState && pollState.total_votes > 0 && !hideLivePollMetrics);
+  const [isFanVoteClosed, setIsFanVoteClosed] = useState(false);
 
   return (
     <aside className="pointer-events-auto order-3 flex min-h-0 flex-col gap-3 lg:order-none lg:overflow-y-auto lg:pr-1" data-map-scroll="true">
@@ -2198,20 +2255,38 @@ function MapRightRail({
         />
       ) : null}
 
-      <div ref={votesRailRef}>
-        {channelId && (pollState || viewer.isOwner) ? (
-          <FanVoteCard
-            channelId={channelId}
-            viewer={viewer}
-            poll={pollState}
-            availableOptions={availablePollOptions}
-            isDemoMode={isDemoMode}
-            onPollChange={setPollState}
-          />
-        ) : (
-          <FanVoteSummary candidates={destinationCandidates} onSelect={selectCountry} />
-        )}
-      </div>
+      {isFanVoteClosed ? (
+        <button
+          type="button"
+          onClick={() => setIsFanVoteClosed(false)}
+          className="pointer-events-auto inline-flex h-9 items-center justify-center rounded-lg border border-[rgba(255,90,61,0.45)] bg-transparent px-3 text-[12px] font-medium text-[#ff6b64] transition hover:bg-[rgba(255,90,61,0.08)]"
+        >
+          Mostrar fan vote
+        </button>
+      ) : (
+        <div ref={votesRailRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setIsFanVoteClosed(true)}
+            aria-label="Cerrar fan vote"
+            className="absolute right-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[rgba(255,90,61,0.45)] bg-transparent text-[#ff6b64] transition hover:bg-[rgba(255,90,61,0.08)]"
+          >
+            <X size={14} />
+          </button>
+          {channelId && (pollState || viewer.isOwner) ? (
+            <FanVoteCard
+              channelId={channelId}
+              viewer={viewer}
+              poll={pollState}
+              availableOptions={availablePollOptions}
+              isDemoMode={isDemoMode}
+              onPollChange={setPollState}
+            />
+          ) : (
+            <FanVoteSummary candidates={destinationCandidates} onSelect={selectCountry} />
+          )}
+        </div>
+      )}
 
       <div ref={sponsorsRailRef}>
         <SponsorsRail
@@ -2399,7 +2474,7 @@ function SuggestedDestinations({
   seenIds: Set<string>;
   onOpenVideo: (video: TravelVideoLocation) => void;
 }) {
-  const visibleVideos = videos.slice(0, 5);
+  const visibleVideos = videos;
   const railRef = useRef<HTMLDivElement | null>(null);
   function scrollRail(direction: -1 | 1) {
     const node = railRef.current;
@@ -2419,7 +2494,7 @@ function SuggestedDestinations({
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="h-7 shrink-0 rounded-full border-white/15 bg-white/[0.05] px-3 text-[11px] font-medium text-[#d8dee6]">
-            {visibleVideos.length}
+            {videos.length}
           </Badge>
           <div className="hidden items-center gap-1 md:flex">
             <button

@@ -151,9 +151,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
                   <span
                     className={cn(
                       "inline-flex h-9 items-center gap-1 rounded-full border px-2.5 text-[10px] font-black uppercase tracking-[0.08em]",
-                      currentWatchBadgeTone === "youtube"
-                        ? "border-[rgba(225,84,58,0.45)] bg-[rgba(225,84,58,0.15)] text-[#ffbeb7]"
-                        : currentWatchBadgeTone === "success"
+                      currentWatchBadgeTone === "success"
                           ? "border-[rgba(85,200,123,0.45)] bg-[rgba(85,200,123,0.12)] text-[#c8f3d6]"
                           : currentWatchBadgeTone === "active"
                             ? "border-[rgba(255,186,73,0.4)] bg-[rgba(255,186,73,0.12)] text-[#ffe0ab]"

@@ -829,7 +829,7 @@ function createFlagPinElement(
   marker.style.background = "rgba(4,7,14,0.78)";
   marker.style.border = "1px solid rgba(255,255,255,0.24)";
   marker.style.boxShadow = "0 6px 16px rgba(2,6,23,0.45)";
-  marker.style.zIndex = point.kind === "video" ? "6" : "4";
+  marker.style.zIndex = "1";
   marker.style.fontSize = "13px";
   marker.textContent = countryCodeToFlag(point.country_code);
 
