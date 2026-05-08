@@ -55,9 +55,6 @@ export function FloatingTopBar({
               <div className="flex h-full min-w-0 flex-1 items-center px-3 text-[13px] text-muted-foreground">
                 {searchPlaceholder}
               </div>
-              <div className="flex h-full min-w-16 items-center justify-center border-l border-white/10 bg-white/[0.02] text-muted-foreground">
-                <span className="platform-country-code">live</span>
-              </div>
             </div>
           )}
         </div>

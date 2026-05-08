@@ -1,6 +1,7 @@
 import { normalizeUsername } from "@/lib/auth-identifiers";
 import { getSessionUserById, type AppUserRole, userIsSuperAdmin } from "@/lib/current-user";
 import { DEMO_CHANNEL, DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG, DEMO_USERNAME, isDemoUsername } from "@/lib/demo-data";
+import { buildMapFanVoteIdentity, createEmptyFanVoteSummary, loadMapFanVoteSummary, type MapFanVoteSummary } from "@/lib/map-fan-votes";
 import { loadMapDataByChannelId, type MapDataPayload } from "@/lib/map-data";
 import { buildPollOptionsFromVideos, loadMapPoll, type MapPollRecord } from "@/lib/map-polls";
 import { sql } from "@/lib/neon";
@@ -33,6 +34,7 @@ export interface PublicMapPayload extends MapDataPayload {
   viewer: MapViewerContext;
   sponsors: MapRailSponsor[];
   activePoll: MapPollRecord | null;
+  fanVotes: MapFanVoteSummary;
   availablePollOptions: ReturnType<typeof buildPollOptionsFromVideos>;
 }
 
@@ -279,6 +281,7 @@ export async function loadPublicMapPayloadByChannelId({
       },
       sponsors: [],
       activePoll: null,
+      fanVotes: createEmptyFanVoteSummary(),
       availablePollOptions: buildPollOptionsFromVideos(mapPayload.videoLocations),
     };
   }
@@ -332,6 +335,14 @@ async function loadPublicMapPayloadByChannelRef(
     includeDraft: isOwner,
     voterFingerprint,
   });
+  const fanVotes = await loadMapFanVoteSummary({
+    channelId: channelRef.id,
+    videoLocations: mapPayload.videoLocations,
+    voterIdentity: buildMapFanVoteIdentity({
+      userId: viewerUserId,
+      voterFingerprint,
+    }),
+  });
   const sponsors = await loadSponsorsForUser(channelRef.user_id, canonicalHandle || normalizeUsername(channelRef.username));
 
   return {
@@ -351,6 +362,7 @@ async function loadPublicMapPayloadByChannelRef(
     },
     sponsors,
     activePoll,
+    fanVotes,
     availablePollOptions,
   };
 }

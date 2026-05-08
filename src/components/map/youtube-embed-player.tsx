@@ -20,6 +20,7 @@ interface YouTubeEmbedPlayerProps {
   allowFullscreen?: boolean;
   isMadeForKids?: boolean;
   openButtonLabel?: string;
+  playbackCommand?: { id: number; action: "pause" | "play" } | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
   onOpenInYouTube?: () => void;
 }
@@ -29,6 +30,8 @@ type EmbedErrorReason = "invalid_id" | "api_failed" | "player_error" | null;
 
 type YTPlayerInstance = {
   destroy: () => void;
+  pauseVideo?: () => void;
+  playVideo?: () => void;
 };
 
 type YTPlayerOptions = {
@@ -111,20 +114,37 @@ export function YouTubeEmbedPlayer({
   allowFullscreen = true,
   isMadeForKids = false,
   openButtonLabel = "Abrir en YouTube",
+  playbackCommand = null,
   onPlaybackStateChange,
   onOpenInYouTube,
 }: YouTubeEmbedPlayerProps) {
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayerInstance | null>(null);
+  const hasObservedPlayingRef = useRef(false);
+  const onPlaybackStateChangeRef = useRef(onPlaybackStateChange);
   const normalizedVideoId = normalizeYouTubeVideoId(videoId);
   const [status, setStatus] = useState<EmbedStatus>(normalizedVideoId ? "loading" : "error");
   const [errorReason, setErrorReason] = useState<EmbedErrorReason>(normalizedVideoId ? null : "invalid_id");
+
+  useEffect(() => {
+    onPlaybackStateChangeRef.current = onPlaybackStateChange;
+  }, [onPlaybackStateChange]);
+
+  useEffect(() => {
+    if (!playbackCommand || !playerRef.current) return;
+    if (playbackCommand.action === "pause") {
+      playerRef.current.pauseVideo?.();
+      return;
+    }
+    playerRef.current.playVideo?.();
+  }, [playbackCommand]);
 
   useEffect(() => {
     let cancelled = false;
 
     playerRef.current?.destroy();
     playerRef.current = null;
+    hasObservedPlayingRef.current = false;
 
     if (!normalizedVideoId) {
       setStatus("error");
@@ -161,9 +181,14 @@ export function YouTubeEmbedPlayer({
             },
             onStateChange: (event) => {
               if (cancelled) return;
-              if (event.data === 1) onPlaybackStateChange?.("playing");
-              if (event.data === 2) onPlaybackStateChange?.("paused");
-              if (event.data === 0) onPlaybackStateChange?.("ended");
+              if (event.data === 1) {
+                hasObservedPlayingRef.current = true;
+                onPlaybackStateChangeRef.current?.("playing");
+              }
+              if (event.data === 2) onPlaybackStateChangeRef.current?.("paused");
+              // YouTube can emit "ended" during init on some embeds.
+              // Only treat it as real completion after actual playback started.
+              if (event.data === 0 && hasObservedPlayingRef.current) onPlaybackStateChangeRef.current?.("ended");
             },
           },
         });
@@ -179,7 +204,7 @@ export function YouTubeEmbedPlayer({
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [allowFullscreen, normalizedVideoId, onPlaybackStateChange]);
+  }, [allowFullscreen, normalizedVideoId]);
 
   function openInYoutube() {
     if (onOpenInYouTube) {

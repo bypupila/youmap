@@ -185,8 +185,8 @@ export function CinematicLanding() {
 
       <header className="absolute inset-x-0 top-0 z-[320] px-4 py-3 pointer-events-auto">
         <FloatingTopBar
-          eyebrow="TravelYourMap - BY PUPILA"
-          title={copy.topTitle}
+          eyebrow="BY PUPILA"
+          title="TRAVEL YOUR MAP"
           searchPlaceholder={copy.searchPlaceholder}
           className="pointer-events-auto relative z-[321]"
           actions={
@@ -212,7 +212,7 @@ export function CinematicLanding() {
         />
       </header>
 
-      <section className="relative z-[310] flex min-h-[100dvh] items-center px-4 pb-10 pt-28 pointer-events-auto">
+      <section className="relative z-[310] flex min-h-[100dvh] items-center px-5 pb-10 pt-28 pointer-events-auto sm:px-7 lg:px-10">
         <div className="relative z-[311] mx-auto grid w-full max-w-[1400px] items-center gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-12">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
@@ -238,20 +238,6 @@ export function CinematicLanding() {
               </Link>
             </div>
 
-            <div className="mt-10">
-              <div className="tm-surface rounded-[2rem] p-5">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
-                    <p className="text-[2rem] leading-none font-semibold tracking-tight">{platformTotalVideos.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{copy.platformVideosLabel}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
-                    <p className="text-[2rem] leading-none font-semibold tracking-tight">{platformTotalCountries.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{copy.platformCountriesLabel}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
           </motion.div>
 
           <motion.div
@@ -260,6 +246,21 @@ export function CinematicLanding() {
             transition={{ delay: 0.1 }}
             className="w-full min-w-0 lg:pl-[6vw]"
           >
+            <div className="mb-4 w-full sm:mb-5">
+              <div className="tm-surface rounded-[2rem] p-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-center">
+                    <p className="text-[2rem] leading-none font-semibold tracking-tight text-[#ff4b4b]">{platformTotalVideos.toLocaleString(localeTag)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{copy.platformVideosLabel}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-center">
+                    <p className="text-[2rem] leading-none font-semibold tracking-tight text-[#ff4b4b]">{platformTotalCountries.toLocaleString(localeTag)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{copy.platformCountriesLabel}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <Link href={mapPath} className="pointer-events-auto relative z-[322] block w-full rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(24,28,31,0.96),rgba(18,21,23,0.92))] p-4 shadow-[0_36px_100px_-52px_rgba(0,0,0,0.88)] backdrop-blur transition-transform duration-300 hover:-translate-y-1">
               <div className="tym-video-thumb aspect-video bg-[radial-gradient(circle_at_30%_30%,#2c2c2c,#111)]">
                 <MiniMapModel videoLocations={mapVideos} />

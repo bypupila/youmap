@@ -31,6 +31,7 @@ interface TravelGlobeProps {
   focusCountryCode?: string | null;
   focusVideoId?: string | null;
   selectedCountryCode?: string | null;
+  votedCountryCode?: string | null;
   interactive?: boolean;
   showControls?: boolean;
   minimalOverlay?: boolean;
@@ -42,6 +43,7 @@ interface TravelGlobeProps {
   onActiveVideoChange?: (video: TravelVideoLocation | null) => void;
   onPinnedVideoChange?: (video: TravelVideoLocation | null) => void;
   onCountrySelect?: (countryCode: string | null) => void;
+  onCountryHoverChange?: (input: { countryCode: string; countryName: string } | null) => void;
   rotationEnabled?: boolean;
   onRotationChange?: (enabled: boolean) => void;
   command?: { id: number; action: "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation" } | null;
@@ -55,6 +57,7 @@ export function TravelGlobe({
   focusCountryCode = null,
   focusVideoId = null,
   selectedCountryCode = null,
+  votedCountryCode = null,
   interactive = true,
   showControls = true,
   minimalOverlay = false,
@@ -66,6 +69,7 @@ export function TravelGlobe({
   onActiveVideoChange,
   onPinnedVideoChange,
   onCountrySelect,
+  onCountryHoverChange,
   rotationEnabled: controlledRotationEnabled,
   onRotationChange,
   command = null,
@@ -76,14 +80,11 @@ export function TravelGlobe({
   const [hoveredPoint, setHoveredPoint] = useState<GlobePoint | null>(null);
   const [internalRotationEnabled, setInternalRotationEnabled] = useState(true);
   const [polygonsData, setPolygonsData] = useState<object[]>([]);
-  const [hoveredPolygonName, setHoveredPolygonName] = useState<string | null>(null);
   const [hoveredPolygonCode, setHoveredPolygonCode] = useState<string | null>(null);
   const didApplyInitialSelection = useRef(false);
   const didApplyFocusSelection = useRef<string | null>(null);
   const didApplyFocusVideo = useRef<string | null>(null);
   const hoveredPointRef = useRef<GlobePoint | null>(null);
-  const countryHoverTimerRef = useRef<number | null>(null);
-  const pendingCountryHoverCodeRef = useRef<string | null>(null);
   const rotationPointOfViewRef = useRef({ lat: 20, lng: -10, altitude: 2.3 });
   const rotationEnabled = controlledRotationEnabled ?? internalRotationEnabled;
 
@@ -306,17 +307,8 @@ export function TravelGlobe({
     hoveredPointRef.current = hoveredPoint;
   }, [hoveredPoint]);
 
-  const clearCountryHoverSelection = useCallback(() => {
-    if (countryHoverTimerRef.current !== null) {
-      window.clearTimeout(countryHoverTimerRef.current);
-    }
-    countryHoverTimerRef.current = null;
-    pendingCountryHoverCodeRef.current = null;
-  }, []);
-
   const selectCountryFromPolygon = useCallback(
     (countryCode: string) => {
-      clearCountryHoverSelection();
       const candidate = buildCountrySelectionPoint(videoLocations, countryCode);
       if (!candidate) return;
       onCountrySelect?.(countryCode.toUpperCase());
@@ -326,31 +318,8 @@ export function TravelGlobe({
       rotationPointOfViewRef.current = nextView;
       globeRef.current?.pointOfView(nextView, 850);
     },
-    [clearCountryHoverSelection, onCountrySelect, pointMode, updateRotationEnabled, videoLocations]
+    [onCountrySelect, pointMode, updateRotationEnabled, videoLocations]
   );
-
-  const scheduleCountryHoverSelection = useCallback(
-    (countryCode: string) => {
-      const normalized = String(countryCode || "").toUpperCase();
-      if (!normalized) return;
-      if (hoveredPointRef.current) return;
-
-      if (pendingCountryHoverCodeRef.current === normalized && countryHoverTimerRef.current !== null) return;
-
-      clearCountryHoverSelection();
-      pendingCountryHoverCodeRef.current = normalized;
-      countryHoverTimerRef.current = window.setTimeout(() => {
-        if (pendingCountryHoverCodeRef.current !== normalized) return;
-        if (hoveredPointRef.current) return;
-        selectCountryFromPolygon(normalized);
-      }, 3000);
-    },
-    [clearCountryHoverSelection, selectCountryFromPolygon]
-  );
-
-  useEffect(() => {
-    return () => clearCountryHoverSelection();
-  }, [clearCountryHoverSelection]);
 
   useEffect(() => {
     return () => {
@@ -360,7 +329,6 @@ export function TravelGlobe({
   }, []);
 
   function handlePointSelection(selected: GlobePoint) {
-    clearCountryHoverSelection();
     updateRotationEnabled(false);
     setSelectedPoint(selected);
 
@@ -391,6 +359,13 @@ export function TravelGlobe({
           polygonCapColor={(polygon) => {
             const polygonCode = resolveCountryCodeFromPolygon(polygon as object, countryNameIndex);
             if (
+              votedCountryCode &&
+              polygonCode &&
+              polygonCode.toUpperCase() === votedCountryCode.toUpperCase()
+            ) {
+              return "rgba(255, 68, 68, 0.08)";
+            }
+            if (
               selectedCountryCode &&
               polygonCode &&
               polygonCode.toUpperCase() === selectedCountryCode.toUpperCase()
@@ -407,23 +382,40 @@ export function TravelGlobe({
             return "rgba(148,163,184,0.03)";
           }}
           polygonSideColor={() => "rgba(15,23,42,0.25)"}
-          polygonStrokeColor={() => "rgba(125,211,252,0.35)"}
+          polygonStrokeColor={(polygon) => {
+            const polygonCode = resolveCountryCodeFromPolygon(polygon as object, countryNameIndex);
+            if (
+              votedCountryCode &&
+              polygonCode &&
+              polygonCode.toUpperCase() === votedCountryCode.toUpperCase()
+            ) {
+              return "rgba(255, 56, 56, 0.95)";
+            }
+            return "rgba(125,211,252,0.35)";
+          }}
           onPolygonHover={
             interactive
               ? (polygon) => {
                   const name = String((polygon as { properties?: { name?: string } } | null)?.properties?.name || "");
-                  setHoveredPolygonName(name || null);
                   const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, countryNameIndex) : null;
                   setHoveredPolygonCode(code);
-                  if (!code || hoveredPointRef.current) {
-                    clearCountryHoverSelection();
+                  if (!code || !name || hoveredPointRef.current) {
+                    onCountryHoverChange?.(null);
                     return;
                   }
-                  scheduleCountryHoverSelection(code);
+                  onCountryHoverChange?.({ countryCode: code, countryName: name });
                 }
               : undefined
           }
-          onPolygonClick={interactive ? () => clearCountryHoverSelection() : undefined}
+          onPolygonClick={
+            interactive
+              ? (polygon) => {
+                  const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, countryNameIndex) : null;
+                  if (!code) return;
+                  selectCountryFromPolygon(code);
+                }
+              : undefined
+          }
           pointsData={pointsData}
           pointLat={(d) => (d as GlobePoint).lat}
           pointLng={(d) => (d as GlobePoint).lng}
@@ -442,14 +434,11 @@ export function TravelGlobe({
             createFlagPinElement(d as GlobePoint, {
               onClick: (point) => handlePointSelection(point),
               onHoverStart: (point) => {
-                clearCountryHoverSelection();
+                onCountryHoverChange?.(null);
                 setHoveredPoint(point);
               },
               onHoverEnd: (point) => {
                 setHoveredPoint((previous) => (previous?.point_id === point.point_id ? null : previous));
-                if (hoveredPolygonCode) {
-                  scheduleCountryHoverSelection(hoveredPolygonCode);
-                }
               },
             }, interactive)
           }
@@ -475,18 +464,17 @@ export function TravelGlobe({
               ? (point) => {
                 const hovered = (point as GlobePoint | undefined) || null;
                 setHoveredPoint(hovered);
-                if (hovered) clearCountryHoverSelection();
+                if (hovered) onCountryHoverChange?.(null);
               }
               : undefined
           }
           onGlobeClick={
             interactive
               ? () => {
-                  clearCountryHoverSelection();
                   updateRotationEnabled(false);
                   setHoveredPoint(null);
-                  setHoveredPolygonName(null);
                   setHoveredPolygonCode(null);
+                  onCountryHoverChange?.(null);
                   setSelectedPoint(null);
                   onPinnedVideoChange?.(null);
                 }
@@ -521,13 +509,6 @@ export function TravelGlobe({
           <span className="max-w-[180px] truncate">{channelData.channel_name}</span>
           <span className="text-slate-300">•</span>
           <span className="text-slate-300">{pointMode === "video" ? `${videoLocations.length} videos` : `${totalCountries} paises`}</span>
-        </div>
-      ) : null}
-
-      {hoveredPolygonName ? (
-        <div className="pointer-events-none absolute left-1/2 top-6 z-30 -translate-x-1/2 rounded-full border border-white/20 bg-black/60 px-3 py-1 text-xs text-white backdrop-blur-md">
-          {hoveredPolygonCode ? `${countryCodeToFlag(hoveredPolygonCode)} ` : ""}
-          {hoveredPolygonName}
         </div>
       ) : null}
 

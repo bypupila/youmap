@@ -132,6 +132,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           }
           sponsors={experiencePayload?.sponsors || []}
           activePoll={experiencePayload?.activePoll || null}
+          fanVotes={experiencePayload?.fanVotes || null}
           availablePollOptions={experiencePayload?.availablePollOptions || []}
           headerEyebrow={previewSession ? "Preview local" : isDemoMode ? "Mapa demo" : "Vista owner"}
           viewMode={isDemoMode ? "demo" : "creator"}

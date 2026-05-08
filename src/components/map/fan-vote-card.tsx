@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import type { MapFanVoteSummary } from "@/lib/map-fan-votes";
 import type { MapPollMode, MapPollRecord } from "@/lib/map-polls";
 import type { MapViewerContext } from "@/lib/map-public";
 
@@ -22,6 +23,7 @@ interface FanVoteCardProps {
   channelId: string;
   viewer: MapViewerContext;
   poll: MapPollRecord | null;
+  fanVotes?: MapFanVoteSummary | null;
   availableOptions: PollOptionInput[];
   isDemoMode?: boolean;
   onPollChange?: (poll: MapPollRecord | null) => void;
@@ -52,6 +54,7 @@ export function FanVoteCard({
   channelId,
   viewer,
   poll,
+  fanVotes = null,
   availableOptions,
   isDemoMode = false,
   onPollChange,
@@ -78,6 +81,7 @@ export function FanVoteCard({
 
   const currentPollCountries = useMemo(() => poll?.country_options || [], [poll?.country_options]);
   const pollMode = poll?.poll_mode || form.pollMode;
+  const hasLivePoll = Boolean(poll && poll.status === "live");
 
   const isAnonymousViewer = !viewer.isOwner && !viewer.isAuthenticated;
   const canSeeDetailedStats = viewer.isOwner || viewer.isAuthenticated;
@@ -119,6 +123,10 @@ export function FanVoteCard({
 
   const top3Countries = rankedCountries.slice(0, 3);
   const top3Cities = rankedCities.slice(0, 3);
+  const topFanCountries = fanVotes?.country_rankings.slice(0, 3) || [];
+  const topFanCities = fanVotes?.city_rankings.slice(0, 3) || [];
+  const fanCountryRows = viewer.isOwner ? fanVotes?.country_rankings || [] : topFanCountries;
+  const fanCityRows = viewer.isOwner ? fanVotes?.city_rankings || [] : topFanCities;
   const winnerCountry = rankedCountries[0] || null;
   const winnerCity = rankedCities[0] || null;
 
@@ -126,6 +134,9 @@ export function FanVoteCard({
   const hasCountdown = Boolean(poll && poll.status === "live" && Number.isFinite(closesAtMs));
   const remainingMs = hasCountdown ? closesAtMs - nowMs : Number.NaN;
   const isExpiredLive = Boolean(hasCountdown && remainingMs <= 0);
+  const fanVoteNextVoteMs = fanVotes?.viewer_next_vote_at ? new Date(fanVotes.viewer_next_vote_at).getTime() : Number.NaN;
+  const hasFanVoteCooldownCountdown = Boolean(!hasLivePoll && fanVotes && !fanVotes.viewer_can_vote && Number.isFinite(fanVoteNextVoteMs));
+  const fanVoteRemainingMs = hasFanVoteCooldownCountdown ? Math.max(0, fanVoteNextVoteMs - nowMs) : 0;
 
   const mustVote = Boolean(poll && poll.status === "live" && poll.show_popup && !poll.has_voted && !viewer.isOwner);
   const voteCities = currentPollCountries.find((country) => country.country_code === selectedCountry)?.cities || [];
@@ -152,10 +163,10 @@ export function FanVoteCard({
   }, [poll, viewer.isOwner]);
 
   useEffect(() => {
-    if (!hasCountdown) return;
+    if (!hasCountdown && !hasFanVoteCooldownCountdown) return;
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [hasCountdown]);
+  }, [hasCountdown, hasFanVoteCooldownCountdown]);
 
   useEffect(() => {
     if (!poll || poll.status !== "live" || !isExpiredLive || expiredHandledRef.current) return;
@@ -521,7 +532,7 @@ export function FanVoteCard({
             <div>
               <p className="tym-overline text-[#ff8b8b]">Fan vote</p>
               <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">
-                {poll?.title || "La audiencia puede votar el siguiente destino"}
+                {hasLivePoll ? poll?.title || "La audiencia puede votar el siguiente destino" : "Ranking de destinos sugeridos por la audiencia"}
               </CardTitle>
             </div>
             {viewer.isOwner ? (
@@ -534,35 +545,73 @@ export function FanVoteCard({
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-4">
           <p className="text-[13px] leading-5 text-[#d7b0b0]">
-            {poll?.prompt || "Activa una shortlist de paises y ciudades para que tu audiencia priorice el siguiente viaje."}
+            {hasLivePoll
+              ? poll?.prompt || "Activa una shortlist de paises y ciudades para que tu audiencia priorice el siguiente viaje."
+              : "Cuando no hay votacion live, este ranking acumula los votos semanales de tus fans por pais y ciudad."}
           </p>
 
-          {poll && !(isAnonymousViewer && poll.status === "live") ? (
-            <div className="grid gap-2">
-              {top3Countries.map((country) => {
-                const width = poll.total_votes > 0 ? Math.max(14, Math.round((country.votes / poll.total_votes) * 100)) : 14;
-                return (
-                  <div key={country.country_code} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <span className="text-[13px] font-medium text-[#f1f1f1]">{country.country_name}</span>
-                      <span className="text-[12px] text-[#aaaaaa]">
-                        {canSeeDetailedStats ? `${country.votes} votos${poll.total_votes > 0 ? ` · ${formatPercent(country.votes, poll.total_votes)}` : ""}` : "Top destino"}
-                      </span>
+          {hasLivePoll ? (
+            poll && !(isAnonymousViewer && poll.status === "live") ? (
+              <div className="grid gap-2">
+                {top3Countries.map((country) => {
+                  const width = poll.total_votes > 0 ? Math.max(14, Math.round((country.votes / poll.total_votes) * 100)) : 14;
+                  return (
+                    <div key={country.country_code} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-[13px] font-medium text-[#f1f1f1]">{country.country_name}</span>
+                        <span className="text-[12px] text-[#aaaaaa]">
+                          {canSeeDetailedStats ? `${country.votes} votos${poll.total_votes > 0 ? ` · ${formatPercent(country.votes, poll.total_votes)}` : ""}` : "Top destino"}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
+                        <div className="h-full rounded-full bg-[rgba(255, 90, 61,0.78)]" style={{ width: `${width}%` }} />
+                      </div>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
-                      <div className="h-full rounded-full bg-[rgba(255, 90, 61,0.78)]" style={{ width: `${width}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : poll ? (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[12px] text-[#b3b8be]">
-              Votacion activa. Vota para participar y ver resultados cuando cierre.
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[12px] text-[#b3b8be]">
+                Votacion activa. Vota para participar y ver resultados cuando cierre.
+              </div>
+            )
           ) : (
-            <div className="rounded-2xl border border-dashed border-[rgba(255, 90, 61,0.22)] bg-[rgba(255, 90, 61,0.08)] px-4 py-3 text-[12px] text-[#ffb4b4]">
-              {viewer.isOwner ? "Todavia no hay una votacion activa o en borrador." : "El creador todavia no publico una votacion para este mundo."}
+            <div className="space-y-3">
+              {fanCountryRows.length ? (
+                <div className="grid gap-2">
+                  {fanCountryRows.map((country) => {
+                    const width = fanVotes && fanVotes.total_votes > 0 ? Math.max(14, Math.round((country.votes / fanVotes.total_votes) * 100)) : 14;
+                    return (
+                      <div key={`fan-country-${country.country_code}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-medium text-[#f1f1f1]">{country.country_name}</span>
+                          <span className="text-[12px] text-[#aaaaaa]">{country.votes} votos</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
+                          <div className="h-full rounded-full bg-[rgba(255, 90, 61,0.78)]" style={{ width: `${width}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[rgba(255, 90, 61,0.22)] bg-[rgba(255, 90, 61,0.08)] px-4 py-3 text-[12px] text-[#ffb4b4]">
+                  Todavia no hay votos abiertos de la audiencia.
+                </div>
+              )}
+
+              {fanCityRows.length ? (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[#aab2bc]">{viewer.isOwner ? "Ciudades votadas" : "Top ciudades"}</p>
+                  <div className="space-y-1.5">
+                    {fanCityRows.map((entry, index) => (
+                      <p key={`fan-city-${entry.country_code}-${entry.city}`} className="text-[12px] text-[#dce2ea]">
+                        {index + 1}. {entry.country_name} · {entry.city} <span className="text-[#9da5ae]">({entry.votes})</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -573,14 +622,7 @@ export function FanVoteCard({
             </Button>
           ) : null}
 
-          {poll?.status === "closed" && !viewer.isOwner ? (
-            <Button type="button" className="w-full" variant="outline" onClick={() => setResultOpen(true)}>
-              <MapPin size={14} />
-              Ver resultados
-            </Button>
-          ) : null}
-
-          {poll && isAnonymousViewer ? (
+          {hasLivePoll && poll && isAnonymousViewer ? (
             <button
               type="button"
               onClick={goToViewerLogin}
@@ -590,12 +632,23 @@ export function FanVoteCard({
             </button>
           ) : null}
 
-          {poll ? (
+          {!hasLivePoll && fanVotes && !fanVotes.viewer_can_vote && !viewer.isOwner ? (
+            <div className="rounded-2xl border border-[rgba(255, 90, 61,0.24)] bg-[rgba(255, 90, 61,0.09)] px-4 py-3 text-[12px] text-[#ffb4b4]">
+              Ya votaste esta semana. Próximo voto en {formatCountdown(fanVoteRemainingMs || fanVotes.viewer_cooldown_remaining_ms)}.
+            </div>
+          ) : null}
+
+          {hasLivePoll && poll ? (
             <div className="flex items-center justify-between gap-3 text-[12px] text-[#aaaaaa]">
               <span>{poll.status === "live" ? "Live" : poll.status === "draft" ? "Draft" : "Closed"}</span>
               <span>
                 {hasCountdown && countdownLabel ? `Cierra en ${countdownLabel}` : canSeeDetailedStats ? `${poll.total_votes} votos totales` : "Votacion activa"}
               </span>
+            </div>
+          ) : fanVotes ? (
+            <div className="flex items-center justify-between gap-3 text-[12px] text-[#aaaaaa]">
+              <span>Open fan vote</span>
+              <span>{fanVotes.total_votes} votos acumulados</span>
             </div>
           ) : null}
         </CardContent>

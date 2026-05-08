@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ArrowSquareOut, BookmarkSimple, Eye, Play, Star, TrendUp } from "@phosphor-icons/react";
+import { ArrowSquareOut, BookmarkSimple, Clock, Eye, Play, Star, TrendUp } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 import type { VideoActivityController, VideoActivityTab } from "@/components/map/video-activity";
 import {
@@ -37,6 +37,12 @@ export function MapVideoActivityPanel({
   const openedVideos = filterByIds(videos, activity.openedIds);
   const savedVideos = filterByIds(videos, activity.savedIds);
   const featuredVideos = filterByIds(videos, activity.featuredIds);
+  const watchLaterVideos = videos
+    .filter((video) => activity.watchStatusById[video.youtube_video_id] === "watch_later")
+    .sort(sortRecentVideos);
+  const incompleteVideos = videos
+    .filter((video) => activity.watchStatusById[video.youtube_video_id] === "not_finished")
+    .sort(sortRecentVideos);
   const previewVideos = resolvePreviewVideos({
     activeTab,
     videos,
@@ -44,6 +50,8 @@ export function MapVideoActivityPanel({
     openedVideos,
     savedVideos,
     featuredVideos,
+    watchLaterVideos,
+    incompleteVideos,
   });
 
   return (
@@ -67,7 +75,7 @@ export function MapVideoActivityPanel({
           />
           <ActivityStatButton
             icon={BookmarkSimple}
-            label="Guardados"
+            label="Por ver"
             value={savedVideos.length}
             active={activeTab === "saved"}
             onClick={() => onTabChange("saved")}
@@ -78,6 +86,20 @@ export function MapVideoActivityPanel({
             value={featuredVideos.length}
             active={activeTab === "featured"}
             onClick={() => onTabChange("featured")}
+          />
+          <ActivityStatButton
+            icon={Clock}
+            label="Más tarde"
+            value={watchLaterVideos.length}
+            active={activeTab === "watch_later"}
+            onClick={() => onTabChange("watch_later")}
+          />
+          <ActivityStatButton
+            icon={Clock}
+            label="Incompletos"
+            value={incompleteVideos.length}
+            active={activeTab === "incomplete"}
+            onClick={() => onTabChange("incomplete")}
           />
           <ActivityStatButton icon={TrendUp} label="Todos" value={videos.length} active={activeTab === "all"} onClick={() => onTabChange("all")} />
         </div>
@@ -193,6 +215,8 @@ function resolvePreviewVideos({
   openedVideos,
   savedVideos,
   featuredVideos,
+  watchLaterVideos,
+  incompleteVideos,
 }: {
   activeTab: VideoActivityTab;
   videos: TravelVideoLocation[];
@@ -200,32 +224,42 @@ function resolvePreviewVideos({
   openedVideos: TravelVideoLocation[];
   savedVideos: TravelVideoLocation[];
   featuredVideos: TravelVideoLocation[];
+  watchLaterVideos: TravelVideoLocation[];
+  incompleteVideos: TravelVideoLocation[];
 }) {
   if (activeTab === "watched") return watchedVideos;
   if (activeTab === "opened") return openedVideos;
   if (activeTab === "saved") return savedVideos;
   if (activeTab === "featured") return featuredVideos;
+  if (activeTab === "watch_later") return watchLaterVideos;
+  if (activeTab === "incomplete") return incompleteVideos;
   return videos.slice().sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0)).slice(0, 4);
 }
 
 function getListLabel(activeTab: VideoActivityTab, canUseAdminPanels: boolean) {
   if (activeTab === "watched") return "Videos vistos";
   if (activeTab === "opened") return "Abiertos en YouTube";
-  if (activeTab === "saved") return "Guardados";
+  if (activeTab === "saved") return "Por ver";
   if (activeTab === "featured") return canUseAdminPanels ? "Destacados por ti" : "Destacados";
+  if (activeTab === "watch_later") return "Ver más tarde";
+  if (activeTab === "incomplete") return "Incompletos";
   return "Ranking actual";
 }
 
 function getEmptyTitle(activeTab: VideoActivityTab) {
-  if (activeTab === "saved") return "Sin guardados";
+  if (activeTab === "saved") return "Sin videos por ver";
   if (activeTab === "featured") return "Sin destacados";
+  if (activeTab === "watch_later") return "Sin videos pendientes";
+  if (activeTab === "incomplete") return "Sin videos incompletos";
   if (activeTab === "opened" || activeTab === "watched") return "Sin videos vistos";
   return "Sin videos";
 }
 
 function getEmptyBody(activeTab: VideoActivityTab) {
-  if (activeTab === "saved") return "Guarda videos desde la tarjeta izquierda para encontrarlos aqui.";
+  if (activeTab === "saved") return "Guarda videos desde la tarjeta izquierda para verlos luego.";
   if (activeTab === "featured") return "Destaca videos desde la tarjeta izquierda para construir tu seleccion.";
+  if (activeTab === "watch_later") return "Marca videos como SIN INICIAR para revisarlos luego.";
+  if (activeTab === "incomplete") return "Se muestran videos marcados como POR TERMINAR.";
   if (activeTab === "opened" || activeTab === "watched") return "Cuando abras un video en YouTube, quedara registrado aqui.";
   return "Ajusta los filtros o vuelve a todos los videos.";
 }

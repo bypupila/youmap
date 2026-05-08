@@ -37,6 +37,7 @@ interface DesktopVideoMapCardProps {
   onChangeVideo: (video: TravelVideoLocation) => void;
   onOpenInYouTube?: (video: TravelVideoLocation) => void;
   openButtonLabel?: string;
+  playbackCommand?: { id: number; action: "pause" | "play" } | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
 }
 
@@ -48,6 +49,7 @@ export function DesktopVideoMapCard({
   onChangeVideo,
   onOpenInYouTube,
   openButtonLabel,
+  playbackCommand,
   onPlaybackStateChange,
 }: DesktopVideoMapCardProps) {
   const [watchMenuOpen, setWatchMenuOpen] = useState(false);
@@ -68,7 +70,7 @@ export function DesktopVideoMapCard({
   const isOpenedInYoutube = activity.openedIds.has(selectedVideo.youtube_video_id);
   const isSaved = activity.savedIds.has(selectedVideo.youtube_video_id);
   const isFeatured = activity.featuredIds.has(selectedVideo.youtube_video_id);
-  const watchStatus = activity.watchStatusById[selectedVideo.youtube_video_id] || (isSeen ? "watched" : undefined);
+  const watchStatus = activity.watchStatusById[selectedVideo.youtube_video_id] || (isSeen ? "not_finished" : undefined);
   const watchBadgeLabel = getVideoWatchStateLabel({
     openedInYoutube: isOpenedInYoutube,
     watchStatus,
@@ -143,36 +145,8 @@ export function DesktopVideoMapCard({
         </div>
       </header>
 
-      <div className="p-2">
-        <div className="rounded-xl border border-white/10 bg-black/35 p-2">
-          <YouTubeEmbedPlayer
-            videoId={selectedVideo.youtube_video_id}
-            title={selectedVideo.title}
-            youtubeHref={youtubeHref}
-            thumbnailUrl={selectedVideo.thumbnail_url}
-            openButtonLabel={openButtonLabel || (isOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
-            onOpenInYouTube={openYouTubeVideo}
-            onPlaybackStateChange={onPlaybackStateChange}
-            isMadeForKids={Boolean(selectedVideo.made_for_kids)}
-          />
-        </div>
-
-        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11.5px] text-[#aab2bc]">
-          <p className="flex min-w-0 items-center justify-center gap-1.5">
-            <MapPin size={13} className="shrink-0" />
-            <span className="truncate">{formatVideoPlace(selectedVideo)}</span>
-          </p>
-          <p className="flex items-center justify-center gap-1.5">
-            <Eye size={13} />
-            {formatCompactNumber(Number(selectedVideo.view_count || 0))} vistas
-          </p>
-          <p className="flex shrink-0 items-center justify-center gap-1.5">
-            <Clock size={13} />
-            {formatVideoDate(selectedVideo.published_at)}
-          </p>
-        </div>
-
-        <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+      <div className="px-2.5 pb-1">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           <button
             type="button"
             onClick={() => go(-1)}
@@ -206,6 +180,19 @@ export function DesktopVideoMapCard({
                 <button
                   type="button"
                   onClick={() => {
+                    activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished");
+                    setWatchMenuOpen(false);
+                  }}
+                  className={cn(
+                    "block w-full rounded-md px-2 py-1.5 text-left text-[11px] hover:bg-white/[0.08]",
+                    watchStatus === "not_finished" && "text-[#ffd37c]"
+                  )}
+                >
+                  INICIADO
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watched");
                     setWatchMenuOpen(false);
                   }}
@@ -219,7 +206,8 @@ export function DesktopVideoMapCard({
                 <button
                   type="button"
                   onClick={() => {
-                    activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later");
+                    activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished");
+                    if (!isSaved) activity.toggleVideoSaved(selectedVideo.youtube_video_id);
                     setWatchMenuOpen(false);
                   }}
                   className={cn(
@@ -227,20 +215,7 @@ export function DesktopVideoMapCard({
                     (watchStatus === "watch_later" || !watchStatus) && "text-[#d8dee6]"
                   )}
                 >
-                  SIN INICIAR
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished");
-                    setWatchMenuOpen(false);
-                  }}
-                  className={cn(
-                    "block w-full rounded-md px-2 py-1.5 text-left text-[11px] hover:bg-white/[0.08]",
-                    watchStatus === "not_finished" && "text-[#ffd37c]"
-                  )}
-                >
-                  POR TERMINAR
+                  VER MAS TARDE
                 </button>
               </div>
             ) : null}
@@ -255,6 +230,37 @@ export function DesktopVideoMapCard({
             Siguiente
             <CaretRight size={15} />
           </button>
+        </div>
+      </div>
+
+      <div className="p-2">
+        <div className="rounded-xl border border-white/10 bg-black/35 p-2">
+          <YouTubeEmbedPlayer
+            videoId={selectedVideo.youtube_video_id}
+            title={selectedVideo.title}
+            youtubeHref={youtubeHref}
+            thumbnailUrl={selectedVideo.thumbnail_url}
+            openButtonLabel={openButtonLabel || (isOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
+            playbackCommand={playbackCommand}
+            onOpenInYouTube={openYouTubeVideo}
+            onPlaybackStateChange={onPlaybackStateChange}
+            isMadeForKids={Boolean(selectedVideo.made_for_kids)}
+          />
+        </div>
+
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11.5px] text-[#aab2bc]">
+          <p className="flex min-w-0 items-center justify-center gap-1.5">
+            <MapPin size={13} className="shrink-0" />
+            <span className="truncate">{formatVideoPlace(selectedVideo)}</span>
+          </p>
+          <p className="flex items-center justify-center gap-1.5">
+            <Eye size={13} />
+            {formatCompactNumber(Number(selectedVideo.view_count || 0))} vistas
+          </p>
+          <p className="flex shrink-0 items-center justify-center gap-1.5">
+            <Clock size={13} />
+            {formatVideoDate(selectedVideo.published_at)}
+          </p>
         </div>
       </div>
     </article>

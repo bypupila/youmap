@@ -85,6 +85,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
           viewer={payload.viewer}
           sponsors={payload.sponsors}
           activePoll={payload.activePoll}
+          fanVotes={payload.fanVotes}
           availablePollOptions={payload.availablePollOptions}
           viewMode={isDemoUsername(resolvedParams.username) || payload.channel.id === DEMO_CHANNEL_ID ? "demo" : payload.viewer.isOwner ? "creator" : "viewer"}
         />

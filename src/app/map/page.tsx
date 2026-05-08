@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { MapExperience } from "@/components/map/map-experience";
 import { Button } from "@/components/ui/button";
+import { getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
+import { getMapVoterFingerprintFromCookieStore } from "@/lib/map-polls";
 import { loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -31,7 +34,21 @@ interface MapPageProps {
 export default async function MapPage({ searchParams }: MapPageProps) {
   const resolvedSearchParams = await searchParams;
   const requestedChannelId = resolvedSearchParams.channelId || DEMO_CHANNEL_SLUG;
-  const payload = (await loadPublicMapPayloadByChannelId({ channelId: requestedChannelId })) || (requestedChannelId === DEMO_CHANNEL_SLUG ? null : await loadPublicMapPayloadByChannelId({ channelId: DEMO_CHANNEL_SLUG }));
+  const cookieStore = await cookies();
+  const sessionUserId = await getValidSessionUserIdFromServerCookies();
+  const payload =
+    (await loadPublicMapPayloadByChannelId({
+      channelId: requestedChannelId,
+      viewerUserId: sessionUserId,
+      voterFingerprint: getMapVoterFingerprintFromCookieStore(cookieStore),
+    })) ||
+    (requestedChannelId === DEMO_CHANNEL_SLUG
+      ? null
+      : await loadPublicMapPayloadByChannelId({
+          channelId: DEMO_CHANNEL_SLUG,
+          viewerUserId: sessionUserId,
+          voterFingerprint: getMapVoterFingerprintFromCookieStore(cookieStore),
+        }));
   const isDemoMap = requestedChannelId === DEMO_CHANNEL_SLUG || payload?.channel.id === DEMO_CHANNEL_ID;
   const headerEyebrow = requestedChannelId === payload?.channel.id ? "Mapa público" : isDemoMap ? "Mapa demo" : "Demo de respaldo";
   if (!payload) {
@@ -69,6 +86,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           viewer={payload.viewer}
           sponsors={payload.sponsors}
           activePoll={payload.activePoll}
+          fanVotes={payload.fanVotes}
           availablePollOptions={payload.availablePollOptions}
           headerEyebrow={headerEyebrow}
           viewMode={isDemoMap ? "demo" : payload.viewer.isOwner ? "creator" : "viewer"}

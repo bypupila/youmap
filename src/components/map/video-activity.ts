@@ -17,7 +17,7 @@ const LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS = {
   featured: "travelmap_featured_videos_v1",
 } as const;
 
-export type VideoActivityTab = "all" | "watched" | "opened" | "saved" | "featured";
+export type VideoActivityTab = "all" | "watched" | "opened" | "saved" | "featured" | "watch_later" | "incomplete";
 export type VideoWatchStatus = "not_finished" | "watched" | "watch_later";
 
 export type VideoActivityController = {
@@ -182,7 +182,8 @@ export function useLocalVideoActivity(): VideoActivityController {
     if (normalized) {
       setWatchStatusById((current) => {
         if (current[normalized] === "watched") return current;
-        const next = { ...current, [normalized]: "watched" as VideoWatchStatus };
+        if (current[normalized] === "not_finished") return current;
+        const next = { ...current, [normalized]: "not_finished" as VideoWatchStatus };
         writeWatchStatusById(next);
         return next;
       });
