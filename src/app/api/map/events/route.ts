@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isDemoChannelId } from "@/lib/demo-data";
 import { MAP_EVENT_TYPES } from "@/lib/map-event-types";
 import {
+  isUuid,
   isMadeForKidsVideo,
   isPublicMapPath,
   recordMapEventFromRequest,
@@ -13,7 +14,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const payloadSchema = z.object({
-  channelId: z.string().uuid(),
+  channelId: z.string().trim().min(1),
   eventType: z.enum(MAP_EVENT_TYPES),
   viewerMode: z.enum(["viewer", "creator", "demo"]).optional().nullable(),
   path: z.string().trim().max(240).optional().nullable(),
@@ -32,6 +33,10 @@ export async function POST(request: Request) {
 
     if (isDemoChannelId(payload.channelId) || payload.viewerMode === "demo") {
       return NextResponse.json({ ok: true, skipped: "demo" });
+    }
+
+    if (!isUuid(payload.channelId)) {
+      return NextResponse.json({ ok: true, skipped: "non_uuid_channel" });
     }
 
     if (!isPublicMapPath(path)) {

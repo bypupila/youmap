@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { GlobeHemisphereWest, Video } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { FloatingTopBar, SignalPill } from "@/components/design-system/chrome";
 import { MapExperience } from "@/components/map/map-experience";
@@ -16,7 +17,6 @@ type LandingCopy = {
   searchPlaceholder: string;
   signalPills: string[];
   headline: string;
-  body: string;
   ctaPrimary: string;
   cardTitle: string;
   ctaDemo: string;
@@ -132,7 +132,6 @@ export function CinematicLanding() {
             searchPlaceholder: "Busca videos, países o creadores",
             signalPills: ["Mapa interactivo", "Analítica por país", "Sponsor hub"],
             headline: "Tu canal convertido en una pagina web interactiva.",
-            body: "Importa tu canal, detecta países y lee el rendimiento por destino con una capa visual limpia.",
             ctaPrimary: "Empezar",
             cardTitle: activeCreator.name,
             ctaDemo: "Ver Demo",
@@ -146,7 +145,6 @@ export function CinematicLanding() {
             searchPlaceholder: "Search across videos, countries, or creators",
             signalPills: ["Interactive map", "Country analytics", "Sponsor hub"],
             headline: "Your channel turned into an interactive web page.",
-            body: "Import your channel, detect countries, and read destination performance in one visual layer.",
             ctaPrimary: "Get started",
             cardTitle: activeCreator.name,
             ctaDemo: "View Demo",
@@ -187,6 +185,7 @@ export function CinematicLanding() {
         <FloatingTopBar
           eyebrow="BY PUPILA"
           title="TRAVEL YOUR MAP"
+          titleClassName="font-bold"
           searchPlaceholder={copy.searchPlaceholder}
           className="pointer-events-auto relative z-[321]"
           actions={
@@ -226,11 +225,23 @@ export function CinematicLanding() {
               ))}
             </div>
 
-            <p className="tym-overline mb-4">Cartografia editorial para creadores de viaje</p>
+            <p className="tym-overline mb-4 !text-[#ff4b4b]">Cartografia editorial para creadores de viaje</p>
             <h1 className="tym-display max-w-[10ch]">
               {copy.headline}
             </h1>
-            <p className="mt-5 max-w-[58ch] text-base leading-7 text-muted-foreground">{copy.body}</p>
+            <p className="mt-5 max-w-[50ch] text-base leading-7 text-muted-foreground">
+              {locale === "es" ? (
+                <>
+                  Importa tu canal, detecta países
+                  <br className="hidden sm:block" />y lee el rendimiento por destino con una capa visual limpia.
+                </>
+              ) : (
+                <>
+                  Import your channel, detect countries
+                  <br className="hidden sm:block" />and read destination performance in one visual layer.
+                </>
+              )}
+            </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href={onboardingPath} className="tym-btn-primary relative z-[322] pointer-events-auto">
@@ -250,12 +261,18 @@ export function CinematicLanding() {
               <div className="tm-surface rounded-[2rem] p-5">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-center">
+                    <div className="mb-1 flex justify-center text-[#ff4b4b]">
+                      <Video size={46} weight="fill" aria-hidden="true" />
+                    </div>
                     <p className="text-[2rem] leading-none font-semibold tracking-tight text-[#ff4b4b]">{platformTotalVideos.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{copy.platformVideosLabel}</p>
+                    <p className="mt-4 text-sm text-muted-foreground">{copy.platformVideosLabel}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-center">
+                    <div className="mb-1 flex justify-center text-[#ff4b4b]">
+                      <GlobeHemisphereWest size={46} weight="fill" aria-hidden="true" />
+                    </div>
                     <p className="text-[2rem] leading-none font-semibold tracking-tight text-[#ff4b4b]">{platformTotalCountries.toLocaleString(localeTag)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{copy.platformCountriesLabel}</p>
+                    <p className="mt-4 text-sm text-muted-foreground">{copy.platformCountriesLabel}</p>
                   </div>
                 </div>
               </div>

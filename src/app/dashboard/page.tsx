@@ -134,6 +134,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           activePoll={experiencePayload?.activePoll || null}
           fanVotes={experiencePayload?.fanVotes || null}
           availablePollOptions={experiencePayload?.availablePollOptions || []}
+          fanVoteOptions={experiencePayload?.fanVoteOptions || []}
           headerEyebrow={previewSession ? "Preview local" : isDemoMode ? "Mapa demo" : "Vista owner"}
           viewMode={isDemoMode ? "demo" : "creator"}
         />

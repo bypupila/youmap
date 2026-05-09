@@ -2,6 +2,7 @@ import { normalizeUsername } from "@/lib/auth-identifiers";
 import { getSessionUserById, type AppUserRole, userIsSuperAdmin } from "@/lib/current-user";
 import { DEMO_CHANNEL, DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG, DEMO_USERNAME, isDemoUsername } from "@/lib/demo-data";
 import { buildMapFanVoteIdentity, createEmptyFanVoteSummary, loadMapFanVoteSummary, type MapFanVoteSummary } from "@/lib/map-fan-votes";
+import { buildRecommendedFanVoteOptions, type FanVoteOptionInput } from "@/lib/fan-vote-options";
 import { loadMapDataByChannelId, type MapDataPayload } from "@/lib/map-data";
 import { buildPollOptionsFromVideos, loadMapPoll, type MapPollRecord } from "@/lib/map-polls";
 import { sql } from "@/lib/neon";
@@ -36,6 +37,7 @@ export interface PublicMapPayload extends MapDataPayload {
   activePoll: MapPollRecord | null;
   fanVotes: MapFanVoteSummary;
   availablePollOptions: ReturnType<typeof buildPollOptionsFromVideos>;
+  fanVoteOptions: FanVoteOptionInput[];
 }
 
 interface PublicChannelRow {
@@ -283,6 +285,7 @@ export async function loadPublicMapPayloadByChannelId({
       activePoll: null,
       fanVotes: createEmptyFanVoteSummary(),
       availablePollOptions: buildPollOptionsFromVideos(mapPayload.videoLocations),
+      fanVoteOptions: buildRecommendedFanVoteOptions(mapPayload.videoLocations),
     };
   }
 
@@ -331,6 +334,7 @@ async function loadPublicMapPayloadByChannelRef(
   const canonicalHandle = normalizeChannelHandle(channelRef.channel_handle || channelRef.username);
   const isOwner = Boolean((viewerUserId && viewerUserId === channelRef.user_id) || isSuperAdmin);
   const availablePollOptions = buildPollOptionsFromVideos(mapPayload.videoLocations);
+  const fanVoteOptions = buildRecommendedFanVoteOptions(mapPayload.videoLocations);
   const activePoll = await loadMapPoll(channelRef.id, {
     includeDraft: isOwner,
     voterFingerprint,
@@ -364,5 +368,6 @@ async function loadPublicMapPayloadByChannelRef(
     activePoll,
     fanVotes,
     availablePollOptions,
+    fanVoteOptions,
   };
 }

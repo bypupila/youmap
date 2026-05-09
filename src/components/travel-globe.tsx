@@ -13,6 +13,9 @@ type PointKind = "country" | "video";
 type GlobePoint = {
   point_id: string;
   kind: PointKind;
+  is_cluster?: boolean;
+  is_expanded_video?: boolean;
+  bounds?: GeoBounds;
   country_code: string;
   country_name: string;
   lat: number;
@@ -21,6 +24,16 @@ type GlobePoint = {
   total_views: number;
   video_count: number;
   size: number;
+};
+
+const DENSE_PLACE_VIDEO_CLUSTER_THRESHOLD = 200;
+const DENSE_CLUSTER_MAX_VIDEOS = 75;
+
+type GeoBounds = {
+  min_lat: number;
+  max_lat: number;
+  min_lng: number;
+  max_lng: number;
 };
 
 interface TravelGlobeProps {
@@ -81,10 +94,12 @@ export function TravelGlobe({
   const [internalRotationEnabled, setInternalRotationEnabled] = useState(true);
   const [polygonsData, setPolygonsData] = useState<object[]>([]);
   const [hoveredPolygonCode, setHoveredPolygonCode] = useState<string | null>(null);
+  const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null);
   const didApplyInitialSelection = useRef(false);
   const didApplyFocusSelection = useRef<string | null>(null);
   const didApplyFocusVideo = useRef<string | null>(null);
   const hoveredPointRef = useRef<GlobePoint | null>(null);
+  const suppressPolygonClickUntilRef = useRef(0);
   const rotationPointOfViewRef = useRef({ lat: 20, lng: -10, altitude: 2.3 });
   const rotationEnabled = controlledRotationEnabled ?? internalRotationEnabled;
 
@@ -130,26 +145,8 @@ export function TravelGlobe({
       }));
     }
 
-    const baseVideoPoints = videoLocations
-      .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
-      .map((row, index) => {
-        const views = Number(row.view_count || 0);
-        return {
-          point_id: `video-${row.youtube_video_id}-${index}`,
-          kind: "video" as const,
-          country_code: row.country_code || "XX",
-          country_name: row.country_name || row.country_code || "Unknown",
-          lat: Number(row.lat),
-          lng: Number(row.lng),
-          videos: [row],
-          total_views: views,
-          video_count: 1,
-          size: Math.max(0.06, Math.min(0.16, Math.log10(views + 10) * 0.045)),
-        };
-      });
-
-    return spreadVideoPoints(baseVideoPoints);
-  }, [videoLocations, pointMode]);
+    return spreadVideoPoints(buildVideoModePoints(videoLocations, expandedClusterId));
+  }, [expandedClusterId, videoLocations, pointMode]);
 
   const arcData = useMemo(
     () => (pointMode === "country" ? getTopArcs(pointsData) : []),
@@ -203,6 +200,7 @@ export function TravelGlobe({
 
     if (command.action === "reset_view") {
       updateRotationEnabled(false);
+      setExpandedClusterId(null);
       setGlobePointOfView({ lat: 20, lng: -10, altitude: 2.3 }, 700);
       return;
     }
@@ -264,6 +262,7 @@ export function TravelGlobe({
     const candidate = buildCountrySelectionPoint(videoLocations, focusCountryCode);
     if (!candidate) return;
     didApplyFocusSelection.current = focusCountryCode.toUpperCase();
+    setExpandedClusterId(null);
     focusCountryOnGlobe(candidate);
   }, [focusCountryCode, videoLocations, pointMode, pointsData, focusCountryOnGlobe]);
 
@@ -313,6 +312,7 @@ export function TravelGlobe({
       if (!candidate) return;
       onCountrySelect?.(countryCode.toUpperCase());
       updateRotationEnabled(false);
+      setExpandedClusterId(null);
       setSelectedPoint(candidate);
       const nextView = { lat: candidate.lat, lng: candidate.lng, altitude: pointMode === "video" ? 0.72 : 1.2 };
       rotationPointOfViewRef.current = nextView;
@@ -331,6 +331,15 @@ export function TravelGlobe({
   function handlePointSelection(selected: GlobePoint) {
     updateRotationEnabled(false);
     setSelectedPoint(selected);
+
+    if (isDenseVideoCluster(selected)) {
+      setExpandedClusterId(selected.point_id);
+      const nextView = getExpandedClusterPointOfView(selected);
+      rotationPointOfViewRef.current = nextView;
+      globeRef.current?.pointOfView(nextView, 900);
+      onPinnedVideoChange?.(null);
+      return;
+    }
 
     if (selected.kind === "video") {
       onPinnedVideoChange?.(selected.videos?.[0] || null);
@@ -410,6 +419,7 @@ export function TravelGlobe({
           onPolygonClick={
             interactive
               ? (polygon) => {
+                  if (Date.now() < suppressPolygonClickUntilRef.current) return;
                   const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, countryNameIndex) : null;
                   if (!code) return;
                   selectCountryFromPolygon(code);
@@ -432,7 +442,10 @@ export function TravelGlobe({
           htmlLng={(d) => (d as GlobePoint).lng}
           htmlElement={(d) =>
             createFlagPinElement(d as GlobePoint, {
-              onClick: (point) => handlePointSelection(point),
+              onClick: (point) => {
+                suppressPolygonClickUntilRef.current = Date.now() + 500;
+                handlePointSelection(point);
+              },
               onHoverStart: (point) => {
                 onCountryHoverChange?.(null);
                 setHoveredPoint(point);
@@ -476,6 +489,7 @@ export function TravelGlobe({
                   setHoveredPolygonCode(null);
                   onCountryHoverChange?.(null);
                   setSelectedPoint(null);
+                  setExpandedClusterId(null);
                   onPinnedVideoChange?.(null);
                 }
               : undefined
@@ -541,6 +555,7 @@ export function TravelGlobe({
               onClick={() => {
                 setHoveredPoint(null);
                 setSelectedPoint(null);
+                setExpandedClusterId(null);
               }}
             >
               Cerrar
@@ -614,6 +629,24 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 }
 
 function buildPointLabel(point: GlobePoint) {
+  if (isDenseVideoCluster(point)) {
+    const featured = point.videos[0];
+    const title = escapeHtml(point.country_name);
+    const totalViews = formatNumber(point.total_views);
+    const sampleTitle = escapeHtml(featured?.title || "Video destacado");
+    const sampleThumb = featured?.thumbnail_url
+      ? toCompactYouTubeThumbnail(featured.thumbnail_url) || featured.thumbnail_url
+      : null;
+
+    return `<div style="background:rgba(5,8,16,.94);padding:10px;border-radius:14px;border:1px solid rgba(255,255,255,.18);width:300px;color:white;font-family:system-ui">
+      ${sampleThumb ? `<img src="${sampleThumb}" alt="${sampleTitle}" style="width:100%;height:136px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,.12)" />` : ""}
+      <div style="margin-top:8px;font-size:16px;font-weight:800;line-height:1.2">${title}</div>
+      <div style="margin-top:6px;font-size:13px;color:#d1d5db">${point.video_count} videos en este grupo · ${totalViews} views</div>
+      <div style="margin-top:6px;font-size:12px;color:#94a3b8">Preview: ${sampleTitle}</div>
+      <div style="margin-top:8px;font-size:12px;color:#67e8f9">Selecciona el grupo para hacer zoom y ver los videos individuales</div>
+    </div>`;
+  }
+
   if (point.kind === "video") {
     const video = point.videos[0];
     const thumb = toCompactYouTubeThumbnail(video?.thumbnail_url) || "https://via.placeholder.com/360x202/111827/9CA3AF?text=Video";
@@ -636,6 +669,367 @@ function buildPointLabel(point: GlobePoint) {
     <div style="font-size:12px;color:#d1d5db">${point.video_count} videos</div>
     <div style="font-size:12px;color:#9ca3af">${formatNumber(point.total_views)} views</div>
   </div>`;
+}
+
+function buildVideoModePoints(videoLocations: TravelVideoLocation[], expandedClusterId: string | null) {
+  const validVideos = videoLocations.filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
+  const denseGroups = groupVideosByDensePlace(validVideos);
+  const clusteredVideos = new Set<TravelVideoLocation>();
+  const points: GlobePoint[] = [];
+
+  for (const group of denseGroups) {
+    if (group.videos.length < DENSE_PLACE_VIDEO_CLUSTER_THRESHOLD) continue;
+
+    for (const cluster of splitDenseGroupIntoClusters(group)) {
+      for (const video of cluster.videos) clusteredVideos.add(video);
+
+      if (cluster.point_id === expandedClusterId) {
+        return positionExpandedClusterVideos(cluster);
+      }
+
+      if (!expandedClusterId) points.push(cluster);
+    }
+  }
+
+  validVideos.forEach((row, index) => {
+    if (clusteredVideos.has(row)) return;
+    points.push(buildSingleVideoPoint(row, index));
+  });
+
+  return points;
+}
+
+function buildSingleVideoPoint(row: TravelVideoLocation, index: number, parentClusterId?: string): GlobePoint {
+  const views = Number(row.view_count || 0);
+  return {
+    point_id: parentClusterId
+      ? `video-expanded-${parentClusterId}-${row.youtube_video_id}-${index}`
+      : `video-${row.youtube_video_id}-${index}`,
+    kind: "video",
+    is_expanded_video: Boolean(parentClusterId),
+    country_code: row.country_code || "XX",
+    country_name: row.country_name || row.country_code || "Unknown",
+    lat: Number(row.lat),
+    lng: Number(row.lng),
+    videos: [row],
+    total_views: views,
+    video_count: 1,
+    size: Math.max(0.06, Math.min(0.16, Math.log10(views + 10) * 0.045)),
+  };
+}
+
+type DenseVideoGroup = {
+  key: string;
+  country_code: string;
+  country_name: string;
+  location_name: string;
+  videos: TravelVideoLocation[];
+  total_views: number;
+  lat_sum: number;
+  lng_sum: number;
+  min_lat: number;
+  max_lat: number;
+  min_lng: number;
+  max_lng: number;
+};
+
+function groupVideosByDensePlace(videoLocations: TravelVideoLocation[]) {
+  const groups = new Map<string, DenseVideoGroup>();
+
+  for (const row of videoLocations) {
+    const key = getDensePlaceClusterKey(row);
+    const countryCode = String(row.country_code || "XX").toUpperCase();
+    const locationName = getDensePlaceDisplayName(row);
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.videos.push(row);
+      existing.total_views += Number(row.view_count || 0);
+      existing.lat_sum += Number(row.lat);
+      existing.lng_sum += Number(row.lng);
+      existing.min_lat = Math.min(existing.min_lat, Number(row.lat));
+      existing.max_lat = Math.max(existing.max_lat, Number(row.lat));
+      existing.min_lng = Math.min(existing.min_lng, Number(row.lng));
+      existing.max_lng = Math.max(existing.max_lng, Number(row.lng));
+      continue;
+    }
+
+    groups.set(key, {
+      key,
+      country_code: countryCode,
+      country_name: row.country_name || countryCode,
+      location_name: locationName,
+      videos: [row],
+      total_views: Number(row.view_count || 0),
+      lat_sum: Number(row.lat),
+      lng_sum: Number(row.lng),
+      min_lat: Number(row.lat),
+      max_lat: Number(row.lat),
+      min_lng: Number(row.lng),
+      max_lng: Number(row.lng),
+    });
+  }
+
+  return Array.from(groups.values());
+}
+
+function splitDenseGroupIntoClusters(group: DenseVideoGroup) {
+  const clusterCount = Math.ceil(group.videos.length / DENSE_CLUSTER_MAX_VIDEOS);
+  const clusteredVideos = clusterVideosByGeography(group.videos, clusterCount);
+  const clusters: GlobePoint[] = [];
+
+  for (let index = 0; index < clusterCount; index += 1) {
+    const videos = clusteredVideos[index] || [];
+    if (videos.length === 0) continue;
+    clusters.push(buildDenseVideoClusterPoint(group, videos, index + 1, clusterCount));
+  }
+
+  return spreadDenseClusterCentersWithinGroup(clusters, group);
+}
+
+function buildDenseVideoClusterPoint(
+  group: DenseVideoGroup,
+  videos: TravelVideoLocation[],
+  clusterNumber: number,
+  clusterCount: number
+): GlobePoint {
+  const count = Math.max(1, videos.length);
+  const aggregates = videos.reduce(
+    (acc, video) => ({
+      lat: acc.lat + Number(video.lat),
+      lng: acc.lng + Number(video.lng),
+      views: acc.views + Number(video.view_count || 0),
+      min_lat: Math.min(acc.min_lat, Number(video.lat)),
+      max_lat: Math.max(acc.max_lat, Number(video.lat)),
+      min_lng: Math.min(acc.min_lng, Number(video.lng)),
+      max_lng: Math.max(acc.max_lng, Number(video.lng)),
+    }),
+    { lat: 0, lng: 0, views: 0, min_lat: 90, max_lat: -90, min_lng: 180, max_lng: -180 }
+  );
+  const clusterLabel = clusterCount > 1
+    ? `${group.location_name || group.country_name} ${clusterNumber}/${clusterCount}`
+    : group.location_name || group.country_name;
+
+  return {
+    point_id: `video-cluster-${group.key}-${clusterNumber}`,
+    kind: "video",
+    is_cluster: true,
+    bounds: {
+      min_lat: group.min_lat,
+      max_lat: group.max_lat,
+      min_lng: group.min_lng,
+      max_lng: group.max_lng,
+    },
+    country_code: group.country_code,
+    country_name: clusterLabel,
+    lat: aggregates.lat / count,
+    lng: aggregates.lng / count,
+    videos,
+    total_views: aggregates.views,
+    video_count: count,
+    size: Math.min(0.36, Math.max(0.18, Math.log2(count + 1) * 0.035)),
+  };
+}
+
+function positionExpandedClusterVideos(cluster: GlobePoint) {
+  const videos = cluster.videos;
+  const count = videos.length;
+  if (count === 0) return [];
+
+  const columns = Math.ceil(Math.sqrt(count * 1.35));
+  const rows = Math.ceil(count / columns);
+  const bounds = cluster.bounds || getVideoBounds(videos);
+  const latSpan = Math.max(1.8, bounds.max_lat - bounds.min_lat);
+  const lngSpan = Math.max(1.8, bounds.max_lng - bounds.min_lng);
+  const latStep = Math.min(0.34, latSpan / Math.max(1, rows - 1));
+  const lngStep = Math.min(0.34, lngSpan / Math.max(1, columns - 1));
+  const gridHeight = latStep * Math.max(0, rows - 1);
+  const gridWidth = lngStep * Math.max(0, columns - 1);
+  const centerLat = cluster.lat;
+  const centerLng = cluster.lng;
+  const startLat = centerLat + gridHeight / 2;
+  const startLng = centerLng - gridWidth / 2;
+
+  return videos.map((video, index) => {
+    const row = Math.floor(index / columns);
+    const col = index % columns;
+    const stagger = row % 2 === 0 ? 0 : lngStep * 0.5;
+    return {
+      ...buildSingleVideoPoint(video, index, cluster.point_id),
+      lat: clampNumber(startLat - row * latStep, bounds.min_lat, bounds.max_lat),
+      lng: clampNumber(startLng + col * lngStep + stagger, bounds.min_lng, bounds.max_lng),
+    };
+  });
+}
+
+function getVideoBounds(videos: TravelVideoLocation[]): GeoBounds {
+  return videos.reduce(
+    (acc, video) => ({
+      min_lat: Math.min(acc.min_lat, Number(video.lat)),
+      max_lat: Math.max(acc.max_lat, Number(video.lat)),
+      min_lng: Math.min(acc.min_lng, Number(video.lng)),
+      max_lng: Math.max(acc.max_lng, Number(video.lng)),
+    }),
+    { min_lat: 90, max_lat: -90, min_lng: 180, max_lng: -180 }
+  );
+}
+
+function spreadDenseClusterCentersWithinGroup(clusters: GlobePoint[], group: DenseVideoGroup) {
+  if (clusters.length <= 1) return clusters;
+
+  const centerLat = group.lat_sum / Math.max(1, group.videos.length);
+  const centerLng = group.lng_sum / Math.max(1, group.videos.length);
+  const latSpan = Math.max(0.2, group.max_lat - group.min_lat);
+  const lngSpan = Math.max(0.2, group.max_lng - group.min_lng);
+  const latRadius = Math.max(0.45, latSpan * 0.48);
+  const lngRadius = Math.max(0.45, lngSpan * 0.48);
+
+  return clusters.map((cluster, index) => {
+    const angle = -Math.PI / 2 + (index / clusters.length) * Math.PI * 2;
+    const targetLat = centerLat + Math.sin(angle) * latRadius;
+    const targetLng = centerLng + Math.cos(angle) * lngRadius;
+
+    return {
+      ...cluster,
+      lat: clampNumber(targetLat, group.min_lat, group.max_lat),
+      lng: clampNumber(targetLng, group.min_lng, group.max_lng),
+    };
+  });
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function clusterVideosByGeography(videos: TravelVideoLocation[], clusterCount: number) {
+  if (clusterCount <= 1) return [[...videos]];
+
+  const ordered = [...videos].sort((a, b) => {
+    const lngDelta = Number(a.lng) - Number(b.lng);
+    if (Math.abs(lngDelta) > 0.000001) return lngDelta;
+    const latDelta = Number(a.lat) - Number(b.lat);
+    if (Math.abs(latDelta) > 0.000001) return latDelta;
+    return String(a.youtube_video_id).localeCompare(String(b.youtube_video_id));
+  });
+
+  let centroids = Array.from({ length: clusterCount }, (_, index) => {
+    const sampleIndex = Math.min(
+      ordered.length - 1,
+      Math.max(0, Math.round(((index + 0.5) / clusterCount) * ordered.length) - 1)
+    );
+    return {
+      lat: Number(ordered[sampleIndex].lat),
+      lng: Number(ordered[sampleIndex].lng),
+    };
+  });
+
+  let clusters = assignVideosToNearestCentroids(ordered, centroids);
+
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    centroids = clusters.map((cluster, index) => {
+      if (cluster.length === 0) return centroids[index];
+      const sums = cluster.reduce(
+        (acc, video) => ({
+          lat: acc.lat + Number(video.lat),
+          lng: acc.lng + Number(video.lng),
+        }),
+        { lat: 0, lng: 0 }
+      );
+      return {
+        lat: sums.lat / cluster.length,
+        lng: sums.lng / cluster.length,
+      };
+    });
+    clusters = assignVideosToNearestCentroids(ordered, centroids);
+  }
+
+  return rebalanceClusters(clusters, Math.ceil(videos.length / clusterCount));
+}
+
+function assignVideosToNearestCentroids(
+  videos: TravelVideoLocation[],
+  centroids: Array<{ lat: number; lng: number }>
+) {
+  const clusters: TravelVideoLocation[][] = centroids.map(() => []);
+
+  for (const video of videos) {
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    centroids.forEach((centroid, index) => {
+      const distance = angularDistanceSquared(Number(video.lat), Number(video.lng), centroid.lat, centroid.lng);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+
+    clusters[bestIndex].push(video);
+  }
+
+  return clusters;
+}
+
+function rebalanceClusters(clusters: TravelVideoLocation[][], maxSize: number) {
+  const result = clusters.map((cluster) => [...cluster]);
+
+  for (let index = 0; index < result.length; index += 1) {
+    result[index].sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0));
+  }
+
+  let oversizedIndex = result.findIndex((cluster) => cluster.length > maxSize);
+  while (oversizedIndex >= 0) {
+    let targetIndex = -1;
+    for (let index = 0; index < result.length; index += 1) {
+      if (index === oversizedIndex || result[index].length >= maxSize) continue;
+      if (targetIndex < 0 || result[index].length < result[targetIndex].length) targetIndex = index;
+    }
+    if (targetIndex < 0) break;
+
+    const moved = result[oversizedIndex].pop();
+    if (!moved) break;
+    result[targetIndex].push(moved);
+    oversizedIndex = result.findIndex((cluster) => cluster.length > maxSize);
+  }
+
+  return result;
+}
+
+function getDensePlaceClusterKey(row: TravelVideoLocation) {
+  const countryCode = String(row.country_code || "XX").toUpperCase();
+  const placeLabel = normalizeDensePlaceLabel(
+    row.location_precision === "country"
+      ? row.country_name || countryCode
+      : row.city || row.location_label || row.region || row.country_name || countryCode
+  );
+
+  if (placeLabel) return `${countryCode}:${placeLabel}`;
+
+  const lat = Math.round(Number(row.lat) * 10) / 10;
+  const lng = Math.round(Number(row.lng) * 10) / 10;
+  return `${countryCode}:geo:${lat}:${lng}`;
+}
+
+function getDensePlaceDisplayName(row: TravelVideoLocation) {
+  return String(row.city || row.location_label || row.region || row.country_name || row.country_code || "Unknown");
+}
+
+function normalizeDensePlaceLabel(raw: string | null | undefined) {
+  return String(raw || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function isDenseVideoCluster(point: GlobePoint) {
+  return point.kind === "video" && point.is_cluster === true;
+}
+
+function formatClusterCount(count: number) {
+  if (count >= 1000) return `${Math.round(count / 100) / 10}k`;
+  return String(count);
 }
 
 function groupVideosByCountry(videoLocations: TravelVideoLocation[]) {
@@ -732,7 +1126,7 @@ function spreadVideoPoints(basePoints: GlobePoint[]) {
       ...point,
       lat: placedLat,
       lng: placedLng,
-      size: 0.092,
+      size: isDenseVideoCluster(point) ? point.size : 0.092,
     };
     placed.push(next);
     addToGrid(next);
@@ -789,9 +1183,16 @@ function createFlagPinElement(
   interactive = true
 ) {
   const marker = document.createElement(interactive ? "button" : "div");
+  const denseCluster = isDenseVideoCluster(point);
+  const expandedVideo = point.is_expanded_video === true;
   if (interactive) marker.setAttribute("type", "button");
   marker.setAttribute("data-globe-marker", "true");
-  marker.setAttribute("aria-label", `${point.kind === "video" ? "Abrir video" : "Abrir destino"}: ${point.country_name}`);
+  marker.setAttribute(
+    "aria-label",
+    denseCluster
+      ? `Hacer zoom al grupo de ${point.video_count} videos: ${point.country_name}`
+      : `${point.kind === "video" ? "Abrir video" : "Abrir destino"}: ${point.country_name}`
+  );
   marker.tabIndex = -1;
   marker.style.cursor = interactive ? "pointer" : "default";
   marker.style.border = "0";
@@ -801,18 +1202,50 @@ function createFlagPinElement(
   marker.style.transform = "translate(-50%, -50%)";
   marker.style.pointerEvents = interactive ? "auto" : "none";
 
-  marker.style.width = "20px";
-  marker.style.height = "20px";
+  marker.style.width = denseCluster ? "28px" : expandedVideo ? "15px" : "20px";
+  marker.style.height = denseCluster ? "28px" : expandedVideo ? "15px" : "20px";
   marker.style.display = "inline-flex";
   marker.style.alignItems = "center";
   marker.style.justifyContent = "center";
   marker.style.borderRadius = "999px";
-  marker.style.background = "rgba(4,7,14,0.78)";
-  marker.style.border = "1px solid rgba(255,255,255,0.24)";
-  marker.style.boxShadow = "0 6px 16px rgba(2,6,23,0.45)";
-  marker.style.zIndex = "1";
-  marker.style.fontSize = "13px";
-  marker.textContent = countryCodeToFlag(point.country_code);
+  marker.style.background = denseCluster ? "rgba(4,7,14,0.88)" : "rgba(4,7,14,0.78)";
+  marker.style.border = denseCluster
+    ? "1px solid rgba(255,255,255,0.34)"
+    : expandedVideo
+      ? "1px solid rgba(255,255,255,0.18)"
+      : "1px solid rgba(255,255,255,0.24)";
+  marker.style.boxShadow = denseCluster
+    ? "0 8px 20px rgba(2,6,23,0.58), 0 0 0 2px rgba(255,90,61,0.12)"
+    : "0 6px 16px rgba(2,6,23,0.45)";
+  marker.style.zIndex = denseCluster ? "2" : "1";
+  marker.style.fontSize = denseCluster ? "13px" : expandedVideo ? "10px" : "13px";
+
+  if (denseCluster) {
+    const flag = document.createElement("span");
+    flag.textContent = countryCodeToFlag(point.country_code);
+    flag.style.lineHeight = "1";
+
+    const count = document.createElement("span");
+    count.textContent = formatClusterCount(point.video_count);
+    count.style.position = "absolute";
+    count.style.left = "50%";
+    count.style.top = "calc(100% - 7px)";
+    count.style.transform = "translateX(-50%)";
+    count.style.borderRadius = "999px";
+    count.style.border = "1px solid rgba(255,255,255,0.28)";
+    count.style.background = "rgba(4,7,14,0.96)";
+    count.style.padding = "1px 4px";
+    count.style.fontSize = "8px";
+    count.style.fontWeight = "800";
+    count.style.lineHeight = "1.2";
+    count.style.color = "#fff";
+    count.style.whiteSpace = "nowrap";
+
+    marker.style.position = "relative";
+    marker.append(flag, count);
+  } else {
+    marker.textContent = countryCodeToFlag(point.country_code);
+  }
 
   if (interactive) {
     marker.addEventListener("mouseenter", () => handlers.onHoverStart(point));
@@ -895,6 +1328,15 @@ function getCountryPointOfView(videos: TravelVideoLocation[], pointMode: "countr
       : 1.15;
 
   return { lat: centerLat, lng: centerLng, altitude };
+}
+
+function getExpandedClusterPointOfView(cluster: GlobePoint) {
+  const baseView = getCountryPointOfView(cluster.videos, "video");
+  return {
+    lat: (cluster.lat || baseView.lat) + 0.75,
+    lng: cluster.lng || baseView.lng,
+    altitude: Math.min(0.34, Math.max(0.28, baseView.altitude * 0.48)),
+  };
 }
 
 function normalizeCountryName(raw: string) {

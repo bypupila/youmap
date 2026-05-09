@@ -123,19 +123,11 @@ function writeWatchStatusById(value: Record<string, VideoWatchStatus>) {
 }
 
 export function useLocalVideoActivity(): VideoActivityController {
-  const [seenIds, setSeenIds] = useState<Set<string>>(() =>
-    readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.seen, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.seen)
-  );
-  const [openedIds, setOpenedIds] = useState<Set<string>>(() =>
-    readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.opened, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.opened)
-  );
-  const [savedIds, setSavedIds] = useState<Set<string>>(() =>
-    readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.saved, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.saved)
-  );
-  const [featuredIds, setFeaturedIds] = useState<Set<string>>(() =>
-    readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.featured, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.featured)
-  );
-  const [watchStatusById, setWatchStatusById] = useState<Record<string, VideoWatchStatus>>(() => readWatchStatusById());
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [openedIds, setOpenedIds] = useState<Set<string>>(new Set());
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
+  const [watchStatusById, setWatchStatusById] = useState<Record<string, VideoWatchStatus>>({});
 
   useEffect(() => {
     setSeenIds(readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.seen, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.seen));

@@ -1,6 +1,46 @@
 import * as Sentry from "@sentry/nextjs";
 import posthog from "posthog-js";
 
+function installExtensionHydrationGuard() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+
+  const selectors = ["#heurio-app", ".heurio-overlay", "[class*='heurio-']", "[id*='heurio-']"];
+
+  const removeInjectedNodes = () => {
+    selectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((node) => {
+        node.parentNode?.removeChild(node);
+      });
+    });
+  };
+
+  removeInjectedNodes();
+
+  const observer = new MutationObserver(removeInjectedNodes);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("load", () => {
+    window.setTimeout(() => {
+      removeInjectedNodes();
+      observer.disconnect();
+    }, 2500);
+  });
+}
+
+function installMicrosoftClarity() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (document.getElementById("microsoft-clarity-script")) return;
+
+  const script = document.createElement("script");
+  script.id = "microsoft-clarity-script";
+  script.async = true;
+  script.src = "https://www.clarity.ms/tag/wf6i1kgiq2";
+  document.head.appendChild(script);
+}
+
+installExtensionHydrationGuard();
+installMicrosoftClarity();
+
 const posthogToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
 
 if (posthogToken) {

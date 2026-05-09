@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 interface FloatingTopBarProps {
   eyebrow: string;
   title: string;
+  titleClassName?: string;
   actions?: ReactNode;
   className?: string;
   searchPlaceholder?: string;
@@ -21,6 +22,7 @@ interface FloatingTopBarProps {
 export function FloatingTopBar({
   eyebrow,
   title,
+  titleClassName,
   actions,
   className,
   searchPlaceholder = "Search across videos, countries, or creators",
@@ -41,7 +43,7 @@ export function FloatingTopBar({
         </Link>
         <div className="min-w-0">
           <p className="tym-overline">{eyebrow}</p>
-          <p className="truncate text-[15px] font-medium text-foreground">{title}</p>
+          <p className={cn("truncate text-[15px] font-medium text-foreground", titleClassName)}>{title}</p>
         </div>
       </div>
 

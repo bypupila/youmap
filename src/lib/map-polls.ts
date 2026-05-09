@@ -129,15 +129,18 @@ export function buildPollOptionsFromVideos(videoLocations: TravelVideoLocation[]
 
   for (const video of videoLocations) {
     const countryCode = normalizeCountryCode(video.country_code || "");
-    const city = normalizeCity(video.city || video.location_label || "");
-    if (!countryCode || !city) continue;
+    if (!countryCode) continue;
 
     const bucket = countries.get(countryCode) || {
       country_name: String(video.country_name || countryCode),
       cities: new Map<string, number>(),
     };
 
-    bucket.cities.set(city, (bucket.cities.get(city) || 0) + 1);
+    const city = normalizeCity(video.city || "");
+    if (city && !isCountryLabel(city, countryCode, bucket.country_name)) {
+      bucket.cities.set(city, (bucket.cities.get(city) || 0) + 1);
+    }
+
     countries.set(countryCode, bucket);
   }
 
@@ -151,6 +154,18 @@ export function buildPollOptionsFromVideos(videoLocations: TravelVideoLocation[]
         .map(([city], cityIndex) => ({ city, sort_order: cityIndex })),
     }))
     .sort((a, b) => a.country_name.localeCompare(b.country_name));
+}
+
+function isCountryLabel(city: string, countryCode: string, countryName: string) {
+  const cityKey = normalizeComparableLocation(city);
+  return cityKey === normalizeComparableLocation(countryCode) || cityKey === normalizeComparableLocation(countryName);
+}
+
+function normalizeComparableLocation(value: string) {
+  return normalizeCity(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 export function normalizePollOptions(

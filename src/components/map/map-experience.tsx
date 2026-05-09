@@ -133,6 +133,7 @@ interface MapExperienceProps {
   activePoll?: MapPollRecord | null;
   fanVotes?: MapFanVoteSummary | null;
   availablePollOptions?: PollOptionInput[];
+  fanVoteOptions?: PollOptionInput[];
   headerEyebrow?: string;
   viewMode?: MapViewMode;
   layoutVariant?: "full";
@@ -355,6 +356,7 @@ export function MapExperience({
   activePoll = null,
   fanVotes = null,
   availablePollOptions = EMPTY_POLL_OPTIONS,
+  fanVoteOptions,
   headerEyebrow,
   viewMode,
 }: MapExperienceProps) {
@@ -389,13 +391,12 @@ export function MapExperience({
   const [mapVoteCity, setMapVoteCity] = useState("");
   const [mapVoteBusy, setMapVoteBusy] = useState(false);
   const [mapVoteError, setMapVoteError] = useState<string | null>(null);
+  const resolvedFanVoteOptions = fanVoteOptions?.length ? fanVoteOptions : availablePollOptions;
   const [sponsorItems, setSponsorItems] = useState<MapRailSponsor[]>(sponsors);
   const [videoExitPrompt, setVideoExitPrompt] = useState<VideoExitPromptState | null>(null);
   const [videoPlaybackCommand, setVideoPlaybackCommand] = useState<{ id: number; action: "pause" | "play" } | null>(null);
   const demoSponsorsBaselineRef = useRef<MapRailSponsor[]>(sponsors);
-  const [isDesktopViewport, setIsDesktopViewport] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : false
-  );
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
   const videoActivity = useLocalVideoActivity();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const videosRailRef = useRef<HTMLDivElement | null>(null);
@@ -600,6 +601,7 @@ export function MapExperience({
   const canToggleViewerPreview = baseViewMode === "creator" || baseViewMode === "demo" || viewer.isOwner;
   const resolvedViewMode: MapViewMode = isPreviewingViewer && canToggleViewerPreview ? "viewer" : baseViewMode;
   const isDemoMode = resolvedViewMode === "demo";
+  const canUseOpenFanVote = Boolean(channelId && resolvedViewMode === "viewer" && !isDemoMode);
   const canUseAdminPanels = resolvedViewMode === "creator" || resolvedViewMode === "demo";
   const hideLivePollMetrics = Boolean(
     pollState && pollState.status === "live" && !viewer.isOwner && !viewer.isAuthenticated
@@ -802,6 +804,7 @@ export function MapExperience({
     const normalized = String(countryCode || "").toUpperCase();
     if (!normalized) return "";
     return (
+      resolvedFanVoteOptions.find((country) => country.country_code === normalized)?.country_name ||
       availablePollOptions.find((country) => country.country_code === normalized)?.country_name ||
       countryBuckets.find((country) => country.country_code === normalized)?.country_name ||
       items.find((video) => String(video.country_code || "").toUpperCase() === normalized)?.country_name ||
@@ -827,7 +830,7 @@ export function MapExperience({
   function handleMapCountrySelect(countryCode: string | null) {
     const normalized = countryCode ? String(countryCode).toUpperCase() : null;
     selectCountry(normalized);
-    if (!normalized || resolvedViewMode !== "viewer" || !channelId || isDemoMode) {
+    if (!normalized || !canUseOpenFanVote) {
       setMapVotePrompt(null);
       return;
     }
@@ -849,7 +852,7 @@ export function MapExperience({
     }
 
     setMapVoteScope("country");
-    const option = availablePollOptions.find((entry) => entry.country_code === normalized) || null;
+    const option = resolvedFanVoteOptions.find((entry) => entry.country_code === normalized) || null;
     setMapVoteCity(option?.cities[0]?.city || "");
     setMapVoteOpen(false);
     setMapVoteError(null);
@@ -863,8 +866,8 @@ export function MapExperience({
   const selectedVoteCountryOption = useMemo(() => {
     const promptCountryCode = mapVotePrompt?.countryCode;
     if (!promptCountryCode) return null;
-    return availablePollOptions.find((country) => country.country_code === promptCountryCode) || null;
-  }, [availablePollOptions, mapVotePrompt?.countryCode]);
+    return resolvedFanVoteOptions.find((country) => country.country_code === promptCountryCode) || null;
+  }, [resolvedFanVoteOptions, mapVotePrompt?.countryCode]);
 
   async function submitOpenFanVote() {
     if (!channelId || !mapVotePrompt || mapVotePrompt.status !== "confirm") return;
@@ -2675,71 +2678,6 @@ function MapCenterStage({
         </div>
       ) : null}
 
-      {mapVotePrompt ? (
-        <div className="pointer-events-none absolute left-1/2 top-24 z-[672] w-[min(420px,calc(100vw-3rem))] -translate-x-1/2">
-          <div className="pointer-events-auto rounded-xl border border-white/10 bg-[#07101a]/92 p-3 text-[#e8edf3] shadow-[0_26px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
-            {mapVotePrompt.status === "confirm" ? (
-              <div className="flex items-center justify-between gap-3">
-                <p className="min-w-0 text-[12px] leading-5">
-                  ¿Quieres votar por{" "}
-                  <span className="font-semibold text-[#f5f7fb]">
-                    {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}
-                  </span>
-                  ?
-                </p>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(90,216,140,0.45)] bg-[rgba(90,216,140,0.16)] text-[#d6ffe2] transition hover:bg-[rgba(90,216,140,0.25)]"
-                    onClick={() => setMapVoteOpen(true)}
-                    aria-label="Confirmar voto"
-                  >
-                    <Check size={14} weight="bold" />
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,90,80,0.45)] bg-[rgba(255,90,80,0.12)] text-[#ffd3cf] transition hover:bg-[rgba(255,90,80,0.2)]"
-                    onClick={() => setMapVotePrompt(null)}
-                    aria-label="Cancelar voto"
-                  >
-                    <X size={14} weight="bold" />
-                  </button>
-                </div>
-              </div>
-            ) : mapVotePrompt.status === "cooldown" ? (
-              <div className="flex items-center justify-between gap-3">
-                <p className="min-w-0 text-[12px] leading-5 text-[#ffd7d2]">
-                  Ya votaste esta semana para {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}. Podrás votar de nuevo en{" "}
-                  <span className="font-semibold text-[#ffd7d2]">{formatRemainingCountdown(mapVotePromptRemainingMs)}</span>.
-                </p>
-                <button
-                  type="button"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/[0.06] text-[#dbe1e7] transition hover:bg-white/[0.12]"
-                  onClick={() => setMapVotePrompt(null)}
-                  aria-label="Cerrar aviso"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-3">
-                <p className="min-w-0 text-[12px] leading-5 text-[#ffd7d2]">
-                  Hay una votación live activa para {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}. Vota desde el panel de Fan Vote.
-                </p>
-                <button
-                  type="button"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/[0.06] text-[#dbe1e7] transition hover:bg-white/[0.12]"
-                  onClick={() => setMapVotePrompt(null)}
-                  aria-label="Cerrar aviso"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
-
       <div
         style={cardCenterStyle}
         className="pointer-events-none absolute inset-x-0 top-[var(--map-card-center-top-clearance)] bottom-[var(--map-card-center-bottom-clearance)] z-[740] hidden px-4 lg:block xl:px-5"
@@ -2765,6 +2703,73 @@ function MapCenterStage({
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[680] px-2 pb-2 md:px-3 md:pb-3 lg:px-4 lg:pb-4">
+        {mapVotePrompt ? (
+          <div className="pointer-events-none mx-auto mb-2 w-full max-w-[760px]">
+            <div className="pointer-events-auto mx-auto w-[min(420px,calc(100vw-3rem))] rounded-xl border border-white/10 bg-[#07101a]/92 p-3 text-[#e8edf3] shadow-[0_26px_80px_-44px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
+              {mapVotePrompt.status === "confirm" ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 text-[12px] leading-5">
+                    ¿Quieres votar por{" "}
+                    <span className="font-semibold text-[#f5f7fb]">
+                      {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}
+                    </span>
+                    ?
+                  </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(90,216,140,0.45)] bg-[rgba(90,216,140,0.16)] text-[#d6ffe2] transition hover:bg-[rgba(90,216,140,0.25)]"
+                      onClick={() => setMapVoteOpen(true)}
+                      aria-label="Confirmar voto"
+                    >
+                      <Check size={14} weight="bold" />
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,90,80,0.45)] bg-[rgba(255,90,80,0.12)] text-[#ffd3cf] transition hover:bg-[rgba(255,90,80,0.2)]"
+                      onClick={() => setMapVotePrompt(null)}
+                      aria-label="Cancelar voto"
+                    >
+                      <X size={14} weight="bold" />
+                    </button>
+                  </div>
+                </div>
+              ) : mapVotePrompt.status === "cooldown" ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 text-[12px] leading-5 text-[#ffd7d2]">
+                    Ya votaste esta semana para {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}.
+                    <span className="block">
+                      Podrás votar de nuevo en{" "}
+                      <span className="font-semibold text-[#ffd7d2]">{formatRemainingCountdown(mapVotePromptRemainingMs)}</span>.
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/[0.06] text-[#dbe1e7] transition hover:bg-white/[0.12]"
+                    onClick={() => setMapVotePrompt(null)}
+                    aria-label="Cerrar aviso"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 text-[12px] leading-5 text-[#ffd7d2]">
+                    Hay una votación live activa para {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}. Vota desde el panel de Fan Vote.
+                  </p>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/[0.06] text-[#dbe1e7] transition hover:bg-white/[0.12]"
+                    onClick={() => setMapVotePrompt(null)}
+                    aria-label="Cerrar aviso"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
         <SuggestedDestinations
           videos={suggestedVideos}
           activeTab={desktopMapTab}
@@ -2778,8 +2783,8 @@ function MapCenterStage({
       </div>
 
       <Dialog open={mapVoteOpen} onOpenChange={setMapVoteOpen}>
-        <DialogContent className="tm-surface-strong max-w-[min(620px,calc(100%-1.5rem))] border-white/10 bg-[#050a12]/96 text-[#f1f1f1]">
-          <DialogHeader>
+        <DialogContent className="tm-surface-strong max-w-[min(620px,calc(100%-1.5rem))] justify-items-center border-white/10 bg-[#050a12]/96 text-center text-[#f1f1f1]">
+          <DialogHeader className="items-center text-center">
             <DialogTitle className="text-[#f5f7fb]">
               Votar destino: {votePromptCountryCode ? `${countryCodeToFlag(votePromptCountryCode)} ` : ""}{votePromptCountryName || "País"}
             </DialogTitle>
@@ -2788,7 +2793,7 @@ function MapCenterStage({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="w-full max-w-md space-y-4">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 type="button"
@@ -2807,6 +2812,7 @@ function MapCenterStage({
                 onClick={() => {
                   if (!canVoteByCountryCity) return;
                   setMapVoteScope("city");
+                  setMapVoteCity((current) => current || selectedVoteCountryOption?.cities[0]?.city || "");
                 }}
                 disabled={!canVoteByCountryCity}
                 className={cn(
@@ -2824,29 +2830,21 @@ function MapCenterStage({
               canVoteByCountryCity ? (
                 <div className="space-y-2">
                   <p className="text-[12px] uppercase tracking-[0.14em] text-[#8f98a3]">Ciudades disponibles</p>
-                  <div className="grid max-h-[220px] gap-2 overflow-y-auto pr-1">
-                    {selectedVoteCountryOption?.cities.map((entry) => {
-                      const isActive = mapVoteCity === entry.city;
-                      return (
-                        <button
-                          key={entry.city}
-                          type="button"
-                          onClick={() => setMapVoteCity(entry.city)}
-                          className={cn(
-                            "rounded-lg border px-3 py-2 text-left text-[12px] transition-colors",
-                            isActive
-                              ? "border-[rgba(255,90,61,0.34)] bg-[rgba(255,90,61,0.14)] text-[#f1f1f1]"
-                              : "border-white/10 bg-white/[0.03] text-[#aab2bc]"
-                          )}
-                        >
-                          {entry.city}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <select
+                    aria-label="Elegir ciudad recomendada"
+                    value={mapVoteCity}
+                    onChange={(event) => setMapVoteCity(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-white/10 bg-[#07101a] px-3 text-center text-[13px] text-[#f1f1f1] outline-none transition focus:border-[rgba(255,90,61,0.55)] focus:ring-2 focus:ring-[rgba(255,90,61,0.18)]"
+                  >
+                    {selectedVoteCountryOption?.cities.map((entry) => (
+                      <option key={entry.city} value={entry.city} className="bg-[#07101a] text-[#f1f1f1]">
+                        {entry.city}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               ) : (
-                <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-[#aab2bc]">
+                <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-[12px] text-[#aab2bc]">
                   Este país no tiene ciudades cargadas todavía. Se votará el país completo.
                 </p>
               )
@@ -2854,7 +2852,7 @@ function MapCenterStage({
 
             {mapVoteError ? <p className="text-[12px] text-[#ff9d9d]">{mapVoteError}</p> : null}
 
-            <div className="flex justify-end">
+            <div className="flex justify-center">
               <Button
                 type="button"
                 onClick={() => void submitOpenFanVote()}
