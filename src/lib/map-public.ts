@@ -362,7 +362,7 @@ async function loadPublicMapPayloadByChannelRef(
       role: sessionUser?.role || "viewer",
       isSuperAdmin,
       shareUrl: buildPublicShareUrl(channelRef.channel_handle || channelRef.username),
-      adminUrl: isOwner || isSuperAdmin ? `/dashboard?channelId=${encodeURIComponent(channelRef.id)}` : null,
+      adminUrl: isOwner || isSuperAdmin ? `/creator-panel?channelId=${encodeURIComponent(channelRef.id)}` : null,
     },
     sponsors,
     activePoll,

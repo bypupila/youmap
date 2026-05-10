@@ -16,6 +16,7 @@ import {
   Eye,
   EnvelopeSimple,
   GearSix,
+  GlobeHemisphereWest,
   House,
   LinkSimple,
   List,
@@ -69,8 +70,9 @@ type SyncState = "idle" | "running" | "success" | "error";
 type MobileMapTab = "overview" | "map" | "videos" | "community" | "more";
 type MapViewMode = "viewer" | "creator" | "demo";
 type DesktopMapTab = VideoActivityTab;
-type GlobeCommandAction = "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation";
+type GlobeCommandAction = "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation" | "collapse_cluster";
 type VideoPlaybackState = "playing" | "paused" | "ended";
+type FanVoteViewerInteraction = "live" | "simulated" | "disabled";
 type MapClientEventPayload = {
   countryCode?: string | null;
   youtubeVideoId?: string | null;
@@ -108,6 +110,25 @@ const DEMO_SPONSOR_FALLBACK: MapRailSponsor[] = [
   { ...getDemoSponsorByCountry("AR"), country_codes: ["AR"], logo_url: "/brands/iati.svg", isExample: true },
   { ...getDemoSponsorByCountry("MA"), country_codes: ["MA"], logo_url: "/brands/airbnb.svg", isExample: true },
 ];
+const DEMO_FAN_VOTE_SAMPLE: MapFanVoteSummary = {
+  total_votes: 64,
+  country_rankings: [
+    { country_code: "JP", country_name: "Japan", votes: 25 },
+    { country_code: "MX", country_name: "Mexico", votes: 22 },
+    { country_code: "IT", country_name: "Italy", votes: 17 },
+  ],
+  city_rankings: [
+    { country_code: "JP", country_name: "Japan", city: "Tokyo", votes: 14 },
+    { country_code: "MX", country_name: "Mexico", city: "CDMX", votes: 12 },
+    { country_code: "IT", country_name: "Italy", city: "Rome", votes: 9 },
+  ],
+  viewer_can_vote: true,
+  viewer_last_voted_at: null,
+  viewer_next_vote_at: null,
+  viewer_vote_country_code: null,
+  viewer_vote_city: null,
+  viewer_cooldown_remaining_ms: 0,
+};
 
 interface PollOptionInput {
   country_code: string;
@@ -283,6 +304,9 @@ type MapShellProps = {
   canToggleViewerPreview: boolean;
   isPreviewingViewer: boolean;
   isDemoMode: boolean;
+  creatorPanelHref: string | null;
+  showCreateMapCta: boolean;
+  fanVoteViewerInteraction: FanVoteViewerInteraction;
   desktopMapTab: DesktopMapTab;
   quickActivityCounts: {
     watched: number;
@@ -380,7 +404,8 @@ export function MapExperience({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopMapTab, setDesktopMapTab] = useState<DesktopMapTab>("all");
   const [isPreviewingViewer, setIsPreviewingViewer] = useState(false);
-  const [globeRotationEnabled, setGlobeRotationEnabled] = useState(true);
+  const [globeRotationEnabled, setGlobeRotationEnabled] = useState(false);
+  const [clusterExpanded, setClusterExpanded] = useState(false);
   const [globeCommand, setGlobeCommand] = useState<{ id: number; action: GlobeCommandAction } | null>(null);
   const [pollState, setPollState] = useState<MapPollRecord | null>(activePoll);
   const [fanVoteState, setFanVoteState] = useState<MapFanVoteSummary | null>(fanVotes);
@@ -598,14 +623,32 @@ export function MapExperience({
     };
   }, [items]);
   const baseViewMode: MapViewMode = viewMode || (viewer.isOwner ? "creator" : "viewer");
+  const isDemoMode = baseViewMode === "demo";
   const canToggleViewerPreview = baseViewMode === "creator" || baseViewMode === "demo" || viewer.isOwner;
   const resolvedViewMode: MapViewMode = isPreviewingViewer && canToggleViewerPreview ? "viewer" : baseViewMode;
-  const isDemoMode = resolvedViewMode === "demo";
-  const canUseOpenFanVote = Boolean(channelId && resolvedViewMode === "viewer" && !isDemoMode);
+  const isCreatorViewerPreview = resolvedViewMode === "viewer" && viewer.isOwner && !isDemoMode;
+  const canUseOpenFanVote = Boolean(channelId && resolvedViewMode === "viewer" && (isDemoMode || !viewer.isOwner));
   const canUseAdminPanels = resolvedViewMode === "creator" || resolvedViewMode === "demo";
+  const fanVoteViewerInteraction: FanVoteViewerInteraction = isCreatorViewerPreview
+    ? "disabled"
+    : resolvedViewMode === "viewer" && isDemoMode
+      ? "simulated"
+      : "live";
   const hideLivePollMetrics = Boolean(
     pollState && pollState.status === "live" && !viewer.isOwner && !viewer.isAuthenticated
   );
+  const creatorPanelHref = canUseAdminPanels && channelId
+    ? `/creator-panel?channelId=${encodeURIComponent(channelId)}${isDemoMode ? "&demo=1" : ""}`
+    : null;
+  const showCreateMapCta = resolvedViewMode === "viewer" && (!viewer.isAuthenticated || isDemoMode);
+
+  useEffect(() => {
+    if (!isDemoMode) return;
+    setFanVoteState((current) => {
+      if ((current?.total_votes || 0) > 0) return current;
+      return DEMO_FAN_VOTE_SAMPLE;
+    });
+  }, [isDemoMode]);
 
   useEffect(() => {
     if (!isDemoMode) return;
@@ -618,7 +661,7 @@ export function MapExperience({
     ? {
         ...viewer,
         isOwner: true,
-        adminUrl: viewer.adminUrl || (channelId ? `/dashboard?channelId=${encodeURIComponent(channelId)}` : "/dashboard?demo=1"),
+        adminUrl: viewer.adminUrl || creatorPanelHref,
       }
     : {
         ...viewer,
@@ -827,9 +870,13 @@ export function MapExperience({
     }
   }
 
-  function handleMapCountrySelect(countryCode: string | null) {
+  function handleMapCountrySelect(countryCode: string | null, source: "polygon" | "cluster" | "country" = "country") {
     const normalized = countryCode ? String(countryCode).toUpperCase() : null;
     selectCountry(normalized);
+    if (source === "cluster") {
+      setMapVotePrompt(null);
+      return;
+    }
     if (!normalized || !canUseOpenFanVote) {
       setMapVotePrompt(null);
       return;
@@ -875,6 +922,63 @@ export function MapExperience({
     const selectedOption = selectedVoteCountryOption;
     const hasCityOptions = Boolean(selectedOption && selectedOption.cities.length > 0);
     const voteScope = hasCityOptions ? mapVoteScope : "country";
+
+    if (isDemoMode) {
+      const nowIso = new Date().toISOString();
+      const nextVoteAtIso = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const selectedCityValue = voteScope === "city" ? mapVoteCity : null;
+      setFanVoteState((current) => {
+        const base = current || DEMO_FAN_VOTE_SAMPLE;
+        const baseCountries = base.country_rankings.length ? base.country_rankings : DEMO_FAN_VOTE_SAMPLE.country_rankings;
+        const baseCities = base.city_rankings.length ? base.city_rankings : DEMO_FAN_VOTE_SAMPLE.city_rankings;
+        const countryName = resolveCountryName(selectedCountryCode);
+
+        const nextCountries = [...baseCountries];
+        const countryIndex = nextCountries.findIndex((entry) => entry.country_code === selectedCountryCode);
+        if (countryIndex >= 0) {
+          nextCountries[countryIndex] = { ...nextCountries[countryIndex], votes: nextCountries[countryIndex].votes + 1 };
+        } else {
+          nextCountries.push({ country_code: selectedCountryCode, country_name: countryName, votes: 1 });
+        }
+
+        const nextCities = [...baseCities];
+        if (selectedCityValue) {
+          const cityIndex = nextCities.findIndex((entry) => entry.country_code === selectedCountryCode && entry.city === selectedCityValue);
+          if (cityIndex >= 0) {
+            nextCities[cityIndex] = { ...nextCities[cityIndex], votes: nextCities[cityIndex].votes + 1 };
+          } else {
+            nextCities.push({
+              country_code: selectedCountryCode,
+              country_name: countryName,
+              city: selectedCityValue,
+              votes: 1,
+            });
+          }
+        }
+
+        return {
+          ...base,
+          total_votes: base.total_votes + 1,
+          country_rankings: nextCountries.sort((a, b) => b.votes - a.votes).slice(0, 24),
+          city_rankings: nextCities.sort((a, b) => b.votes - a.votes).slice(0, 24),
+          viewer_can_vote: false,
+          viewer_last_voted_at: nowIso,
+          viewer_next_vote_at: nextVoteAtIso,
+          viewer_vote_country_code: selectedCountryCode,
+          viewer_vote_city: selectedCityValue,
+          viewer_cooldown_remaining_ms: 7 * 24 * 60 * 60 * 1000,
+        };
+      });
+      setMapVoteOpen(false);
+      setMapVoteError(null);
+      setMapVotePrompt({
+        status: "cooldown",
+        countryCode: selectedCountryCode,
+        countryName: mapVotePrompt.countryName,
+        remainingMs: 7 * 24 * 60 * 60 * 1000,
+      });
+      return;
+    }
 
     setMapVoteBusy(true);
     setMapVoteError(null);
@@ -1298,6 +1402,9 @@ export function MapExperience({
     canToggleViewerPreview,
     isPreviewingViewer,
     isDemoMode,
+    creatorPanelHref,
+    showCreateMapCta,
+    fanVoteViewerInteraction,
     desktopMapTab,
     quickActivityCounts: {
       watched: watchedVideos.length,
@@ -1328,12 +1435,16 @@ export function MapExperience({
     selectCity,
     goBackLocationFilter,
     onUnifiedBack: () => {
+      if (clusterExpanded) {
+        issueGlobeCommand("collapse_cluster");
+        return;
+      }
       requestVideoExit(() => {
         setDesktopMapTab("all");
         goBackLocationFilter();
       });
     },
-    showUnifiedBack: Boolean(selectedCountryCode || selectedCityName || desktopMapTab !== "all"),
+    showUnifiedBack: Boolean(clusterExpanded || selectedCountryCode || selectedCityName || desktopMapTab !== "all"),
     hoveredCountryPin,
     mapVotePrompt,
     setMapVotePrompt,
@@ -1374,6 +1485,7 @@ export function MapExperience({
           onActiveVideoChange={setActiveVideo}
           onPinnedVideoChange={(video) => (video ? requestOpenVideo(video) : requestVideoExit(() => setSelectedVideo(null)))}
           onCountrySelect={handleMapCountrySelect}
+          onClusterExpandedChange={setClusterExpanded}
           onCountryHoverChange={setHoveredCountryPin}
           focusCountryCode={focusCountryCode}
           focusVideoId={focusVideoId}
@@ -1401,6 +1513,7 @@ export function MapExperience({
         onActiveVideoChange={setActiveVideo}
         onPinnedVideoChange={(video) => (video ? requestOpenVideo(video) : requestVideoExit(() => setSelectedVideo(null)))}
         onCountrySelect={handleMapCountrySelect}
+        onClusterExpandedChange={setClusterExpanded}
         onCountryHoverChange={setHoveredCountryPin}
         focusCountryCode={focusCountryCode}
         focusVideoId={focusVideoId}
@@ -1528,7 +1641,8 @@ function MobileMapMenu({
   setMissingVideosOpen,
   copyShareUrl,
   copyState,
-  isDemoMode,
+  creatorPanelHref,
+  canUseAdminPanels,
   selectCountry,
   setMobileTab,
 }: MapShellProps & { setMobileTab: Dispatch<SetStateAction<MobileMapTab>> }) {
@@ -1581,7 +1695,7 @@ function MobileMapMenu({
               />
               <MobileMenuButton icon={UsersThree} label="Sponsors" count={sponsors.length || undefined} onClick={() => goToTab("community")} />
               {viewer.isOwner ? <MobileMenuButton icon={GearSix} label="Ajustes" count={pendingManual.length || undefined} onClick={() => { setMissingVideosOpen(true); closeMenu(); }} /> : null}
-              {viewer.isOwner && viewer.adminUrl ? <MobileMenuButton icon={ChartBar} label="Panel admin" href={viewer.adminUrl} /> : null}
+              {creatorPanelHref && canUseAdminPanels ? <MobileMenuButton icon={ChartBar} label="Panel" href={creatorPanelHref} /> : null}
             </nav>
 
             <div className="mt-auto space-y-2">
@@ -1595,12 +1709,10 @@ function MobileMapMenu({
                 <MapPin size={15} />
                 Abrir mapa publico
               </Link>
-              {!isDemoMode ? (
-                <button type="button" className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]" onClick={copyShareUrl}>
-                  {copyState === "copied" ? <Check size={15} /> : <Copy size={15} />}
-                  {copyState === "copied" ? "Enlace copiado" : "Copiar enlace"}
-                </button>
-              ) : null}
+              <button type="button" className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]" onClick={copyShareUrl}>
+                {copyState === "copied" ? <Check size={15} /> : <Copy size={15} />}
+                {copyState === "copied" ? "Enlace copiado" : "Compartir"}
+              </button>
             </div>
           </motion.aside>
         </motion.div>
@@ -1946,9 +2058,9 @@ function MobileStatsGrid({
 }) {
   return (
     <div className={cn("grid overflow-hidden rounded-lg border border-white/10 bg-white/[0.035]", cityCount > 0 ? "grid-cols-3" : "grid-cols-2", className)}>
-      <OverviewMetric label="Paises" value={resolvedSummary.total_countries} tone="white" />
-      {cityCount > 0 ? <OverviewMetric label="Ciudades" value={cityCount} tone="white" /> : null}
-      <OverviewMetric label="Videos" value={resolvedSummary.total_videos} tone="red" />
+      <OverviewMetric icon={GlobeHemisphereWest} label="Paises" value={resolvedSummary.total_countries} tone="red" />
+      {cityCount > 0 ? <OverviewMetric icon={MapPin} label="Ciudades" value={cityCount} tone="red" /> : null}
+      <OverviewMetric icon={Video} label="Videos" value={resolvedSummary.total_videos} tone="red" />
     </div>
   );
 }
@@ -2232,7 +2344,8 @@ function MapTopBar({
   setSearchQuery,
   locateFirstSearchResult,
   youtubeDataHealth,
-  viewer,
+  creatorPanelHref,
+  showCreateMapCta,
   copyShareUrl,
   copyState,
   toggleViewerPreview,
@@ -2240,10 +2353,8 @@ function MapTopBar({
   canUseAdminPanels,
   canToggleViewerPreview,
   isPreviewingViewer,
-  isDemoMode,
   headerEyebrow,
 }: MapShellProps) {
-  const panelHref = viewer.adminUrl ? `${viewer.adminUrl}${viewer.adminUrl.includes("?") ? "&" : "?"}panel=creator` : null;
   const lastExtractionAt = channel.last_synced_at || youtubeDataHealth.latestRefreshedAt || null;
 
   return (
@@ -2279,17 +2390,17 @@ function MapTopBar({
         </div>
 
         <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
-          {canUseAdminPanels && panelHref ? (
+          {canUseAdminPanels && creatorPanelHref ? (
             <Button asChild type="button" size="sm" className="shrink-0 bg-[#c91f18] text-white hover:bg-[#e03128]">
-              <Link href={`${panelHref}&focus=missing-videos`}>
+              <Link href={`${creatorPanelHref}&tab=ops&focus=missing-videos`}>
                 <WarningCircle size={14} />
                 Videos faltantes
               </Link>
             </Button>
           ) : null}
-          {canUseAdminPanels && panelHref ? (
+          {canUseAdminPanels && creatorPanelHref ? (
             <Button asChild size="sm" variant="outline" className="shrink-0">
-              <Link href={panelHref}>
+              <Link href={creatorPanelHref}>
                 <GearSix size={14} />
                 Panel
               </Link>
@@ -2297,21 +2408,21 @@ function MapTopBar({
           ) : null}
           {canToggleViewerPreview ? (
             <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={toggleViewerPreview}>
-              {isPreviewingViewer ? "Volver al Creator" : "Vista del Viewer"}
+              {isPreviewingViewer ? "Creador" : "Viewer"}
             </Button>
           ) : null}
-          {!isDemoMode ? (
-            <Button type="button" size="sm" className="shrink-0 bg-[#e1543a] hover:bg-[#ee6b49]" onClick={copyShareUrl}>
-              {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
-              {copyState === "copied" ? "Copiado" : "Copiar canal"}
-            </Button>
-          ) : null}
-          <Button asChild size="sm" variant="outline" className="shrink-0">
-            <Link href="/onboarding">
-              <Plus size={14} />
-              Register
-            </Link>
+          <Button type="button" size="sm" className="shrink-0 bg-[#e1543a] hover:bg-[#ee6b49]" onClick={copyShareUrl}>
+            {copyState === "copied" ? <Check size={14} /> : <LinkSimple size={14} />}
+            {copyState === "copied" ? "Copiado" : "Compartir"}
           </Button>
+          {showCreateMapCta ? (
+            <Button asChild size="sm" variant="outline" className="shrink-0">
+              <Link href="/onboarding">
+                <Plus size={14} />
+                Crear mapa
+              </Link>
+            </Button>
+          ) : null}
           <span className="hidden max-w-[150px] truncate text-[11px] text-[#9da5ae] 2xl:block">{channel.canonicalHandle ? `@${channel.canonicalHandle}` : headerEyebrow || "Mapa público"}</span>
         </div>
       </div>
@@ -2334,6 +2445,8 @@ function MapOverviewRail({
   selectedCountryCityBuckets,
   selectedCountryVideos,
   selectedCityVideos,
+  mapVideos,
+  videoActivity,
   selectCountry,
   selectCity,
   onUnifiedBack,
@@ -2343,19 +2456,31 @@ function MapOverviewRail({
   const hasCountrySelection = Boolean(selectedCountryCode);
   const activeLocationCount = selectedCityName ? selectedCityVideos.length : selectedCountryVideos.length;
   const hasCityDrilldown = selectedCityName && selectedCityVideos.length > 0;
-  const topQuickFilters = [
-    { id: "featured" as const, label: "Favoritos", value: quickActivityCounts.featured, icon: Star },
-    { id: "saved" as const, label: "Por ver", value: quickActivityCounts.saved, icon: BookmarkSimple },
-  ];
-  const bottomQuickFilters = [
-    { id: "watched" as const, label: "Vistos", value: quickActivityCounts.watched, icon: Eye },
-    { id: "incomplete" as const, label: "Incompletos", value: quickActivityCounts.incomplete, icon: Clock },
-  ];
+  const seenVideosByCountry = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const video of mapVideos) {
+      const videoId = String(video.youtube_video_id || "").trim();
+      const code = String(video.country_code || "").toUpperCase();
+      if (!videoId || !code || !videoActivity.seenIds.has(videoId)) continue;
+      map.set(code, (map.get(code) || 0) + 1);
+    }
+    return map;
+  }, [mapVideos, videoActivity.seenIds]);
+  const quickActivityRows = [
+    [
+      { id: "featured" as const, label: "Favoritos", value: quickActivityCounts.featured, icon: Star },
+      { id: "saved" as const, label: "Por ver", value: quickActivityCounts.saved, icon: BookmarkSimple },
+    ],
+    [
+      { id: "watched" as const, label: "Vistos", value: quickActivityCounts.watched, icon: Eye },
+      { id: "incomplete" as const, label: "Incompletos", value: quickActivityCounts.incomplete, icon: Clock },
+    ],
+  ] satisfies Array<Array<{ id: DesktopMapTab; label: string; value: number; icon: Icon }>>;
 
   return (
     <aside ref={videosRailRef} className="pointer-events-auto order-2 min-h-0 lg:order-none lg:overflow-hidden">
-      <Card className="tm-surface-strong flex min-h-[420px] flex-col rounded-xl border-white/10 lg:h-full">
-        <CardHeader className="border-b border-white/10 px-3 pb-3 pt-3">
+      <Card className="tm-surface-strong flex min-h-[420px] flex-col gap-2 rounded-xl border-white/10 pt-2 lg:h-full">
+        <CardHeader className="px-3 pb-2 pt-1">
           <div className="flex items-start gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <ChannelAvatar channel={channel} size="sm" />
@@ -2369,76 +2494,43 @@ function MapOverviewRail({
 
         <CardContent className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-3">
           <div className={cn("grid overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]", cityCount > 0 ? "grid-cols-3" : "grid-cols-2")}>
-            <OverviewMetric label="Paises" value={resolvedSummary.total_countries} tone="white" />
-            {cityCount > 0 ? <OverviewMetric label="Ciudades" value={cityCount} tone="white" /> : null}
-            <OverviewMetric label="Videos" value={resolvedSummary.total_videos} tone="red" />
+            <OverviewMetric icon={GlobeHemisphereWest} label="Paises" value={resolvedSummary.total_countries} tone="red" />
+            {cityCount > 0 ? <OverviewMetric icon={MapPin} label="Ciudades" value={cityCount} tone="red" /> : null}
+            <OverviewMetric icon={Video} label="Videos" value={resolvedSummary.total_videos} tone="red" />
           </div>
 
           <div className="mt-3 space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              {topQuickFilters.map((filter) => {
-                const isActive = desktopMapTab === filter.id;
-                const Icon = filter.icon;
-                return (
-                  <button
-                    key={filter.id}
-                    type="button"
-                    onClick={() => setDesktopMapTab((current) => (current === filter.id ? "all" : filter.id))}
-                    className={cn(
-                      "tym-nav-pill !flex-col min-h-11 h-11 rounded-lg px-2 py-1",
-                      isActive
-                        ? "border-[#ff3b30] bg-[rgba(255,59,48,0.12)] text-[#ff3b30]"
-                        : "border-white/10 bg-[#07101a]/78 text-[#d8dee6]"
-                    )}
-                  >
-                    <span className="inline-flex min-w-0 items-center gap-1.5 text-[10px] leading-none">
-                      <Icon size={12} weight={isActive ? "fill" : "regular"} />
-                      <span className="truncate">{filter.label}</span>
-                    </span>
-                    <span
+            {quickActivityRows.map((row) => (
+              <div key={row.map((filter) => filter.id).join("-")} className="grid grid-cols-2 gap-2">
+                {row.map((filter) => {
+                  const isActive = desktopMapTab === filter.id;
+                  const Icon = filter.icon;
+                  return (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      onClick={() => setDesktopMapTab((current) => (current === filter.id ? "all" : filter.id))}
                       className={cn(
-                        "mt-1 inline-flex h-4 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] leading-none",
-                        isActive ? "bg-[rgba(255,59,48,0.24)] text-[#ff3b30]" : "bg-white/[0.08] text-[#cdd5de]"
+                        "tym-nav-pill h-[68px] min-h-[68px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-center",
+                        isActive
+                          ? "border-[#ff3b30] bg-[rgba(255,59,48,0.12)] text-[#ff3b30]"
+                          : "border-white/10 bg-[#07101a]/78 text-[#d8dee6]"
                       )}
                     >
-                      {formatNumber(filter.value)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {bottomQuickFilters.map((filter) => {
-                const isActive = desktopMapTab === filter.id;
-                const Icon = filter.icon;
-                return (
-                  <button
-                    key={filter.id}
-                    type="button"
-                    onClick={() => setDesktopMapTab((current) => (current === filter.id ? "all" : filter.id))}
-                    className={cn(
-                      "tym-nav-pill !flex-col min-h-11 h-11 rounded-lg px-2 py-1",
-                      isActive
-                        ? "border-[#ff3b30] bg-[rgba(255,59,48,0.12)] text-[#ff3b30]"
-                        : "border-white/10 bg-[#07101a]/78 text-[#d8dee6]"
-                    )}
-                  >
-                    <span className="inline-flex min-w-0 items-center gap-1.5 text-[10px] leading-none">
-                      <Icon size={12} weight={isActive ? "fill" : "regular"} />
-                      <span className="truncate">{filter.label}</span>
-                    </span>
-                    <span
-                      className={cn(
-                        "mt-1 inline-flex h-4 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] leading-none",
-                        isActive ? "bg-[rgba(255,59,48,0.24)] text-[#ff3b30]" : "bg-white/[0.08] text-[#cdd5de]"
-                      )}
-                    >
-                      {formatNumber(filter.value)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                      <span className="flex w-full justify-center">
+                        <Icon size={16} weight={isActive ? "fill" : "regular"} className="shrink-0" />
+                      </span>
+                      <span className="flex min-w-0 items-center justify-center text-[10px] uppercase leading-none tracking-[0.08em]">
+                        <span className="truncate">{filter.label}</span>
+                      </span>
+                      <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-[#ff3b30] px-1.5 font-mono text-[10px] font-semibold leading-none text-white">
+                        {formatNumber(filter.value)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-3">
@@ -2508,26 +2600,37 @@ function MapOverviewRail({
               ) : countryBuckets.length > 0 ? (
                 countryBuckets.map((bucket) => {
                   const isActive = selectedCountryCode === bucket.country_code;
+                  const seenCount = seenVideosByCountry.get(String(bucket.country_code || "").toUpperCase()) || 0;
+                  const completionRatio = bucket.count > 0 ? Math.max(0, Math.min(1, seenCount / bucket.count)) : 0;
+                  const completionPercent = Math.round(completionRatio * 100);
                   return (
                     <button
                       key={bucket.country_code}
                       type="button"
                       onClick={() => selectCountry(bucket.country_code)}
                       className={cn(
-                        "w-full rounded-lg border p-2 text-left transition",
+                        "relative w-full overflow-hidden rounded-lg border p-2 text-left transition",
                         isActive ? "border-[#ff3f38]/60 bg-[rgba(225, 84, 58,0.12)]" : "border-white/10 bg-white/[0.035] hover:bg-white/[0.07]"
                       )}
                     >
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-y-0 left-0 bg-[rgba(225,84,58,0.34)]"
+                        style={{ width: `${completionPercent}%` }}
+                      />
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2">
+                        <div className="relative z-10 flex min-w-0 items-center gap-2">
                           <CountryCodeMark code={bucket.country_code} compact />
                           <p className="truncate text-[12px] font-semibold text-[#f4f7fb]">{bucket.country_name}</p>
                         </div>
-                        <Badge variant="outline" className="h-5 rounded-full border-white/15 bg-white/[0.04] px-2 text-[10px] leading-none text-[#d5dbe2]">
+                        <Badge variant="outline" className="relative z-10 h-5 rounded-full border-white/15 bg-white/[0.04] px-2 text-[10px] leading-none text-[#d5dbe2]">
                           {bucket.count}
                         </Badge>
                       </div>
-                      {bucket.cities.length > 0 ? <p className="mt-1 truncate text-[10px] text-[#9da5ae]">{bucket.cities.length} ciudad(es) detectadas</p> : null}
+                      <div className="relative z-10 mt-1 flex items-center justify-between gap-2">
+                        <p className="truncate text-[10px] text-[#9da5ae]">{bucket.cities.length > 0 ? `${bucket.cities.length} ciudad(es) detectadas` : "Sin ciudades detectadas"}</p>
+                        <p className="shrink-0 text-[10px] text-[#ffd0cc]">{completionPercent}% visto</p>
+                      </div>
                     </button>
                   );
                 })
@@ -2544,6 +2647,7 @@ function MapOverviewRail({
 
 function MapCenterStage({
   desktopMapTab,
+  setDesktopMapTab,
   selectedCountryCode,
   selectedCountryName,
   windowFilter,
@@ -2599,18 +2703,45 @@ function MapCenterStage({
   return (
     <section className="pointer-events-none relative order-1 min-h-[520px] overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] lg:order-none lg:min-h-0">
       <div className="pointer-events-none absolute left-1/2 top-3 z-[660] w-[min(340px,calc(100vw-2rem))] -translate-x-1/2">
-        <div className="pointer-events-auto flex w-full gap-1 rounded-xl border border-white/10 bg-[#07101a]/88 p-1.5 backdrop-blur-2xl">
-          {(["all", "365", "90", "30"] as FilterWindow[]).map((option) => (
+        <div className="pointer-events-auto grid w-full grid-cols-4 gap-1 rounded-xl border border-white/10 bg-[#07101a]/88 p-1.5 backdrop-blur-2xl">
+          {([
+            { id: "all" as const, label: "Todos" },
+            { id: "365" as const, label: "365d" },
+            { id: "90" as const, label: "90d" },
+            { id: "30" as const, label: "30d" },
+          ]).map((option) => (
             <button
-              key={option}
+              key={option.id}
               type="button"
-              className="tym-nav-pill min-h-8 min-w-0 flex-1 px-2 text-[12px]"
-              data-active={option === windowFilter ? "true" : "false"}
-              onClick={() => setWindowFilter(option)}
+              className="tym-nav-pill min-h-7 min-w-0 px-1 text-[11px]"
+              data-active={option.id === windowFilter ? "true" : "false"}
+              onClick={() => setWindowFilter(option.id)}
             >
-              {option === "all" ? "Todos" : `${option}d`}
+              {option.label}
             </button>
           ))}
+          {([
+            { id: "featured" as const, label: "Favoritos", icon: Star },
+            { id: "saved" as const, label: "Por ver", icon: BookmarkSimple },
+            { id: "watched" as const, label: "Vistos", icon: Eye },
+            { id: "incomplete" as const, label: "Incompletos", icon: Clock },
+          ]).map((option) => {
+            const Icon = option.icon;
+            const active = desktopMapTab === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-label={option.label}
+                title={option.label}
+                className="tym-nav-pill min-h-7 min-w-0 px-1"
+                data-active={active ? "true" : "false"}
+                onClick={() => setDesktopMapTab((current) => (current === option.id ? "all" : option.id))}
+              >
+                <Icon size={13} weight={active ? "fill" : "regular"} />
+              </button>
+            );
+          })}
         </div>
         {showUnifiedBack ? (
           <button
@@ -2623,7 +2754,7 @@ function MapCenterStage({
         ) : null}
       </div>
 
-      <div className="pointer-events-auto absolute right-3 top-1/2 z-[650] hidden -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/86 backdrop-blur-2xl md:flex">
+      <div className="pointer-events-auto absolute right-3 top-[52%] z-[650] hidden -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07101a]/86 backdrop-blur-2xl md:flex">
         <button type="button" className="flex h-10 w-10 items-center justify-center text-[#dce4ed] transition hover:bg-white/[0.08]" onClick={() => { goBackLocationFilter(); issueGlobeCommand("reset_view"); }} aria-label="Volver al filtro anterior">
           <House size={16} />
         </button>
@@ -2885,6 +3016,7 @@ function MapRightRail({
   hideLivePollMetrics,
   sponsors,
   isDemoMode,
+  fanVoteViewerInteraction,
   syncState,
   syncError,
   lastSyncSummary,
@@ -2906,7 +3038,11 @@ function MapRightRail({
 }: MapShellProps) {
   const hasLivePoll = Boolean(pollState && pollState.status === "live");
   const showDestinationWinner = Boolean(hasLivePoll && pollState && pollState.total_votes > 0 && !hideLivePollMetrics);
-  const [isFanVoteClosed, setIsFanVoteClosed] = useState(false);
+  const hasFanVoteContent = Boolean(
+    hasLivePoll ||
+      (pollState?.total_votes || 0) > 0 ||
+      (fanVoteState?.total_votes || 0) > 0
+  );
 
   return (
     <aside className="pointer-events-auto order-3 flex min-h-0 flex-col gap-3 lg:order-none lg:overflow-y-auto lg:pr-1" data-map-scroll="true">
@@ -2943,24 +3079,8 @@ function MapRightRail({
         />
       ) : null}
 
-      {isFanVoteClosed ? (
-        <button
-          type="button"
-          onClick={() => setIsFanVoteClosed(false)}
-          className="pointer-events-auto inline-flex h-9 items-center justify-center rounded-lg border border-[rgba(255,90,61,0.45)] bg-transparent px-3 text-[12px] font-medium text-[#ff6b64] transition hover:bg-[rgba(255,90,61,0.08)]"
-        >
-          Mostrar fan vote
-        </button>
-      ) : (
+      {hasFanVoteContent || viewer.isOwner ? (
         <div ref={votesRailRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setIsFanVoteClosed(true)}
-            aria-label="Cerrar fan vote"
-            className="absolute right-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[rgba(255,90,61,0.45)] bg-transparent text-[#ff6b64] transition hover:bg-[rgba(255,90,61,0.08)]"
-          >
-            <X size={14} />
-          </button>
           {channelId ? (
             <FanVoteCard
               channelId={channelId}
@@ -2969,12 +3089,22 @@ function MapRightRail({
               fanVotes={fanVoteState}
               availableOptions={availablePollOptions}
               isDemoMode={isDemoMode}
+              viewerInteraction={fanVoteViewerInteraction}
               onPollChange={setPollState}
             />
           ) : (
             <FanVoteSummary candidates={destinationCandidates} onSelect={selectCountry} />
           )}
         </div>
+      ) : (
+        <Card className="tm-surface-strong rounded-xl border-white/10">
+          <CardHeader className="px-3 pb-2 pt-3">
+            <CardTitle className="text-[14px] font-semibold text-[#f5f7fb]">Fan Vote</CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3 pt-0">
+            <p className="text-[12px] text-[#9da5ae]">Fan Vote cerrado.</p>
+          </CardContent>
+        </Card>
       )}
 
       <div ref={sponsorsRailRef}>
@@ -3488,6 +3618,7 @@ function SponsorsRail({
   onSponsorImpression: (sponsor: MapRailSponsor) => void;
   onSponsorClick: (sponsor: MapRailSponsor) => void;
 }) {
+  const effectiveSponsors = isDemoMode && sponsors.length === 0 ? DEMO_SPONSOR_FALLBACK : sponsors;
   const [startIndex, setStartIndex] = useState(0);
   const [managerOpen, setManagerOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -3495,9 +3626,9 @@ function SponsorsRail({
   const [inquiriesLoading, setInquiriesLoading] = useState(false);
   const [inquiriesError, setInquiriesError] = useState<string | null>(null);
   const [updatingInquiryId, setUpdatingInquiryId] = useState<string | null>(null);
-  const maxStartIndex = Math.max(0, sponsors.length - 3);
+  const maxStartIndex = Math.max(0, effectiveSponsors.length - 3);
   const clampedStart = Math.min(startIndex, maxStartIndex);
-  const visibleSponsors = useMemo(() => sponsors.slice(clampedStart, clampedStart + 3), [clampedStart, sponsors]);
+  const visibleSponsors = useMemo(() => effectiveSponsors.slice(clampedStart, clampedStart + 3), [clampedStart, effectiveSponsors]);
   const canMoveLeft = clampedStart > 0;
   const canMoveRight = clampedStart < maxStartIndex;
   const canOpenInbox = viewer.isOwner && (isDemoMode || Boolean(channelId));
@@ -3597,7 +3728,7 @@ function SponsorsRail({
             </button>
           </div>
           <div className="flex items-center gap-1">
-            {sponsors.length > 0 ? (
+            {effectiveSponsors.length > 0 ? (
               <button
                 type="button"
                 onClick={() => setManagerOpen(true)}
@@ -3891,15 +4022,16 @@ function SponsorInboxDialog({
   );
 }
 
-function OverviewMetric({ label, value, tone }: { label: string; value: number; tone: "white" | "red" }) {
+function OverviewMetric({ icon: Icon, label, value, tone }: { icon: Icon; label: string; value: number; tone: "white" | "red" }) {
   const colors = {
     white: "text-[#f5f7fb]",
     red: "text-[#ff5a52]",
   };
 
   return (
-    <div className="border-r border-white/10 px-3 py-3 last:border-r-0">
-      <p className={cn("text-center text-[20px] font-semibold leading-6", colors[tone])}>{formatExactNumber(value)}</p>
+    <div className="border-r border-white/10 px-3 py-2.5 last:border-r-0">
+      <Icon size={20} weight="fill" className="mx-auto mb-1 text-[#ff5a52]" />
+      <p className={cn("text-center font-mono text-[20px] font-semibold leading-6", colors[tone])}>{formatExactNumber(value)}</p>
       <p className="mt-1 text-center text-[11px] text-[#9da5ae]">{label}</p>
     </div>
   );

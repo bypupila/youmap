@@ -127,7 +127,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               role: sessionUserRole,
               isSuperAdmin: sessionUserRole === "superadmin",
               shareUrl: buildPublicShareUrl(payload.channel.channel_handle || payload.channel.canonicalHandle),
-              adminUrl: "/dashboard",
+              adminUrl: "/creator-panel",
             }
           }
           sponsors={experiencePayload?.sponsors || []}

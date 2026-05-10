@@ -27,7 +27,7 @@ type GlobePoint = {
 };
 
 const DENSE_PLACE_VIDEO_CLUSTER_THRESHOLD = 200;
-const DENSE_CLUSTER_MAX_VIDEOS = 75;
+const DENSE_CLUSTER_MAX_VIDEOS = 100;
 
 type GeoBounds = {
   min_lat: number;
@@ -55,11 +55,12 @@ interface TravelGlobeProps {
   showPointPanel?: boolean;
   onActiveVideoChange?: (video: TravelVideoLocation | null) => void;
   onPinnedVideoChange?: (video: TravelVideoLocation | null) => void;
-  onCountrySelect?: (countryCode: string | null) => void;
+  onCountrySelect?: (countryCode: string | null, source?: "polygon" | "cluster" | "country") => void;
+  onClusterExpandedChange?: (expanded: boolean) => void;
   onCountryHoverChange?: (input: { countryCode: string; countryName: string } | null) => void;
   rotationEnabled?: boolean;
   onRotationChange?: (enabled: boolean) => void;
-  command?: { id: number; action: "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation" } | null;
+  command?: { id: number; action: "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation" | "collapse_cluster" } | null;
 }
 
 export function TravelGlobe({
@@ -82,6 +83,7 @@ export function TravelGlobe({
   onActiveVideoChange,
   onPinnedVideoChange,
   onCountrySelect,
+  onClusterExpandedChange,
   onCountryHoverChange,
   rotationEnabled: controlledRotationEnabled,
   onRotationChange,
@@ -91,6 +93,7 @@ export function TravelGlobe({
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const [selectedPoint, setSelectedPoint] = useState<GlobePoint | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<GlobePoint | null>(null);
+  const [openedClusterIds, setOpenedClusterIds] = useState<Set<string>>(() => new Set());
   const [internalRotationEnabled, setInternalRotationEnabled] = useState(true);
   const [polygonsData, setPolygonsData] = useState<object[]>([]);
   const [hoveredPolygonCode, setHoveredPolygonCode] = useState<string | null>(null);
@@ -160,6 +163,10 @@ export function TravelGlobe({
   const visibleVideos = activePoint ? activePoint.videos.slice(0, maxVisibleVideos) : [];
 
   useEffect(() => {
+    onClusterExpandedChange?.(Boolean(expandedClusterId));
+  }, [expandedClusterId, onClusterExpandedChange]);
+
+  useEffect(() => {
     let active = true;
     import("react-globe.gl").then((module) => {
       if (!active) return;
@@ -212,7 +219,7 @@ export function TravelGlobe({
         {
           lat: Number(current.lat ?? 20),
           lng: Number(current.lng ?? -10),
-          altitude: Math.min(4.2, Math.max(0.6, Number(current.altitude ?? 2.3) * 1.22)),
+          altitude: Math.min(4.2, Math.max(0.25, Number(current.altitude ?? 2.3) * 1.22)),
         },
         450
       );
@@ -226,7 +233,7 @@ export function TravelGlobe({
         {
           lat: Number(current.lat ?? 20),
           lng: Number(current.lng ?? -10),
-          altitude: Math.max(0.45, Math.min(4.2, Number(current.altitude ?? 2.3) * 0.82)),
+          altitude: Math.max(0.2, Math.min(4.2, Number(current.altitude ?? 2.3) * 0.78)),
         },
         450
       );
@@ -234,6 +241,12 @@ export function TravelGlobe({
     }
 
     if (command.action === "toggle_rotation") return;
+
+    if (command.action === "collapse_cluster") {
+      setExpandedClusterId(null);
+      setHoveredPoint(null);
+      return;
+    }
   }, [command, setGlobePointOfView, updateRotationEnabled]);
 
   const focusCountryOnGlobe = useCallback((countrySelection: GlobePoint) => {
@@ -310,7 +323,7 @@ export function TravelGlobe({
     (countryCode: string) => {
       const candidate = buildCountrySelectionPoint(videoLocations, countryCode);
       if (!candidate) return;
-      onCountrySelect?.(countryCode.toUpperCase());
+      onCountrySelect?.(countryCode.toUpperCase(), "polygon");
       updateRotationEnabled(false);
       setExpandedClusterId(null);
       setSelectedPoint(candidate);
@@ -333,6 +346,12 @@ export function TravelGlobe({
     setSelectedPoint(selected);
 
     if (isDenseVideoCluster(selected)) {
+      setOpenedClusterIds((previous) => {
+        const next = new Set(previous);
+        next.add(selected.point_id);
+        return next;
+      });
+      onCountrySelect?.(selected.country_code.toUpperCase(), "cluster");
       setExpandedClusterId(selected.point_id);
       const nextView = getExpandedClusterPointOfView(selected);
       rotationPointOfViewRef.current = nextView;
@@ -346,6 +365,7 @@ export function TravelGlobe({
       return;
     }
 
+    onCountrySelect?.(selected.country_code.toUpperCase(), "country");
     focusCountryOnGlobe(selected);
     onPinnedVideoChange?.(null);
   }
@@ -453,7 +473,11 @@ export function TravelGlobe({
               onHoverEnd: (point) => {
                 setHoveredPoint((previous) => (previous?.point_id === point.point_id ? null : previous));
               },
-            }, interactive)
+            }, interactive, {
+              opened: openedClusterIds.has((d as GlobePoint).point_id),
+              expanded: expandedClusterId === (d as GlobePoint).point_id,
+              hasExpandedCluster: Boolean(expandedClusterId),
+            })
           }
           arcsData={arcData}
           arcStartLat={(d) => (d as { startLat: number }).startLat}
@@ -682,12 +706,13 @@ function buildVideoModePoints(videoLocations: TravelVideoLocation[], expandedClu
 
     for (const cluster of splitDenseGroupIntoClusters(group)) {
       for (const video of cluster.videos) clusteredVideos.add(video);
-
-      if (cluster.point_id === expandedClusterId) {
-        return positionExpandedClusterVideos(cluster);
+      const isExpandedCluster = cluster.point_id === expandedClusterId;
+      if (!expandedClusterId) {
+        points.push(cluster);
       }
-
-      if (!expandedClusterId) points.push(cluster);
+      if (isExpandedCluster) {
+        points.push(...positionExpandedClusterVideos(cluster));
+      }
     }
   }
 
@@ -877,28 +902,97 @@ function getVideoBounds(videos: TravelVideoLocation[]): GeoBounds {
 function spreadDenseClusterCentersWithinGroup(clusters: GlobePoint[], group: DenseVideoGroup) {
   if (clusters.length <= 1) return clusters;
 
-  const centerLat = group.lat_sum / Math.max(1, group.videos.length);
-  const centerLng = group.lng_sum / Math.max(1, group.videos.length);
-  const latSpan = Math.max(0.2, group.max_lat - group.min_lat);
-  const lngSpan = Math.max(0.2, group.max_lng - group.min_lng);
-  const latRadius = Math.max(0.45, latSpan * 0.48);
-  const lngRadius = Math.max(0.45, lngSpan * 0.48);
+  const latSpan = Math.max(0.24, group.max_lat - group.min_lat);
+  const lngSpan = Math.max(0.24, group.max_lng - group.min_lng);
+  const padLat = Math.min(0.18, latSpan * 0.08);
+  const padLng = Math.min(0.18, lngSpan * 0.08);
+  const boundedMinLat = group.min_lat + padLat;
+  const boundedMaxLat = group.max_lat - padLat;
+  const boundedMinLng = group.min_lng + padLng;
+  const boundedMaxLng = group.max_lng - padLng;
+  const minLat = boundedMinLat < boundedMaxLat ? boundedMinLat : group.min_lat;
+  const maxLat = boundedMinLat < boundedMaxLat ? boundedMaxLat : group.max_lat;
+  const minLng = boundedMinLng < boundedMaxLng ? boundedMinLng : group.min_lng;
+  const maxLng = boundedMinLng < boundedMaxLng ? boundedMaxLng : group.max_lng;
+  const minimumDistance = Math.max(
+    0.24,
+    Math.min(0.74, Math.max(latSpan, lngSpan) / (Math.sqrt(clusters.length) + 0.35))
+  );
 
-  return clusters.map((cluster, index) => {
-    const angle = -Math.PI / 2 + (index / clusters.length) * Math.PI * 2;
-    const targetLat = centerLat + Math.sin(angle) * latRadius;
-    const targetLng = centerLng + Math.cos(angle) * lngRadius;
+  const ordered = [...clusters].sort((a, b) => b.video_count - a.video_count);
+  const rng = createSeededRandom(hashStringToSeed(group.key));
+  const placed: Array<{ point_id: string; lat: number; lng: number }> = [];
 
-    return {
-      ...cluster,
-      lat: clampNumber(targetLat, group.min_lat, group.max_lat),
-      lng: clampNumber(targetLng, group.min_lng, group.max_lng),
-    };
+  for (const cluster of ordered) {
+    let bestCandidate: { lat: number; lng: number; score: number } | null = null;
+
+    for (let attempt = 0; attempt < 180; attempt += 1) {
+      const candidateLat = minLat + (maxLat - minLat) * rng();
+      const candidateLng = minLng + (maxLng - minLng) * rng();
+      const score = nearestDistanceToPlaced(candidateLat, candidateLng, placed);
+
+      if (!bestCandidate || score > bestCandidate.score) {
+        bestCandidate = { lat: candidateLat, lng: candidateLng, score };
+      }
+      if (score >= minimumDistance) break;
+    }
+
+    const fallbackLat = cluster.lat || (group.lat_sum / Math.max(1, group.videos.length));
+    const fallbackLng = cluster.lng || (group.lng_sum / Math.max(1, group.videos.length));
+    const resolved = bestCandidate
+      ? { lat: bestCandidate.lat, lng: bestCandidate.lng }
+      : {
+          lat: clampNumber(fallbackLat, minLat, maxLat),
+          lng: clampNumber(fallbackLng, minLng, maxLng),
+        };
+
+    placed.push({
+      point_id: cluster.point_id,
+      lat: resolved.lat,
+      lng: resolved.lng,
+    });
+  }
+
+  return clusters.map((cluster) => {
+    const point = placed.find((placedPoint) => placedPoint.point_id === cluster.point_id);
+    if (!point) return cluster;
+    return { ...cluster, lat: point.lat, lng: point.lng };
   });
 }
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function nearestDistanceToPlaced(
+  lat: number,
+  lng: number,
+  placed: Array<{ lat: number; lng: number }>
+) {
+  if (placed.length === 0) return Number.POSITIVE_INFINITY;
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const point of placed) {
+    const distance = Math.sqrt(angularDistanceSquared(lat, lng, point.lat, point.lng));
+    if (distance < nearest) nearest = distance;
+  }
+  return nearest;
+}
+
+function hashStringToSeed(input: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function createSeededRandom(seed: number) {
+  let state = seed || 1;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
 }
 
 function clusterVideosByGeography(videos: TravelVideoLocation[], clusterCount: number) {
@@ -1180,11 +1274,16 @@ function createFlagPinElement(
     onHoverStart: (point: GlobePoint) => void;
     onHoverEnd: (point: GlobePoint) => void;
   },
-  interactive = true
+  interactive = true,
+  markerState?: { opened?: boolean; expanded?: boolean; hasExpandedCluster?: boolean }
 ) {
   const marker = document.createElement(interactive ? "button" : "div");
   const denseCluster = isDenseVideoCluster(point);
   const expandedVideo = point.is_expanded_video === true;
+  const openedCluster = denseCluster && markerState?.opened;
+  const expandedCluster = denseCluster && markerState?.expanded;
+  const hasExpandedCluster = denseCluster && markerState?.hasExpandedCluster;
+  const inactiveCluster = denseCluster && hasExpandedCluster && !expandedCluster;
   if (interactive) marker.setAttribute("type", "button");
   marker.setAttribute("data-globe-marker", "true");
   marker.setAttribute(
@@ -1202,22 +1301,37 @@ function createFlagPinElement(
   marker.style.transform = "translate(-50%, -50%)";
   marker.style.pointerEvents = interactive ? "auto" : "none";
 
-  marker.style.width = denseCluster ? "28px" : expandedVideo ? "15px" : "20px";
-  marker.style.height = denseCluster ? "28px" : expandedVideo ? "15px" : "20px";
+  marker.style.width = denseCluster ? "24px" : expandedVideo ? "15px" : "20px";
+  marker.style.height = denseCluster ? "24px" : expandedVideo ? "15px" : "20px";
   marker.style.display = "inline-flex";
   marker.style.alignItems = "center";
   marker.style.justifyContent = "center";
   marker.style.borderRadius = "999px";
-  marker.style.background = denseCluster ? "rgba(4,7,14,0.88)" : "rgba(4,7,14,0.78)";
+  marker.style.background = denseCluster
+    ? expandedCluster
+      ? "rgba(4,7,14,0.94)"
+      : inactiveCluster
+        ? "rgba(4,7,14,0.68)"
+        : "rgba(4,7,14,0.88)"
+    : "rgba(4,7,14,0.78)";
   marker.style.border = denseCluster
-    ? "1px solid rgba(255,255,255,0.34)"
+    ? expandedCluster
+      ? "1px solid rgba(250,204,21,0.95)"
+      : openedCluster
+        ? "1px solid rgba(250,204,21,0.9)"
+        : "1px solid rgba(255,255,255,0.34)"
     : expandedVideo
       ? "1px solid rgba(255,255,255,0.18)"
       : "1px solid rgba(255,255,255,0.24)";
   marker.style.boxShadow = denseCluster
-    ? "0 8px 20px rgba(2,6,23,0.58), 0 0 0 2px rgba(255,90,61,0.12)"
+    ? expandedCluster
+      ? "0 10px 24px rgba(2,6,23,0.62), 0 0 0 2px rgba(250,204,21,0.28)"
+      : openedCluster
+        ? "0 8px 20px rgba(2,6,23,0.58), 0 0 0 2px rgba(250,204,21,0.3)"
+        : "0 8px 20px rgba(2,6,23,0.58), 0 0 0 2px rgba(255,90,61,0.12)"
     : "0 6px 16px rgba(2,6,23,0.45)";
-  marker.style.zIndex = denseCluster ? "2" : "1";
+  marker.style.zIndex = denseCluster ? (expandedCluster ? "4" : "2") : "1";
+  marker.style.opacity = inactiveCluster ? "0.62" : "1";
   marker.style.fontSize = denseCluster ? "13px" : expandedVideo ? "10px" : "13px";
 
   if (denseCluster) {
@@ -1228,18 +1342,19 @@ function createFlagPinElement(
     const count = document.createElement("span");
     count.textContent = formatClusterCount(point.video_count);
     count.style.position = "absolute";
-    count.style.left = "50%";
-    count.style.top = "calc(100% - 7px)";
-    count.style.transform = "translateX(-50%)";
+    count.style.right = "-4px";
+    count.style.bottom = "-4px";
+    count.style.transform = "none";
     count.style.borderRadius = "999px";
     count.style.border = "1px solid rgba(255,255,255,0.28)";
-    count.style.background = "rgba(4,7,14,0.96)";
-    count.style.padding = "1px 4px";
+    count.style.background = expandedCluster || openedCluster ? "rgba(250,204,21,0.95)" : "rgba(4,7,14,0.96)";
+    count.style.padding = "0 3px";
     count.style.fontSize = "8px";
     count.style.fontWeight = "800";
     count.style.lineHeight = "1.2";
-    count.style.color = "#fff";
+    count.style.color = expandedCluster || openedCluster ? "#111827" : "#fff";
     count.style.whiteSpace = "nowrap";
+    count.style.pointerEvents = "none";
 
     marker.style.position = "relative";
     marker.append(flag, count);

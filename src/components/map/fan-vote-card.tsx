@@ -26,6 +26,7 @@ interface FanVoteCardProps {
   fanVotes?: MapFanVoteSummary | null;
   availableOptions: PollOptionInput[];
   isDemoMode?: boolean;
+  viewerInteraction?: "live" | "simulated" | "disabled";
   onPollChange?: (poll: MapPollRecord | null) => void;
 }
 
@@ -57,6 +58,7 @@ export function FanVoteCard({
   fanVotes = null,
   availableOptions,
   isDemoMode = false,
+  viewerInteraction = "live",
   onPollChange,
 }: FanVoteCardProps) {
   const [editorOpen, setEditorOpen] = useState(false);
@@ -83,6 +85,9 @@ export function FanVoteCard({
   const pollMode = poll?.poll_mode || form.pollMode;
   const hasLivePoll = Boolean(poll && poll.status === "live");
 
+  const viewerInteractionDisabled = !viewer.isOwner && viewerInteraction === "disabled";
+  const simulateViewerInteraction = !viewer.isOwner && viewerInteraction === "simulated";
+  const useSimulatedState = isDemoMode || simulateViewerInteraction;
   const isAnonymousViewer = !viewer.isOwner && !viewer.isAuthenticated;
   const canSeeDetailedStats = viewer.isOwner || viewer.isAuthenticated;
 
@@ -138,7 +143,7 @@ export function FanVoteCard({
   const hasFanVoteCooldownCountdown = Boolean(!hasLivePoll && fanVotes && !fanVotes.viewer_can_vote && Number.isFinite(fanVoteNextVoteMs));
   const fanVoteRemainingMs = hasFanVoteCooldownCountdown ? Math.max(0, fanVoteNextVoteMs - nowMs) : 0;
 
-  const mustVote = Boolean(poll && poll.status === "live" && poll.show_popup && !poll.has_voted && !viewer.isOwner);
+  const mustVote = Boolean(poll && poll.status === "live" && poll.show_popup && !poll.has_voted && !viewer.isOwner && !viewerInteractionDisabled);
   const voteCities = currentPollCountries.find((country) => country.country_code === selectedCountry)?.cities || [];
 
   useEffect(() => {
@@ -151,7 +156,7 @@ export function FanVoteCard({
   }, [availableOptions, poll]);
 
   useEffect(() => {
-    if (!poll || poll.status !== "live" || !poll.show_popup || poll.has_voted || viewer.isOwner) return;
+    if (!poll || poll.status !== "live" || !poll.show_popup || poll.has_voted || viewer.isOwner || viewerInteractionDisabled) return;
     if (typeof window === "undefined") return;
 
     const key = `${POPUP_SESSION_KEY_PREFIX}:${poll.id}`;
@@ -160,7 +165,7 @@ export function FanVoteCard({
 
     window.sessionStorage.setItem(key, "1");
     setVoteOpen(true);
-  }, [poll, viewer.isOwner]);
+  }, [poll, viewer.isOwner, viewerInteractionDisabled]);
 
   useEffect(() => {
     if (!hasCountdown && !hasFanVoteCooldownCountdown) return;
@@ -178,7 +183,7 @@ export function FanVoteCard({
       setResultOpen(true);
     }
 
-    if (!isDemoMode) {
+    if (!useSimulatedState) {
       void (async () => {
         try {
           const response = await fetch(`/api/map/polls/${encodeURIComponent(poll.id)}/results`, { cache: "no-store" });
@@ -192,7 +197,7 @@ export function FanVoteCard({
         }
       })();
     }
-  }, [isDemoMode, isExpiredLive, onPollChange, poll, voteOpen]);
+  }, [isExpiredLive, onPollChange, poll, useSimulatedState, voteOpen]);
 
   function goToViewerLogin() {
     if (typeof window === "undefined") return;
@@ -365,11 +370,15 @@ export function FanVoteCard({
   async function submitVote() {
     if (!poll || !selectedCountry) return;
     if (poll.poll_mode === "country_city" && !selectedCity) return;
+    if (viewerInteractionDisabled) {
+      setVoteError("Vista de viewer del creador: los votos estan bloqueados en tu propio mapa.");
+      return;
+    }
 
     setBusyVote(true);
     setVoteError(null);
 
-    if (isDemoMode) {
+    if (useSimulatedState) {
       const updatedCountries = poll.country_options.map((country) => {
         if (country.country_code !== selectedCountry) return country;
 
@@ -532,7 +541,7 @@ export function FanVoteCard({
             <div>
               <p className="tym-overline text-[#ff8b8b]">Fan vote</p>
               <CardTitle className="mt-1 text-[16px] font-medium text-[#f1f1f1]">
-                {hasLivePoll ? poll?.title || "La audiencia puede votar el siguiente destino" : "Ranking de destinos sugeridos por la audiencia"}
+                {hasLivePoll ? poll?.title || "La audiencia puede votar el siguiente destino" : "Ranking de Audiencia."}
               </CardTitle>
             </div>
             {viewer.isOwner ? (
@@ -544,11 +553,7 @@ export function FanVoteCard({
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-4">
-          <p className="text-[13px] leading-5 text-[#d7b0b0]">
-            {hasLivePoll
-              ? poll?.prompt || "Activa una shortlist de paises y ciudades para que tu audiencia priorice el siguiente viaje."
-              : "Cuando no hay votacion live, este ranking acumula los votos semanales de tus fans por pais y ciudad."}
-          </p>
+          {hasLivePoll ? <p className="text-[13px] leading-5 text-[#d7b0b0]">{poll?.prompt || "Activa una shortlist de paises y ciudades para que tu audiencia priorice el siguiente viaje."}</p> : null}
 
           {hasLivePoll ? (
             poll && !(isAnonymousViewer && poll.status === "live") ? (
@@ -615,14 +620,14 @@ export function FanVoteCard({
             </div>
           )}
 
-          {poll?.status === "live" && !viewer.isOwner ? (
+          {poll?.status === "live" && !viewer.isOwner && !viewerInteractionDisabled ? (
             <Button type="button" className="w-full" onClick={() => !poll.has_voted && setVoteOpen(true)} disabled={poll.has_voted || isExpiredLive}>
               <MapPin size={14} />
               {poll.has_voted ? "Ya votaste" : "Votar destino"}
             </Button>
           ) : null}
 
-          {hasLivePoll && poll && isAnonymousViewer ? (
+          {hasLivePoll && poll && isAnonymousViewer && !viewerInteractionDisabled ? (
             <button
               type="button"
               onClick={goToViewerLogin}
@@ -632,9 +637,15 @@ export function FanVoteCard({
             </button>
           ) : null}
 
-          {!hasLivePoll && fanVotes && !fanVotes.viewer_can_vote && !viewer.isOwner ? (
+          {!hasLivePoll && fanVotes && !fanVotes.viewer_can_vote && !viewer.isOwner && !viewerInteractionDisabled ? (
             <div className="rounded-2xl border border-[rgba(255, 90, 61,0.24)] bg-[rgba(255, 90, 61,0.09)] px-4 py-3 text-[12px] text-[#ffb4b4]">
               Ya votaste esta semana. Próximo voto en {formatCountdown(fanVoteRemainingMs || fanVotes.viewer_cooldown_remaining_ms)}.
+            </div>
+          ) : null}
+
+          {viewerInteractionDisabled ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[12px] text-[#b4bbc5]">
+              Preview viewer de tu propio mapa: las acciones no modifican estadisticas ni votos.
             </div>
           ) : null}
 
@@ -647,8 +658,14 @@ export function FanVoteCard({
             </div>
           ) : fanVotes ? (
             <div className="flex items-center justify-between gap-3 text-[12px] text-[#aaaaaa]">
-              <span>Open fan vote</span>
-              <span>{fanVotes.total_votes} votos acumulados</span>
+              {viewer.isOwner ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => setEditorOpen(true)}>
+                  {poll ? "Editar votacion" : "Open fan vote"}
+                </Button>
+              ) : (
+                <span>Fan vote</span>
+              )}
+              {fanVotes.total_votes > 0 ? <span>{fanVotes.total_votes} votos acumulados</span> : null}
             </div>
           ) : null}
         </CardContent>
@@ -860,7 +877,13 @@ export function FanVoteCard({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={voteOpen} onOpenChange={setVoteOpen}>
+      <Dialog
+        open={voteOpen && !viewerInteractionDisabled}
+        onOpenChange={(nextOpen) => {
+          if (viewerInteractionDisabled) return;
+          setVoteOpen(nextOpen);
+        }}
+      >
         <DialogContent
           className="tm-surface-strong max-w-[min(980px,calc(100%-1.5rem))] overflow-hidden p-0"
           showCloseButton={!mustVote}
