@@ -3,18 +3,45 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GlobeMethods } from "react-globe.gl";
 import type { TravelVideoLocation } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type GlobeComponent = typeof import("react-globe.gl").default;
-type MiniMapPoint = { countryCode: string; lat: number; lng: number; count: number };
+type MiniMapPoint = { countryCode: string; lat: number; lng: number; count: number; label: string };
 
 const GLOBE_TEXTURE_URL = "https://unpkg.com/three-globe/example/img/earth-night.jpg";
 
-export function MiniMapModel({ videoLocations = [] }: { videoLocations?: TravelVideoLocation[] }) {
+interface MiniMapModelProps {
+  videoLocations?: TravelVideoLocation[];
+  className?: string;
+  markerMode?: "countries" | "videos";
+  pointOfView?: { lat: number; lng: number; altitude: number };
+  autoRotateSpeed?: number;
+}
+
+export function MiniMapModel({
+  videoLocations = [],
+  className,
+  markerMode = "countries",
+  pointOfView = { lat: 18, lng: -22, altitude: 2.05 },
+  autoRotateSpeed = -0.45,
+}: MiniMapModelProps) {
   const [Globe, setGlobe] = useState<GlobeComponent | null>(null);
   const [dimensions, setDimensions] = useState({ width: 320, height: 180 });
   const containerRef = useRef<HTMLDivElement | null>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const pointsData = useMemo<MiniMapPoint[]>(() => {
+    if (markerMode === "videos") {
+      return videoLocations
+        .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
+        .map((row) => ({
+          countryCode: String(row.country_code || "").toUpperCase(),
+          lat: Number(row.lat),
+          lng: Number(row.lng),
+          count: 1,
+          label: String(row.country_code || "TYM").toUpperCase(),
+        }));
+    }
+
     const byCountry = new Map<string, { latSum: number; lngSum: number; count: number }>();
     for (const row of videoLocations) {
       const countryCode = String(row.country_code || "").toUpperCase();
@@ -30,8 +57,9 @@ export function MiniMapModel({ videoLocations = [] }: { videoLocations?: TravelV
       lat: stats.latSum / stats.count,
       lng: stats.lngSum / stats.count,
       count: stats.count,
+      label: countryCode,
     }));
-  }, [videoLocations]);
+  }, [markerMode, videoLocations]);
 
   useEffect(() => {
     let active = true;
@@ -65,19 +93,22 @@ export function MiniMapModel({ videoLocations = [] }: { videoLocations?: TravelV
 
   useEffect(() => {
     if (!globeRef.current) return;
-    globeRef.current.pointOfView({ lat: 18, lng: -22, altitude: 2.05 }, 0);
+    globeRef.current.pointOfView(pointOfView, 0);
     const controls = globeRef.current.controls();
     if (!controls) return;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = -0.45;
+    controls.autoRotateSpeed = autoRotateSpeed;
     controls.enablePan = false;
     controls.enableZoom = false;
-  }, [Globe]);
+  }, [Globe, autoRotateSpeed, pointOfView]);
 
   return (
     <div
       ref={containerRef}
-      className="pointer-events-none relative h-full w-full overflow-hidden rounded-xl bg-[radial-gradient(circle_at_26%_22%,rgba(106,210,255,0.2),rgba(10,10,10,0)_45%),radial-gradient(circle_at_82%_78%,rgba(255,255,255,0.06),rgba(10,10,10,0)_35%),#090909] [&_*]:pointer-events-none [&_.scene-nav-info]:hidden"
+      className={cn(
+        "pointer-events-none relative h-full w-full overflow-hidden rounded-xl bg-[radial-gradient(circle_at_26%_22%,rgba(106,210,255,0.2),rgba(10,10,10,0)_45%),radial-gradient(circle_at_82%_78%,rgba(255,255,255,0.06),rgba(10,10,10,0)_35%),#090909] [&_*]:pointer-events-none [&_.scene-nav-info]:hidden",
+        className
+      )}
       aria-hidden="true"
     >
       {Globe ? (
@@ -122,7 +153,7 @@ function createMiniFlagPin(point: MiniMapPoint) {
   marker.style.boxShadow = "0 6px 12px rgba(2,6,23,0.45)";
 
   const flag = document.createElement("span");
-  flag.textContent = countryCodeToFlag(point.countryCode);
+  flag.textContent = point.label || point.countryCode || "TYM";
   flag.style.position = "absolute";
   flag.style.left = "50%";
   flag.style.top = "50%";
@@ -131,18 +162,10 @@ function createMiniFlagPin(point: MiniMapPoint) {
   flag.style.width = "100%";
   flag.style.textAlign = "center";
   flag.style.fontSize = "10px";
+  flag.style.fontWeight = "800";
   flag.style.lineHeight = "1";
-  flag.style.fontFamily = "\"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif";
+  flag.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
   marker.appendChild(flag);
 
   return marker;
-}
-
-function countryCodeToFlag(countryCode?: string | null) {
-  const code = String(countryCode || "").toUpperCase();
-  if (code.length !== 2) return "TM";
-  const first = code.charCodeAt(0) - 65;
-  const second = code.charCodeAt(1) - 65;
-  if (first < 0 || first > 25 || second < 0 || second > 25) return "TM";
-  return String.fromCodePoint(0x1f1e6 + first, 0x1f1e6 + second);
 }
