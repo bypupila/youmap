@@ -89,6 +89,12 @@ type JapanDestination = {
   thumbnailUrl?: string | null;
 };
 
+type PreviewVideo = {
+  country: string;
+  title: string;
+  thumbnailUrl: string;
+};
+
 export async function CinematicLanding() {
   const { videoLocations } = await loadLuisitoMapData();
   const japanVideos = videoLocations.filter((video) => video.country_code?.toUpperCase() === "JP");
@@ -96,6 +102,7 @@ export async function CinematicLanding() {
     videoCount: japanVideos.length,
     thumbnailUrl: japanVideos.find((video) => video.thumbnail_url)?.thumbnail_url,
   };
+  const previewVideos = buildPreviewVideos(videoLocations);
 
   return (
     <main className="creator-landing min-h-[100dvh] overflow-hidden bg-[#070a0d] text-[#f5f2ed]">
@@ -107,7 +114,7 @@ export async function CinematicLanding() {
         <HowItWorks />
         <FeatureGrid />
         <SponsorComparison />
-        <PublicPagePreview videoLocations={videoLocations} />
+        <PublicPagePreview previewVideos={previewVideos} />
         <PricingSection />
         <FaqSection />
       </div>
@@ -190,9 +197,6 @@ function HeroSection({
 
       <div className="relative min-h-[620px] lg:min-h-[820px]">
         <CreatorGlobe videoLocations={videoLocations} />
-        <button className="absolute left-[42%] top-[42%] z-20 grid h-24 w-24 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-[#05070a]/80 text-white shadow-[0_26px_70px_-36px_rgba(0,0,0,0.95)] backdrop-blur-xl transition hover:scale-105 active:scale-95" type="button" aria-label="Reproducir demo">
-          <Play size={31} weight="fill" />
-        </button>
         <div className="absolute right-0 top-10 z-20 grid w-[210px] gap-5 sm:right-4 lg:right-0">
           {creatorStats.map((stat) => <MetricCard key={stat.label} {...stat} />)}
         </div>
@@ -350,7 +354,7 @@ function ComparisonPanel({ title, items, bad = false }: { title: string; items: 
   );
 }
 
-function PublicPagePreview({ videoLocations }: { videoLocations: TravelVideoLocation[] }) {
+function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] }) {
   return (
     <section id="examples" className="grid gap-10 py-12 lg:grid-cols-[1.32fr_0.9fr] lg:items-center">
       <div className="rounded-[20px] border border-white/12 bg-[#0c1014] p-4 shadow-[0_32px_90px_-54px_rgba(0,0,0,0.95)]">
@@ -366,9 +370,22 @@ function PublicPagePreview({ videoLocations }: { videoLocations: TravelVideoLoca
               <Link href="/u/luisitocomunica" className="mt-3 text-[12px] font-bold text-white">Ver todos los destinos</Link>
             </div>
           </aside>
-          <div className="relative min-h-[320px] overflow-hidden rounded-[18px]">
-            <CreatorGlobe videoLocations={videoLocations} />
-            <button className="absolute left-1/2 top-1/2 z-20 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#05070a]/78 text-white" type="button" aria-label="Ver mapa"><Play size={26} weight="fill" /></button>
+          <div className="relative min-h-[320px] overflow-hidden rounded-[18px] bg-[#05070a] p-3">
+            <div className="grid h-full min-h-[320px] grid-cols-2 gap-3">
+              {previewVideos.map((video, index) => (
+                <article
+                  key={`${video.country}-${video.thumbnailUrl}`}
+                  className={index === 0 ? "relative col-span-2 overflow-hidden rounded-[14px]" : "relative overflow-hidden rounded-[14px]"}
+                >
+                  <img src={video.thumbnailUrl} alt={video.title} className="h-full min-h-[140px] w-full object-cover" />
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(5,8,13,0.82))]" />
+                  <div className="absolute bottom-3 left-3 right-3">
+                    <p className="text-[11px] font-extrabold uppercase text-[#ff473b]">{video.country}</p>
+                    <h4 className="mt-1 line-clamp-2 text-[13px] font-extrabold leading-4 text-white">{video.title}</h4>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -386,6 +403,19 @@ function PublicPagePreview({ videoLocations }: { videoLocations: TravelVideoLoca
       </div>
     </section>
   );
+}
+
+function buildPreviewVideos(videoLocations: TravelVideoLocation[]): PreviewVideo[] {
+  const preferredCountries = ["JP", "AR", "IT", "TH"];
+  return preferredCountries.flatMap((countryCode) => {
+    const video = videoLocations.find((item) => item.country_code?.toUpperCase() === countryCode && item.thumbnail_url);
+    if (!video?.thumbnail_url) return [];
+    return [{
+      country: video.country_name || countryCode,
+      title: video.title,
+      thumbnailUrl: video.thumbnail_url,
+    }];
+  });
 }
 
 function PricingSection() {
