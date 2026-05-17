@@ -84,6 +84,7 @@ for (const file of trackedFiles) {
   if (!fs.existsSync(absolute)) continue;
 
   const stat = fs.statSync(absolute);
+  if (!stat.isFile()) continue;
   if (stat.size > 1024 * 1024) continue;
 
   const raw = fs.readFileSync(absolute, "utf8");
