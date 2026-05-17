@@ -23,6 +23,13 @@ const creatorStats = [
   { value: "165", label: "países cubiertos", icon: GlobeHemisphereWest },
 ];
 
+const creatorsList = [
+  { name: "Luisito Comunica", src: "/creators/luisito-comunica.png" },
+  { name: "Drew Binsky", src: "/creators/drew-binsky.png" },
+  { name: "Alan por el Mundo", src: "/creators/alan-por-el-mundo.png" },
+  { name: "Misias pero Viajeras", src: "/creators/misias-pero-viajeras.png" },
+];
+
 const sponsorLogos = ["Booking.com", "GoPro", "airbnb", "NordVPN", "LATAM AIRLINES", "SafetyWing"];
 
 const steps = [
@@ -144,7 +151,7 @@ function CreatorNav() {
           <Link href="/explore" className="transition hover:text-white">Explorar</Link>
         </div>
         <div className="flex items-center gap-2 text-[13px] font-semibold">
-          <button className="hidden rounded-full px-3 py-2 text-white/75 transition hover:text-white md:inline-flex" type="button">ES</button>
+          <button className="hidden rounded-full border border-[#ff473b]/65 px-3 py-2 text-white/85 transition hover:border-[#ff5b50] hover:text-white md:inline-flex" type="button">ES</button>
           <Link href="/auth" className="hidden rounded-full px-4 py-2 text-white/75 transition hover:text-white md:inline-flex">Iniciar sesión</Link>
           <Link href="/onboarding?lang=es" className="rounded-full bg-[#ff473b] px-5 py-3 text-white shadow-[0_18px_38px_-22px_rgba(255,71,59,0.85)] transition hover:-translate-y-0.5 hover:bg-[#ff594e] active:translate-y-0 active:scale-[0.98]">
             Crear mi mapa
@@ -163,7 +170,7 @@ function HeroSection({
   japanDestination: JapanDestination;
 }) {
   return (
-    <section className="relative grid min-h-[860px] items-center gap-10 pb-12 pt-20 lg:grid-cols-[0.92fr_1.08fr] lg:pt-8">
+    <section className="relative mt-[30px] grid min-h-[860px] items-start gap-10 pb-12 pt-20 lg:min-h-[820px] lg:grid-cols-[0.92fr_1.08fr] lg:pt-4">
       <div className="relative z-10 max-w-[620px]">
         <p className="mb-5 text-[12px] font-extrabold uppercase tracking-[0.2em] text-[#ff473b]">El media kit interactivo para creadores de viajes</p>
         <h1 className="max-w-[11ch] text-[46px] font-extrabold leading-[0.98] tracking-[-0.055em] text-white sm:text-[68px] lg:text-[76px]">
@@ -182,8 +189,10 @@ function HeroSection({
         </div>
         <div className="mt-10 flex items-center gap-4">
           <div className="flex -space-x-3">
-            {["LM", "DB", "AV", "MP"].map((item) => (
-              <span key={item} className="grid h-11 w-11 place-items-center rounded-full border-2 border-[#080b0e] bg-[linear-gradient(145deg,#ffe2c4,#6b392c)] text-[11px] font-extrabold text-[#1c0f0c]">{item}</span>
+            {creatorsList.map((creator) => (
+              <div key={creator.name} className="h-11 w-11 rounded-full border-2 border-[#080b0e] bg-[#101419] overflow-hidden shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
+                <img src={creator.src} alt={creator.name} className="h-full w-full object-cover" />
+              </div>
             ))}
           </div>
           <div>
@@ -195,12 +204,16 @@ function HeroSection({
         </div>
       </div>
 
-      <div className="relative min-h-[620px] lg:min-h-[820px]">
+      <div className="relative min-h-[660px] lg:min-h-[900px]">
         <CreatorGlobe videoLocations={videoLocations} />
-        <div className="absolute right-0 top-10 z-20 grid w-[210px] gap-5 sm:right-4 lg:right-0">
-          {creatorStats.map((stat) => <MetricCard key={stat.label} {...stat} />)}
+        <div className="absolute right-0 top-10 z-20 flex w-full max-w-[430px] flex-col gap-4 sm:right-4 lg:right-0">
+          <div className="grid w-full max-w-[410px] grid-cols-2 gap-4 self-end lg:w-[410px]">
+            {creatorStats.map((stat) => <MetricCard key={stat.label} {...stat} />)}
+          </div>
+          <div className="w-full max-w-[410px] self-end lg:w-[410px]">
+            <DestinationCard destination={japanDestination} />
+          </div>
         </div>
-        <DestinationCard destination={japanDestination} />
       </div>
     </section>
   );
@@ -208,7 +221,7 @@ function HeroSection({
 
 function CreatorGlobe({ videoLocations }: { videoLocations: TravelVideoLocation[] }) {
   return (
-    <div className="creator-real-globe absolute -left-[12%] top-0 h-[720px] w-[720px] overflow-hidden rounded-full lg:-left-[4%] lg:h-[850px] lg:w-[850px]">
+    <div className="creator-real-globe absolute -left-[14%] top-0 h-[780px] w-[780px] overflow-hidden rounded-full lg:-left-[8%] lg:h-[980px] lg:w-[980px]">
       <MiniMapModel
         videoLocations={videoLocations}
         markerMode="videos"
@@ -232,7 +245,7 @@ function MetricCard({ value, label, icon: Icon }: { value: string; label: string
 
 function DestinationCard({ destination }: { destination: JapanDestination }) {
   return (
-    <div className="absolute bottom-20 right-0 z-20 w-full max-w-[410px] rounded-[24px] border border-white/13 bg-[#101419]/90 p-4 shadow-[0_32px_90px_-44px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:right-4 lg:right-0">
+    <div className="w-full rounded-[24px] border border-white/13 bg-[#101419]/90 p-4 shadow-[0_32px_90px_-44px_rgba(0,0,0,0.95)] backdrop-blur-xl">
       <div className="relative h-[170px] overflow-hidden rounded-[16px] bg-[linear-gradient(165deg,rgba(255,209,165,0.82),rgba(42,65,89,0.72)_45%,rgba(12,17,21,0.98))]">
         {destination.thumbnailUrl ? (
           <img
@@ -361,7 +374,9 @@ function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] })
         <div className="mb-4 flex gap-2"><span className="h-2 w-2 rounded-full bg-white/20" /><span className="h-2 w-2 rounded-full bg-white/20" /><span className="h-2 w-2 rounded-full bg-white/20" /></div>
         <div className="grid min-h-[470px] gap-5 rounded-[16px] bg-[radial-gradient(circle_at_65%_48%,rgba(56,143,205,0.34),transparent_28%),radial-gradient(circle_at_62%_50%,#19314a,#071018_58%,#05070a)] p-7 md:grid-cols-[190px_1fr]">
           <aside className="relative z-10">
-            <div className="h-24 w-24 rounded-full border-4 border-white bg-[linear-gradient(145deg,#ffcf9d,#6d3529)]" />
+            <div className="h-24 w-24 rounded-full border-4 border-white overflow-hidden bg-[#101419] shadow-lg">
+              <img src="/creators/luisito-comunica.png" alt="Luisito Comunica" className="h-full w-full object-cover" />
+            </div>
             <h3 className="mt-5 text-[20px] font-extrabold">Luisito Comunica</h3>
             <p className="text-[12px] text-white/62">@luisitocomunica</p>
             <p className="mt-2 text-[12px] text-white/62">193 videos · 86 países</p>
@@ -474,7 +489,14 @@ function FinalCta() {
     <section className="relative mt-8 min-h-[360px] overflow-hidden border-t border-white/8 bg-[linear-gradient(90deg,rgba(7,10,13,0.34),rgba(7,10,13,0.96)_52%),linear-gradient(145deg,#4a3424,#101820_45%,#070a0d)]">
       <div className="absolute left-[8%] top-[18%] h-[220px] w-[340px] rounded-[48%] bg-[radial-gradient(circle,#f3b46f,transparent_68%)] opacity-18 blur-3xl" />
       <div className="mx-auto grid max-w-[1500px] gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_1fr] lg:px-14">
-        <div className="min-h-[230px] rounded-[40px] bg-[radial-gradient(circle_at_50%_20%,rgba(255,223,165,0.35),transparent_35%),linear-gradient(150deg,#2e231d,#11181d_52%,#070a0d)]" />
+        <div className="relative min-h-[260px] overflow-hidden rounded-[40px] border border-white/10 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.8)] lg:min-h-[320px]">
+          <img
+            src="/creators/final-cta-map-mockup.png"
+            alt="TravelYourMap interactive 3D map interface"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#070a0d] via-transparent to-transparent opacity-40" />
+        </div>
         <div className="max-w-[620px] self-center">
           <h2 className="text-[34px] font-extrabold leading-[1.04] tracking-[-0.05em] text-white sm:text-[46px]">Tu contenido ya existe.<br />Ahora necesita <span className="text-[#ff473b]">verse profesional.</span></h2>
           <p className="mt-5 text-[15px] leading-7 text-white/65">Transforma tu canal en un media kit interactivo listo para sponsors, marcas y partnerships.</p>

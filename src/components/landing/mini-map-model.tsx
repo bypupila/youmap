@@ -133,10 +133,28 @@ export function MiniMapModel({
           htmlElement={(d) => createMiniFlagPin(d as MiniMapPoint)}
         />
       ) : (
-        <div className="absolute inset-0 animate-pulse bg-[radial-gradient(circle_at_50%_50%,rgba(83,183,255,0.25),rgba(9,9,9,0)_58%)]" />
+        <div className="absolute inset-0 flex items-center justify-center bg-[#070a0d]">
+          {/* A sleek, dark circular skeleton representing the globe while it loads */}
+          <div className="relative flex h-[280px] w-[280px] animate-pulse items-center justify-center rounded-full border border-white/5 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.02),transparent_70%)] sm:h-[450px] sm:w-[450px]">
+            <div className="absolute inset-[15%] rounded-full border border-dashed border-white/[0.03]" />
+            <div className="absolute inset-[35%] rounded-full border border-white/[0.02]" />
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/20">Cargando mapa...</span>
+          </div>
+        </div>
       )}
     </div>
   );
+}
+
+function countryCodeToFlagEmoji(countryCode: string): string {
+  const code = String(countryCode).toUpperCase();
+  if (code.length !== 2) return code;
+  const codePoints = code.split("").map((char) => 127397 + char.charCodeAt(0));
+  try {
+    return String.fromCodePoint(...codePoints);
+  } catch {
+    return code;
+  }
 }
 
 function createMiniFlagPin(point: MiniMapPoint) {
@@ -153,18 +171,17 @@ function createMiniFlagPin(point: MiniMapPoint) {
   marker.style.boxShadow = "0 6px 12px rgba(2,6,23,0.45)";
 
   const flag = document.createElement("span");
-  flag.textContent = point.label || point.countryCode || "TYM";
+  flag.textContent = countryCodeToFlagEmoji(point.countryCode || point.label);
   flag.style.position = "absolute";
   flag.style.left = "50%";
   flag.style.top = "50%";
-  flag.style.transform = "translate(-50%, -52%)";
+  flag.style.transform = "translate(-50%, -50%)";
   flag.style.display = "block";
   flag.style.width = "100%";
   flag.style.textAlign = "center";
-  flag.style.fontSize = "10px";
-  flag.style.fontWeight = "800";
+  flag.style.fontSize = "13px";
   flag.style.lineHeight = "1";
-  flag.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+  flag.style.fontFamily = "Apple Color Emoji, Segoe UI Emoji, Roboto Emoji, sans-serif";
   marker.appendChild(flag);
 
   return marker;

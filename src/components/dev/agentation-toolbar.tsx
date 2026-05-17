@@ -11,9 +11,8 @@ export function AgentationToolbar() {
     return null;
   }
 
-  // Agentation is opt-in in local dev because its feedback surface can sit above the app
-  // and block clicks if it is mounted during normal QA.
-  if (process.env.NEXT_PUBLIC_ENABLE_AGENTATION !== "overlay") {
+  // Show by default in local dev; allow opting out explicitly.
+  if (process.env.NEXT_PUBLIC_ENABLE_AGENTATION === "off") {
     return null;
   }
 
