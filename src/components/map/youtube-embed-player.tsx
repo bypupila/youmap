@@ -273,7 +273,7 @@ export function YouTubeEmbedPlayer({
           type="button"
           onClick={openInYoutube}
           disabled={!youtubeHref}
-          className="inline-flex h-8 items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[11px] font-medium text-[#e8edf4] transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-1 rounded-md border border-white/10 bg-[#1b1f26] px-2.5 text-[11px] font-medium text-[#b7bfcb] transition hover:bg-[#232a33] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Abrir en YouTube"
         >
           {openButtonLabel}

@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { geoCentroid } from "d3-geo";
+import { Country } from "country-state-city";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GlobeMethods } from "react-globe.gl";
 import { feature } from "topojson-client";
@@ -26,6 +28,14 @@ type GlobePoint = {
   size: number;
 };
 
+type HoverCountryPreview = {
+  countryCode: string;
+  countryName: string;
+  totalVideos: number;
+  watchedVideos: number;
+  ratio: number;
+};
+
 const DENSE_PLACE_VIDEO_CLUSTER_THRESHOLD = 200;
 const DENSE_CLUSTER_MAX_VIDEOS = 100;
 
@@ -45,6 +55,8 @@ interface TravelGlobeProps {
   focusVideoId?: string | null;
   selectedCountryCode?: string | null;
   votedCountryCode?: string | null;
+  watchedVideoIds?: Set<string>;
+  videoWatchStatusById?: Record<string, "not_finished" | "watched" | "watch_later">;
   interactive?: boolean;
   showControls?: boolean;
   minimalOverlay?: boolean;
@@ -53,6 +65,7 @@ interface TravelGlobeProps {
   pointMode?: "country" | "video";
   showSummaryCard?: boolean;
   showPointPanel?: boolean;
+  pointPanelClassName?: string;
   onActiveVideoChange?: (video: TravelVideoLocation | null) => void;
   onPinnedVideoChange?: (video: TravelVideoLocation | null) => void;
   onCountrySelect?: (countryCode: string | null, source?: "polygon" | "cluster" | "country") => void;
@@ -72,6 +85,8 @@ export function TravelGlobe({
   focusVideoId = null,
   selectedCountryCode = null,
   votedCountryCode = null,
+  watchedVideoIds,
+  videoWatchStatusById,
   interactive = true,
   showControls = true,
   minimalOverlay = false,
@@ -80,6 +95,7 @@ export function TravelGlobe({
   pointMode = "country",
   showSummaryCard = true,
   showPointPanel = true,
+  pointPanelClassName,
   onActiveVideoChange,
   onPinnedVideoChange,
   onCountrySelect,
@@ -90,9 +106,12 @@ export function TravelGlobe({
   command = null,
 }: TravelGlobeProps) {
   const [GlobeComponent, setGlobeComponent] = useState<null | typeof import("react-globe.gl").default>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [selectedPoint, setSelectedPoint] = useState<GlobePoint | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<GlobePoint | null>(null);
+  const [hoveredCountryPreview, setHoveredCountryPreview] = useState<HoverCountryPreview | null>(null);
   const [openedClusterIds, setOpenedClusterIds] = useState<Set<string>>(() => new Set());
   const [internalRotationEnabled, setInternalRotationEnabled] = useState(true);
   const [polygonsData, setPolygonsData] = useState<object[]>([]);
@@ -102,6 +121,7 @@ export function TravelGlobe({
   const didApplyFocusSelection = useRef<string | null>(null);
   const didApplyFocusVideo = useRef<string | null>(null);
   const hoveredPointRef = useRef<GlobePoint | null>(null);
+  const hoverClearTimeoutRef = useRef<number | null>(null);
   const suppressPolygonClickUntilRef = useRef(0);
   const rotationPointOfViewRef = useRef({ lat: 20, lng: -10, altitude: 2.3 });
   const rotationEnabled = controlledRotationEnabled ?? internalRotationEnabled;
@@ -130,11 +150,50 @@ export function TravelGlobe({
     () => new Set(videoLocations.map((video) => String(video.country_code || "").toUpperCase()).filter(Boolean)).size,
     [videoLocations]
   );
+  const videoCountryCodes = useMemo(
+    () => new Set(videoLocations.map((video) => String(video.country_code || "").toUpperCase()).filter(Boolean)),
+    [videoLocations]
+  );
+
+  const polygonCountryIndex = useMemo(() => buildPolygonCountryIndex(videoLocations), [videoLocations]);
+
+  const countryFallbackPoints = useMemo(() => {
+    if (pointMode !== "country" || polygonsData.length === 0) return [];
+
+    const points: GlobePoint[] = [];
+    for (const polygon of polygonsData) {
+      const countryCode = resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex);
+      if (!countryCode || videoCountryCodes.has(countryCode.toUpperCase())) continue;
+
+      const centroid = geoCentroid(polygon as any);
+      if (!Number.isFinite(centroid[0]) || !Number.isFinite(centroid[1])) continue;
+
+      const properties = (polygon as { properties?: { name?: string } }).properties || {};
+      const countryName =
+        Country.getCountryByCode(countryCode)?.name ||
+        String(properties.name || countryCode || "Unknown");
+
+      points.push({
+        point_id: `country-empty-${countryCode.toUpperCase()}`,
+        kind: "country",
+        country_code: countryCode.toUpperCase(),
+        country_name: countryName,
+        lat: centroid[1],
+        lng: centroid[0],
+        videos: [],
+        total_views: 0,
+        video_count: 0,
+        size: 0.24,
+      });
+    }
+
+    return points;
+  }, [pointMode, polygonsData, polygonCountryIndex, videoCountryCodes]);
 
   const pointsData = useMemo(() => {
     if (pointMode === "country") {
       const grouped = groupVideosByCountry(videoLocations);
-      return grouped.map((group) => ({
+      const groupedPoints = grouped.map((group) => ({
         point_id: `country-${group.country_code}`,
         kind: "country" as const,
         country_code: group.country_code,
@@ -146,21 +205,80 @@ export function TravelGlobe({
         video_count: group.videos.length,
         size: Math.log2(group.videos.length + 1) * 0.48 + 0.24,
       }));
+
+      return spreadVideoPoints([...groupedPoints, ...countryFallbackPoints]);
     }
 
     return spreadVideoPoints(buildVideoModePoints(videoLocations, expandedClusterId));
-  }, [expandedClusterId, videoLocations, pointMode]);
+  }, [countryFallbackPoints, expandedClusterId, videoLocations, pointMode]);
 
   const arcData = useMemo(
-    () => (pointMode === "country" ? getTopArcs(pointsData) : []),
+    () => (pointMode === "country" ? getTopArcs(pointsData.filter((point) => point.video_count > 0)) : []),
     [pointMode, pointsData]
   );
+  const watchedCountryProgress = useMemo(() => {
+    const progress = new Map<string, { total: number; watched: number; ratio: number }>();
 
-  const countryNameIndex = useMemo(() => buildCountryNameIndex(videoLocations), [videoLocations]);
+    for (const video of videoLocations) {
+      const countryCode = String(video.country_code || "").toUpperCase().trim();
+      if (!countryCode) continue;
+      const current = progress.get(countryCode) || { total: 0, watched: 0, ratio: 0 };
+      current.total += 1;
+      if (isVideoComplete(video.youtube_video_id, watchedVideoIds, videoWatchStatusById)) {
+        current.watched += 1;
+      }
+      current.ratio = current.total > 0 ? current.watched / current.total : 0;
+      progress.set(countryCode, current);
+    }
+
+    return progress;
+  }, [videoLocations, videoWatchStatusById, watchedVideoIds]);
 
   const activePoint = hoveredPoint || selectedPoint;
-  const panelMode = hoveredPoint ? "Hover preview" : selectedPoint ? "Pinned selection" : null;
   const visibleVideos = activePoint ? activePoint.videos.slice(0, maxVisibleVideos) : [];
+  const activePointCountryProgress = activePoint
+    ? watchedCountryProgress.get(activePoint.country_code.toUpperCase()) || { total: activePoint.video_count, watched: 0, ratio: 0 }
+    : null;
+  const summaryCountry = hoveredCountryPreview || (activePoint
+    ? {
+        countryCode: activePoint.country_code,
+        countryName: activePoint.country_name,
+        totalVideos: activePointCountryProgress?.total || activePoint.video_count,
+        watchedVideos: activePointCountryProgress?.watched || 0,
+        ratio: activePointCountryProgress?.ratio || 0,
+      }
+    : null);
+  const panelCountryCode = summaryCountry?.countryCode || activePoint?.country_code || "";
+  const panelCountryName = summaryCountry?.countryName || activePoint?.country_name || "";
+  const panelWatchedVideos = summaryCountry?.watchedVideos ?? activePointCountryProgress?.watched ?? 0;
+  const panelTotalVideos = summaryCountry?.totalVideos ?? activePointCountryProgress?.total ?? activePoint?.video_count ?? 0;
+  const panelRatio = summaryCountry?.ratio ?? activePointCountryProgress?.ratio ?? 0;
+  const panelPointId = activePoint?.point_id || panelCountryCode || "country";
+
+  const showHoverPoint = useCallback((point: GlobePoint) => {
+    if (hoverClearTimeoutRef.current) {
+      window.clearTimeout(hoverClearTimeoutRef.current);
+      hoverClearTimeoutRef.current = null;
+    }
+    setHoveredPoint(point);
+    const progress = watchedCountryProgress.get(point.country_code.toUpperCase()) || { total: point.video_count, watched: 0, ratio: 0 };
+    setHoveredCountryPreview({
+      countryCode: point.country_code,
+      countryName: point.country_name,
+      totalVideos: progress.total || point.video_count,
+      watchedVideos: progress.watched,
+      ratio: progress.ratio,
+    });
+  }, [watchedCountryProgress]);
+
+  const scheduleHoverPointClear = useCallback((pointId?: string) => {
+    if (hoverClearTimeoutRef.current) window.clearTimeout(hoverClearTimeoutRef.current);
+    hoverClearTimeoutRef.current = window.setTimeout(() => {
+      setHoveredPoint((previous) => (!pointId || previous?.point_id === pointId ? null : previous));
+      setHoveredCountryPreview((previous) => (!pointId || previous ? null : previous));
+      hoverClearTimeoutRef.current = null;
+    }, 3000);
+  }, []);
 
   useEffect(() => {
     onClusterExpandedChange?.(Boolean(expandedClusterId));
@@ -175,6 +293,26 @@ export function TravelGlobe({
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      setContainerSize((current) => {
+        const width = Math.round(rect.width);
+        const height = Math.round(rect.height);
+        if (current.width === width && current.height === height) return current;
+        return { width, height };
+      });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -250,7 +388,10 @@ export function TravelGlobe({
   }, [command, setGlobePointOfView, updateRotationEnabled]);
 
   const focusCountryOnGlobe = useCallback((countrySelection: GlobePoint) => {
-    const { lat, lng, altitude } = getCountryPointOfView(countrySelection.videos, pointMode);
+    const { lat, lng, altitude } =
+      countrySelection.videos.length > 0
+        ? getCountryPointOfView(countrySelection.videos, pointMode)
+        : { lat: countrySelection.lat, lng: countrySelection.lng, altitude: pointMode === "video" ? 0.72 : 1.2 };
     updateRotationEnabled(false);
     setSelectedPoint(countrySelection);
     rotationPointOfViewRef.current = { lat, lng, altitude };
@@ -272,7 +413,10 @@ export function TravelGlobe({
   useEffect(() => {
     if (!focusCountryCode || pointsData.length === 0) return;
     if (didApplyFocusSelection.current === focusCountryCode.toUpperCase()) return;
-    const candidate = buildCountrySelectionPoint(videoLocations, focusCountryCode);
+    const candidate =
+      pointsData.find(
+        (point) => point.kind === "country" && point.country_code.toUpperCase() === focusCountryCode.toUpperCase()
+      ) || buildCountrySelectionPoint(videoLocations, focusCountryCode);
     if (!candidate) return;
     didApplyFocusSelection.current = focusCountryCode.toUpperCase();
     setExpandedClusterId(null);
@@ -321,9 +465,17 @@ export function TravelGlobe({
 
   const selectCountryFromPolygon = useCallback(
     (countryCode: string) => {
-      const candidate = buildCountrySelectionPoint(videoLocations, countryCode);
-      if (!candidate) return;
+      const candidate =
+        pointsData.find(
+          (point) => point.kind === "country" && point.country_code.toUpperCase() === countryCode.toUpperCase()
+        ) || buildCountrySelectionPoint(videoLocations, countryCode);
       onCountrySelect?.(countryCode.toUpperCase(), "polygon");
+      if (!candidate) {
+        setSelectedPoint(null);
+        setExpandedClusterId(null);
+        onPinnedVideoChange?.(null);
+        return;
+      }
       updateRotationEnabled(false);
       setExpandedClusterId(null);
       setSelectedPoint(candidate);
@@ -331,11 +483,12 @@ export function TravelGlobe({
       rotationPointOfViewRef.current = nextView;
       globeRef.current?.pointOfView(nextView, 850);
     },
-    [onCountrySelect, pointMode, updateRotationEnabled, videoLocations]
+    [onCountrySelect, pointMode, pointsData, updateRotationEnabled, videoLocations]
   );
 
   useEffect(() => {
     return () => {
+      if (hoverClearTimeoutRef.current) window.clearTimeout(hoverClearTimeoutRef.current);
       disposeGlobeResources(globeRef.current);
       globeRef.current = undefined;
     };
@@ -372,6 +525,7 @@ export function TravelGlobe({
 
   return (
     <div
+      ref={containerRef}
       className={`relative w-full overflow-hidden bg-[#04070E] ${compact ? "h-[620px] rounded-[28px]" : "h-[100dvh]"} ${
         interactive ? "" : "pointer-events-none [&_*]:pointer-events-none [&_.scene-nav-info]:hidden"
       }`}
@@ -381,57 +535,61 @@ export function TravelGlobe({
       {GlobeComponent ? (
         <GlobeComponent
           ref={globeRef}
+          width={containerSize.width || undefined}
+          height={containerSize.height || undefined}
           globeImageUrl="https://unpkg.com/three-globe/example/img/earth-night.jpg"
           backgroundImageUrl="https://unpkg.com/three-globe/example/img/night-sky.png"
           polygonsData={polygonsData}
           polygonAltitude={() => 0.005}
           polygonCapColor={(polygon) => {
-            const polygonCode = resolveCountryCodeFromPolygon(polygon as object, countryNameIndex);
-            if (
-              votedCountryCode &&
-              polygonCode &&
-              polygonCode.toUpperCase() === votedCountryCode.toUpperCase()
-            ) {
-              return "rgba(255, 68, 68, 0.08)";
+            const polygonCode = resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex);
+            const countryStats = polygonCode ? watchedCountryProgress.get(polygonCode.toUpperCase()) || { total: 0, watched: 0, ratio: 0 } : { total: 0, watched: 0, ratio: 0 };
+            const watchedProgress = countryStats.ratio;
+            if (countryStats.total === 0) {
+              return "rgba(255, 68, 68, 0.24)";
             }
-            if (
-              selectedCountryCode &&
-              polygonCode &&
-              polygonCode.toUpperCase() === selectedCountryCode.toUpperCase()
-            ) {
-              return "rgba(34,211,238,0.18)";
+            if (watchedProgress >= 1) {
+              return "rgba(34, 197, 94, 0.26)";
             }
-            if (
-              hoveredPolygonCode &&
-              polygonCode &&
-              polygonCode.toUpperCase() === hoveredPolygonCode.toUpperCase()
-            ) {
-              return "rgba(125,211,252,0.12)";
-            }
-            return "rgba(148,163,184,0.03)";
+            const alpha = Math.min(0.28, 0.12 + Math.max(0.02, watchedProgress) * 0.18);
+            return `rgba(250, 204, 21, ${alpha})`;
           }}
           polygonSideColor={() => "rgba(15,23,42,0.25)"}
           polygonStrokeColor={(polygon) => {
-            const polygonCode = resolveCountryCodeFromPolygon(polygon as object, countryNameIndex);
-            if (
-              votedCountryCode &&
-              polygonCode &&
-              polygonCode.toUpperCase() === votedCountryCode.toUpperCase()
-            ) {
-              return "rgba(255, 56, 56, 0.95)";
+            const polygonCode = resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex);
+            const countryStats = polygonCode ? watchedCountryProgress.get(polygonCode.toUpperCase()) || { total: 0, watched: 0, ratio: 0 } : { total: 0, watched: 0, ratio: 0 };
+            const watchedProgress = countryStats.ratio;
+            if (countryStats.total === 0) {
+              return "rgba(255, 68, 68, 0.9)";
             }
-            return "rgba(125,211,252,0.35)";
+            if (watchedProgress >= 1) {
+              return "rgba(34, 197, 94, 0.95)";
+            }
+            return "rgba(250, 204, 21, 0.9)";
           }}
           onPolygonHover={
             interactive
               ? (polygon) => {
                   const name = String((polygon as { properties?: { name?: string } } | null)?.properties?.name || "");
-                  const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, countryNameIndex) : null;
+                  const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex) : null;
                   setHoveredPolygonCode(code);
                   if (!code || !name || hoveredPointRef.current) {
+                    if (!code) {
+                      scheduleHoverPointClear();
+                      setHoveredCountryPreview(null);
+                    }
                     onCountryHoverChange?.(null);
                     return;
                   }
+                  const stats = watchedCountryProgress.get(code.toUpperCase()) || { total: 0, watched: 0, ratio: 0 };
+                  setHoveredCountryPreview({
+                    countryCode: code,
+                    countryName: name,
+                    totalVideos: stats.total,
+                    watchedVideos: stats.watched,
+                    ratio: stats.ratio,
+                  });
+                  scheduleHoverPointClear();
                   onCountryHoverChange?.({ countryCode: code, countryName: name });
                 }
               : undefined
@@ -440,7 +598,7 @@ export function TravelGlobe({
             interactive
               ? (polygon) => {
                   if (Date.now() < suppressPolygonClickUntilRef.current) return;
-                  const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, countryNameIndex) : null;
+                  const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex) : null;
                   if (!code) return;
                   selectCountryFromPolygon(code);
                 }
@@ -468,15 +626,18 @@ export function TravelGlobe({
               },
               onHoverStart: (point) => {
                 onCountryHoverChange?.(null);
-                setHoveredPoint(point);
+                showHoverPoint(point);
               },
               onHoverEnd: (point) => {
-                setHoveredPoint((previous) => (previous?.point_id === point.point_id ? null : previous));
+                scheduleHoverPointClear(point.point_id);
               },
             }, interactive, {
               opened: openedClusterIds.has((d as GlobePoint).point_id),
               expanded: expandedClusterId === (d as GlobePoint).point_id,
               hasExpandedCluster: Boolean(expandedClusterId),
+              watchedProgress: getPointCompletedRatio(d as GlobePoint, watchedVideoIds, videoWatchStatusById),
+              watched: isPointWatched(d as GlobePoint, watchedVideoIds, videoWatchStatusById),
+              partiallyWatched: isPointPartiallyWatched(d as GlobePoint, watchedVideoIds, videoWatchStatusById),
             })
           }
           arcsData={arcData}
@@ -500,8 +661,12 @@ export function TravelGlobe({
             interactive
               ? (point) => {
                 const hovered = (point as GlobePoint | undefined) || null;
-                setHoveredPoint(hovered);
-                if (hovered) onCountryHoverChange?.(null);
+                if (hovered) {
+                  onCountryHoverChange?.(null);
+                  showHoverPoint(hovered);
+                } else {
+                  scheduleHoverPointClear();
+                }
               }
               : undefined
           }
@@ -510,6 +675,7 @@ export function TravelGlobe({
               ? () => {
                   updateRotationEnabled(false);
                   setHoveredPoint(null);
+                  setHoveredCountryPreview(null);
                   setHoveredPolygonCode(null);
                   onCountryHoverChange?.(null);
                   setSelectedPoint(null);
@@ -550,81 +716,107 @@ export function TravelGlobe({
         </div>
       ) : null}
 
-      {showPointPanel && activePoint ? (
+      {showPointPanel && (summaryCountry || activePoint) ? (
         <aside
           className={`absolute z-30 text-white backdrop-blur-xl ${
             minimalOverlay
-              ? "right-4 top-4 w-[340px] rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl"
+              ? pointPanelClassName || "left-1/2 top-4 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl"
               : "right-0 top-0 h-full w-full max-w-[380px] border-l border-white/10 bg-black/85 p-4 sm:p-5"
           }`}
         >
-          <div className={`flex items-center justify-between ${minimalOverlay ? "mb-2" : "mb-4"}`}>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-sm">
-                  {countryCodeToFlag(activePoint.country_code)}
-                </span>
-                <div>
-                  <h2 className={`${minimalOverlay ? "text-base" : "text-lg"} font-semibold`}>{activePoint.country_name}</h2>
-                  {panelMode ? <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">{panelMode}</p> : null}
-                </div>
-              </div>
-              <p className="mt-1 text-xs text-slate-300">
-                {activePoint.video_count} videos · {formatNumber(activePoint.total_views)} views
-              </p>
-            </div>
-            <button
-              type="button"
-              className="rounded-md border border-white/20 px-2 py-1 text-[11px] hover:bg-white/10"
-              onClick={() => {
-                setHoveredPoint(null);
-                setSelectedPoint(null);
-                setExpandedClusterId(null);
-              }}
-            >
-              Cerrar
-            </button>
-          </div>
-
-          <div className={`${minimalOverlay ? "space-y-1.5" : "space-y-2 overflow-y-auto pr-1"}`} style={minimalOverlay ? undefined : { maxHeight: "calc(100dvh - 220px)" }}>
-            {visibleVideos.map((video) => (
-              <button
-                type="button"
-                key={`${activePoint.point_id}-${video.youtube_video_id}`}
-                onClick={() => onPinnedVideoChange?.(video)}
-                className="block w-full rounded-xl border border-white/10 bg-white/5 p-2 text-left transition hover:bg-white/10"
-              >
-                <div className="flex gap-3">
-                  {video.thumbnail_url ? (
-                    <Image
-                      src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
-                      alt={video.title}
-                      width={120}
-                      height={72}
-                      className="h-16 w-28 rounded-md object-cover"
+          {minimalOverlay ? (
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-lg">
+                {countryCodeToFlag(panelCountryCode)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-semibold">{panelCountryName}</h2>
+                <p className="mt-1 text-xs text-slate-300">
+                  {panelWatchedVideos} de {panelTotalVideos} videos vistos
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/10">
+                    <span
+                      className="block h-full rounded-full bg-[#22c55e]"
+                      style={{ width: `${Math.round(panelRatio * 100)}%` }}
                     />
-                  ) : (
-                    <div className="h-16 w-28 rounded-md bg-white/10" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="line-clamp-2 text-xs font-semibold">{video.title}</p>
-                    <p className="mt-1 text-[11px] text-slate-300">
-                      {formatNumber(Number(video.view_count || 0))} views · {formatNumber(Number(video.like_count || 0))} likes
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      {formatNumber(Number(video.comment_count || 0))} comments · {formatDate(video.published_at)}
-                    </p>
                   </div>
+                  <span className="w-9 text-right text-[11px] font-bold text-[#86efac]">
+                    {Math.round(panelRatio * 100)}%
+                  </span>
                 </div>
-              </button>
-            ))}
-          </div>
+                <p className="mt-2 text-center text-[10px] leading-4 text-[#8d98a5]">
+                  Vota para que el creador viaje.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-sm">
+                      {countryCodeToFlag(panelCountryCode)}
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-semibold">{panelCountryName}</h2>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-300">
+                    {activePoint?.video_count || 0} videos · {formatNumber(activePoint?.total_views || 0)} views
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md border border-white/20 px-2 py-1 text-[11px] hover:bg-white/10"
+                  onClick={() => {
+                    setHoveredPoint(null);
+                    setSelectedPoint(null);
+                    setExpandedClusterId(null);
+                  }}
+                >
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: "calc(100dvh - 220px)" }}>
+                {visibleVideos.map((video) => (
+                  <button
+                    type="button"
+                    key={`${panelPointId}-${video.youtube_video_id}`}
+                    onClick={() => onPinnedVideoChange?.(video)}
+                    className="block w-full rounded-xl border border-white/10 bg-white/5 p-2 text-left transition hover:bg-white/10"
+                  >
+                    <div className="flex gap-3">
+                      {video.thumbnail_url ? (
+                        <Image
+                          src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
+                          alt={video.title}
+                          width={120}
+                          height={72}
+                          className="h-16 w-28 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="h-16 w-28 rounded-md bg-white/10" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="line-clamp-2 text-xs font-semibold">{video.title}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {formatNumber(Number(video.view_count || 0))} views · {formatDate(video.published_at)}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           {showSponsorBanner && !minimalOverlay ? (
             <SponsorBanner
               channelId={channelData.id}
-              countryCode={activePoint.country_code}
-              countryName={activePoint.country_name}
+              countryCode={panelCountryCode}
+              countryName={panelCountryName}
             />
           ) : null}
         </aside>
@@ -1275,7 +1467,7 @@ function createFlagPinElement(
     onHoverEnd: (point: GlobePoint) => void;
   },
   interactive = true,
-  markerState?: { opened?: boolean; expanded?: boolean; hasExpandedCluster?: boolean }
+  markerState?: { opened?: boolean; expanded?: boolean; hasExpandedCluster?: boolean; watched?: boolean; partiallyWatched?: boolean; watchedProgress?: number }
 ) {
   const marker = document.createElement(interactive ? "button" : "div");
   const denseCluster = isDenseVideoCluster(point);
@@ -1283,6 +1475,13 @@ function createFlagPinElement(
   const openedCluster = denseCluster && markerState?.opened;
   const expandedCluster = denseCluster && markerState?.expanded;
   const hasExpandedCluster = denseCluster && markerState?.hasExpandedCluster;
+  const watched = markerState?.watched === true;
+  const partiallyWatched = markerState?.partiallyWatched === true;
+  const watchedProgress = Math.max(0, Math.min(1, Number(markerState?.watchedProgress || 0)));
+  const isComplete = watched || watchedProgress >= 1;
+  const isPartialWatch = partiallyWatched || (watchedProgress > 0 && !isComplete);
+  const hasVideoContent = point.videos.length > 0;
+  const isEmptyCountry = point.kind === "country" && !hasVideoContent;
   const inactiveCluster = denseCluster && hasExpandedCluster && !expandedCluster;
   if (interactive) marker.setAttribute("type", "button");
   marker.setAttribute("data-globe-marker", "true");
@@ -1290,7 +1489,7 @@ function createFlagPinElement(
     "aria-label",
     denseCluster
       ? `Hacer zoom al grupo de ${point.video_count} videos: ${point.country_name}`
-      : `${point.kind === "video" ? "Abrir video" : "Abrir destino"}: ${point.country_name}`
+      : `${point.kind === "video" ? "Abrir video" : point.video_count === 0 ? "Votar por" : "Abrir destino"}: ${point.country_name}`
   );
   marker.tabIndex = -1;
   marker.style.cursor = interactive ? "pointer" : "default";
@@ -1307,37 +1506,81 @@ function createFlagPinElement(
   marker.style.alignItems = "center";
   marker.style.justifyContent = "center";
   marker.style.borderRadius = "999px";
-  marker.style.background = denseCluster
+  const markerBackground = denseCluster
     ? expandedCluster
       ? "rgba(4,7,14,0.94)"
       : inactiveCluster
         ? "rgba(4,7,14,0.68)"
-        : "rgba(4,7,14,0.88)"
-    : "rgba(4,7,14,0.78)";
-  marker.style.border = denseCluster
-    ? expandedCluster
-      ? "1px solid rgba(250,204,21,0.95)"
-      : openedCluster
-        ? "1px solid rgba(250,204,21,0.9)"
-        : "1px solid rgba(255,255,255,0.34)"
-    : expandedVideo
-      ? "1px solid rgba(255,255,255,0.18)"
-      : "1px solid rgba(255,255,255,0.24)";
-  marker.style.boxShadow = denseCluster
-    ? expandedCluster
-      ? "0 10px 24px rgba(2,6,23,0.62), 0 0 0 2px rgba(250,204,21,0.28)"
-      : openedCluster
-        ? "0 8px 20px rgba(2,6,23,0.58), 0 0 0 2px rgba(250,204,21,0.3)"
-        : "0 8px 20px rgba(2,6,23,0.58), 0 0 0 2px rgba(255,90,61,0.12)"
-    : "0 6px 16px rgba(2,6,23,0.45)";
-  marker.style.zIndex = denseCluster ? (expandedCluster ? "4" : "2") : "1";
+        : isComplete
+          ? "rgba(12,64,34,0.9)"
+          : isPartialWatch
+            ? "rgba(250,204,21,0.18)"
+            : "rgba(4,7,14,0.88)"
+    : isComplete
+      ? "rgba(12,64,34,0.88)"
+      : isPartialWatch
+        ? "rgba(250,204,21,0.14)"
+        : "rgba(4,7,14,0.78)";
+  const markerBorder = denseCluster
+    ? isComplete
+      ? "1px solid rgba(34,197,94,0.98)"
+      : isPartialWatch
+        ? "1px solid rgba(250,204,21,0.95)"
+        : expandedCluster
+            ? "1px solid rgba(250,204,21,0.95)"
+            : openedCluster
+              ? "1px solid rgba(250,204,21,0.9)"
+              : "1px solid rgba(255,255,255,0.34)"
+    : isComplete
+      ? "1px solid rgba(34,197,94,0.98)"
+      : isPartialWatch
+        ? "1px solid rgba(250,204,21,0.95)"
+          : expandedVideo
+            ? "1px solid rgba(255,255,255,0.18)"
+            : "1px solid rgba(255,255,255,0.24)";
+  const markerShadow = denseCluster
+    ? isComplete
+      ? "0 8px 22px rgba(2,6,23,0.62), 0 0 0 2px rgba(34,197,94,0.32)"
+      : isPartialWatch
+        ? "0 8px 22px rgba(2,6,23,0.56), 0 0 0 2px rgba(250,204,21,0.28)"
+          : expandedCluster
+            ? "0 10px 24px rgba(2,6,23,0.62), 0 0 0 2px rgba(250,204,21,0.28)"
+            : openedCluster
+              ? "0 8px 20px rgba(2,6,23,0.58), 0 0 0 2px rgba(250,204,21,0.3)"
+              : "0 8px 20px rgba(2,6,23,0.58), 0 0 0 2px rgba(255,90,61,0.12)"
+    : isComplete
+      ? "0 6px 16px rgba(2,6,23,0.5), 0 0 0 2px rgba(34,197,94,0.3)"
+      : isPartialWatch
+        ? "0 6px 16px rgba(2,6,23,0.46), 0 0 0 2px rgba(250,204,21,0.26)"
+          : "0 6px 16px rgba(2,6,23,0.45)";
+  marker.style.background = markerBackground;
+  marker.style.border = markerBorder;
+  marker.style.boxShadow = markerShadow;
+  // Keep pins above the globe/canvas but below higher-level UI overlays (cards, sidebars, menus).
+  marker.style.zIndex = denseCluster ? (expandedCluster ? "9" : "8") : "7";
   marker.style.opacity = inactiveCluster ? "0.62" : "1";
   marker.style.fontSize = denseCluster ? "13px" : expandedVideo ? "10px" : "13px";
+  marker.style.overflow = "hidden";
+  marker.style.position = "relative";
+
+  if (watchedProgress > 0) {
+    const fill = document.createElement("span");
+    fill.setAttribute("aria-hidden", "true");
+    fill.style.position = "absolute";
+    fill.style.inset = "0";
+    fill.style.width = `${Math.round(watchedProgress * 100)}%`;
+    fill.style.background = isComplete ? "rgba(34,197,94,0.88)" : "rgba(250,204,21,0.46)";
+    fill.style.pointerEvents = "none";
+    fill.style.zIndex = "0";
+    marker.append(fill);
+  }
 
   if (denseCluster) {
     const flag = document.createElement("span");
     flag.textContent = countryCodeToFlag(point.country_code);
     flag.style.lineHeight = "1";
+    flag.style.position = "relative";
+    flag.style.zIndex = "1";
 
     const count = document.createElement("span");
     count.textContent = formatClusterCount(point.video_count);
@@ -1347,19 +1590,30 @@ function createFlagPinElement(
     count.style.transform = "none";
     count.style.borderRadius = "999px";
     count.style.border = "1px solid rgba(255,255,255,0.28)";
-    count.style.background = expandedCluster || openedCluster ? "rgba(250,204,21,0.95)" : "rgba(4,7,14,0.96)";
+    count.style.background = isComplete
+      ? "rgba(34,197,94,0.96)"
+      : expandedCluster || openedCluster
+        ? "rgba(250,204,21,0.95)"
+        : isPartialWatch
+          ? "rgba(250,204,21,0.92)"
+          : "rgba(4,7,14,0.9)";
     count.style.padding = "0 3px";
     count.style.fontSize = "8px";
     count.style.fontWeight = "800";
     count.style.lineHeight = "1.2";
-    count.style.color = expandedCluster || openedCluster ? "#111827" : "#fff";
+    count.style.color = isComplete || expandedCluster || openedCluster || isPartialWatch ? "#111827" : "#fff";
     count.style.whiteSpace = "nowrap";
     count.style.pointerEvents = "none";
+    count.style.zIndex = "2";
 
-    marker.style.position = "relative";
     marker.append(flag, count);
   } else {
-    marker.textContent = countryCodeToFlag(point.country_code);
+    const flag = document.createElement("span");
+    flag.textContent = countryCodeToFlag(point.country_code);
+    flag.style.position = "relative";
+    flag.style.zIndex = "1";
+    flag.style.lineHeight = "1";
+    marker.append(flag);
   }
 
   if (interactive) {
@@ -1373,6 +1627,65 @@ function createFlagPinElement(
   }
 
   return marker;
+}
+
+type VideoWatchStatusMap = Record<string, "not_finished" | "watched" | "watch_later">;
+
+function isVideoComplete(
+  videoId: string | null | undefined,
+  watchedVideoIds?: Set<string>,
+  videoWatchStatusById?: VideoWatchStatusMap
+) {
+  const normalized = String(videoId || "").trim();
+  if (!normalized) return false;
+  if (videoWatchStatusById?.[normalized]) return videoWatchStatusById[normalized] === "watched";
+  return watchedVideoIds?.has(normalized) === true;
+}
+
+function isVideoStartedButIncomplete(
+  videoId: string | null | undefined,
+  watchedVideoIds?: Set<string>,
+  videoWatchStatusById?: VideoWatchStatusMap
+) {
+  const normalized = String(videoId || "").trim();
+  if (!normalized) return false;
+  const status = videoWatchStatusById?.[normalized];
+  if (status === "not_finished") return true;
+  if (status === "watched" || status === "watch_later") return false;
+  return watchedVideoIds?.has(normalized) === true;
+}
+
+function isPointWatched(
+  point: GlobePoint,
+  watchedVideoIds?: Set<string>,
+  videoWatchStatusById?: VideoWatchStatusMap
+) {
+  if (point.videos.length === 0) return false;
+  return point.videos.every((video) => isVideoComplete(video.youtube_video_id, watchedVideoIds, videoWatchStatusById));
+}
+
+function isPointPartiallyWatched(
+  point: GlobePoint,
+  watchedVideoIds?: Set<string>,
+  videoWatchStatusById?: VideoWatchStatusMap
+) {
+  if (point.videos.length === 0) return false;
+  if (isPointWatched(point, watchedVideoIds, videoWatchStatusById)) return false;
+  return point.videos.some((video) =>
+    isVideoStartedButIncomplete(video.youtube_video_id, watchedVideoIds, videoWatchStatusById)
+  );
+}
+
+function getPointCompletedRatio(
+  point: GlobePoint,
+  watchedVideoIds?: Set<string>,
+  videoWatchStatusById?: VideoWatchStatusMap
+) {
+  if (point.videos.length === 0) return 0;
+  const watchedCount = point.videos.filter((video) =>
+    isVideoComplete(video.youtube_video_id, watchedVideoIds, videoWatchStatusById)
+  ).length;
+  return Math.max(0, Math.min(1, watchedCount / point.videos.length));
 }
 
 function buildCountrySelectionPoint(videoLocations: TravelVideoLocation[], countryCode: string): GlobePoint | null {
@@ -1490,6 +1803,62 @@ function buildCountryNameIndex(videoLocations: TravelVideoLocation[]) {
         index.set(normalized, code);
       }
     }
+  }
+
+  return index;
+}
+
+function buildPolygonCountryIndex(videoLocations: TravelVideoLocation[]) {
+  const index = buildCountryNameIndex(videoLocations);
+
+  for (const country of Country.getAllCountries()) {
+    const code = String(country.isoCode || "").toUpperCase();
+    const candidates = new Set<string>();
+    if (code) candidates.add(code);
+    if (country.name) candidates.add(country.name);
+
+    for (const candidate of candidates) {
+      const normalized = normalizeCountryName(candidate);
+      if (!normalized) continue;
+      if (!index.has(normalized)) {
+        index.set(normalized, code);
+      }
+    }
+  }
+
+  const manualAliases: Array<[string, string]> = [
+    ["fiji", "FJ"],
+    ["dominican rep", "DO"],
+    ["bahamas", "BS"],
+    ["fr s antarctic lands", "TF"],
+    ["cote d ivoire", "CI"],
+    ["central african rep", "CF"],
+    ["eq guinea", "GQ"],
+    ["palestine", "PS"],
+    ["gambia", "GM"],
+    ["solomon is", "SB"],
+    ["czechia", "CZ"],
+    ["n cyprus", "CY"],
+    ["somaliland", "SO"],
+    ["eswatini", "SZ"],
+    ["republic of the congo", "CG"],
+    ["congo", "CG"],
+    ["dem rep congo", "CD"],
+    ["democratic republic of the congo", "CD"],
+    ["dr congo", "CD"],
+    ["bosnia and herz", "BA"],
+    ["falkland is", "FK"],
+    ["falkland islands", "FK"],
+    ["w sahara", "EH"],
+    ["western sahara", "EH"],
+    ["s sudan", "SS"],
+    ["south sudan", "SS"],
+  ];
+
+  for (const [alias, code] of manualAliases) {
+    const normalized = normalizeCountryName(alias);
+    if (!normalized || index.has(normalized)) continue;
+    index.set(normalized, code);
   }
 
   return index;

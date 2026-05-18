@@ -2,38 +2,43 @@
 
 import Image from "next/image";
 import {
-  Bell,
+  ArrowsOutSimple,
   BookmarkSimple,
   CaretDown,
   CheckCircle,
   Clock,
   Compass,
+  CopySimple,
   Eye,
   Flag,
-  FunnelSimple,
   GlobeHemisphereWest,
   Heart,
   House,
   List,
   MagnifyingGlass,
   MapPin,
-  Minus,
   Play,
-  Plus,
   SquaresFour,
-  UploadSimple,
+  Star,
   Users,
   UsersThree,
   Video,
   X,
 } from "@phosphor-icons/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { TravelGlobe } from "@/components/travel-globe";
+import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
+import { useLocalVideoActivity } from "@/components/map/video-activity";
+import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 
-type ContentFilter = "all" | "live" | "videos" | "creators";
-type TravelList = "trips" | "wishlist" | "explored";
+type ContentFilterWindow = "all" | "365" | "90" | "30";
+type ActivityFilter = "all" | "favorites" | "saved" | "watched" | "incomplete";
+type LocalVotePrompt = {
+  countryCode: string;
+  countryName: string;
+};
 
 interface MapProposalPrototype2Props {
   channel: TravelChannel;
@@ -44,6 +49,18 @@ type SidebarCountryItem = {
   code: string;
   name: string;
   count: number;
+  watchedCount: number;
+  progress: number;
+};
+
+type ProposalAnalytics = {
+  countries: number;
+  cities: number;
+  videos: number;
+  exploredPlaces: number;
+  watchedHours: number;
+  visitedCountries: number;
+  reactions: number;
 };
 
 function countryCodeToFlag(code: string) {
@@ -54,6 +71,21 @@ function countryCodeToFlag(code: string) {
     normalized.charCodeAt(1) + 127397
   );
 }
+
+function formatCompactMetric(value: number) {
+  if (!Number.isFinite(value)) return "0";
+  if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}M`;
+  if (value >= 1_000) return `${Math.round(value / 100) / 10}K`;
+  return String(Math.round(value));
+}
+
+const ACTIVITY_FILTER_OPTIONS: Array<{ id: ActivityFilter; label: string; Icon: typeof Star }> = [
+  { id: "all", label: "Todos", Icon: SquaresFour },
+  { id: "favorites", label: "Favoritos", Icon: Star },
+  { id: "saved", label: "Guardados", Icon: BookmarkSimple },
+  { id: "watched", label: "Vistos", Icon: CheckCircle },
+  { id: "incomplete", label: "Incompletos", Icon: Clock },
+];
 
 // Custom Premium Inline SVG Sponsor Logos for offline reliability & visual excellence
 function GoProLogo() {
@@ -265,12 +297,15 @@ const STATIC_MARKERS = [
 ];
 
 export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPrototype2Props) {
-  const [filter, setFilter] = useState<ContentFilter>("all");
-  const [travelList, setTravelList] = useState<TravelList>("trips");
+  const [filter, setFilter] = useState<ContentFilterWindow>("all");
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+  const [dateMenuOpen, setDateMenuOpen] = useState(false);
+  const [activityMenuOpen, setActivityMenuOpen] = useState(false);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSidebarItem, setActiveSidebarItem] = useState("Explorar");
   const [zoom, setZoom] = useState(1);
-  const [selectedVideo, setSelectedVideo] = useState<typeof SUGGESTED_VIDEOS[0] | null>(null);
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string | null>(null);
 
   // TravelGlobe interactive state controls
   const [globeRotationEnabled, setGlobeRotationEnabled] = useState(true);
@@ -278,6 +313,9 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
   const [clusterExpanded, setClusterExpanded] = useState(false);
   const [hoveredCountryPin, setHoveredCountryPin] = useState<{ countryCode: string; countryName: string } | null>(null);
   const [activeVideo, setActiveVideo] = useState<TravelVideoLocation | null>(null);
+  const [pinnedVideo, setPinnedVideo] = useState<TravelVideoLocation | null>(null);
+  const [isDesktopVideoCard, setIsDesktopVideoCard] = useState(false);
+  const videoActivity = useLocalVideoActivity();
 
   // States for interactive simulations
   const [notice, setNotice] = useState("Prototipo Premium /map-proposal-2. Presiona elementos para simular interacción.");
@@ -285,8 +323,9 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set(["dolomitas", "islandia"]));
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set(["dolomitas"]));
+  const [localFanVotes, setLocalFanVotes] = useState<Record<string, number>>({});
+  const [votePrompt, setVotePrompt] = useState<LocalVotePrompt | null>(null);
+  const [votedCountryCode, setVotedCountryCode] = useState<string | null>(null);
   const sidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     const bucket = new Map<string, SidebarCountryItem>();
     for (const video of videoLocations) {
@@ -297,40 +336,176 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       if (current) {
         current.count += 1;
       } else {
-        bucket.set(code, { code, name, count: 1 });
+        bucket.set(code, { code, name, count: 1, watchedCount: 0, progress: 0 });
       }
+    }
+    for (const video of videoLocations) {
+      const code = String(video.country_code || "").toUpperCase().trim();
+      const id = String(video.youtube_video_id || "").trim();
+      if (!code || !id || !videoActivity.seenIds.has(id)) continue;
+      const current = bucket.get(code);
+      if (!current) continue;
+      current.watchedCount += 1;
+    }
+    for (const item of bucket.values()) {
+      item.progress = item.count > 0 ? Math.min(1, item.watchedCount / item.count) : 0;
     }
     return Array.from(bucket.values())
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-      .slice(0, 6);
-  }, [videoLocations]);
+      ;
+  }, [videoActivity.seenIds, videoLocations]);
+  const filteredVideoLocations = useMemo(() => {
+    const dateFiltered = (() => {
+      if (filter === "all") return videoLocations;
+      const days = filter === "365" ? 365 : filter === "90" ? 90 : 30;
+      const threshold = Date.now() - days * 24 * 60 * 60 * 1000;
+      return videoLocations.filter((video) => {
+        const publishedAt = video.published_at ? new Date(video.published_at).getTime() : 0;
+        return Number.isFinite(publishedAt) && publishedAt >= threshold;
+      });
+    })();
+
+    if (activityFilter === "all") return dateFiltered;
+    return dateFiltered.filter((video) => {
+      const id = String(video.youtube_video_id || "");
+      if (activityFilter === "favorites") return videoActivity.featuredIds.has(id);
+      if (activityFilter === "saved") return videoActivity.savedIds.has(id);
+      if (activityFilter === "watched") return videoActivity.watchStatusById[id] === "watched" || videoActivity.seenIds.has(id);
+      return videoActivity.watchStatusById[id] === "not_finished";
+    });
+  }, [activityFilter, filter, videoActivity.featuredIds, videoActivity.savedIds, videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
+
+  const dateFilterLabel = useMemo(() => {
+    if (filter === "365") return "365 Días";
+    if (filter === "90") return "90 Días";
+    if (filter === "30") return "30 Días";
+    return "Todos";
+  }, [filter]);
+  const activityFilterOption = useMemo(
+    () => ACTIVITY_FILTER_OPTIONS.find((option) => option.id === activityFilter) || ACTIVITY_FILTER_OPTIONS[0],
+    [activityFilter]
+  );
+  const ActiveActivityIcon = activityFilterOption.Icon;
+  const voteCandidates = useMemo(() => {
+    return sidebarCountries
+      .map((country) => ({
+        code: country.code,
+        name: country.name,
+        count: country.count,
+        votes: localFanVotes[country.code] || 0,
+      }))
+      .sort((a, b) => b.votes - a.votes || b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 3);
+  }, [localFanVotes, sidebarCountries]);
+  const activeLocationVideos = useMemo(() => {
+    const fallbackCountryCode = String((pinnedVideo || activeVideo)?.country_code || "").toUpperCase();
+    const countryCode = String(selectedCountryCode || fallbackCountryCode).toUpperCase();
+    if (!countryCode) return filteredVideoLocations;
+    const sameCountryVideos = filteredVideoLocations.filter((video) => String(video.country_code || "").toUpperCase() === countryCode);
+    return sameCountryVideos.length ? sameCountryVideos : filteredVideoLocations;
+  }, [activeVideo, filteredVideoLocations, pinnedVideo, selectedCountryCode]);
+  const railSourceVideos = useMemo(() => {
+    if (activeLocationVideos.length > 0) return activeLocationVideos;
+    if (filteredVideoLocations.length > 0) return filteredVideoLocations;
+    return videoLocations;
+  }, [activeLocationVideos, filteredVideoLocations, videoLocations]);
+  const proposalAnalytics = useMemo<ProposalAnalytics>(() => {
+    const countryCodes = new Set<string>();
+    const cityKeys = new Set<string>();
+    const placeKeys = new Set<string>();
+    let reactions = 0;
+    let watchedSeconds = 0;
+
+    for (const video of videoLocations) {
+      const countryCode = String(video.country_code || "").toUpperCase().trim();
+      if (countryCode) countryCodes.add(countryCode);
+
+      const city = String(video.city || video.location_label || video.region || "").trim();
+      if (city) cityKeys.add(`${countryCode}:${city.toLowerCase()}`);
+
+      const lat = Number(video.lat);
+      const lng = Number(video.lng);
+      if (city) {
+        placeKeys.add(`${countryCode}:${city.toLowerCase()}`);
+      } else if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        placeKeys.add(`${countryCode}:${lat.toFixed(2)}:${lng.toFixed(2)}`);
+      } else if (countryCode) {
+        placeKeys.add(countryCode);
+      }
+
+      reactions += Number(video.like_count || 0) + Number(video.comment_count || 0);
+
+      const id = String(video.youtube_video_id || "");
+      const wasWatched = videoActivity.watchStatusById[id] === "watched" || videoActivity.seenIds.has(id) || videoActivity.openedIds.has(id);
+      if (wasWatched) watchedSeconds += Number(video.duration_seconds || 0);
+    }
+
+    const watchedCountryCodes = new Set(
+      videoLocations
+        .filter((video) => {
+          const id = String(video.youtube_video_id || "");
+          return videoActivity.watchStatusById[id] === "watched" || videoActivity.seenIds.has(id) || videoActivity.openedIds.has(id);
+        })
+        .map((video) => String(video.country_code || "").toUpperCase().trim())
+        .filter(Boolean)
+    );
+
+    return {
+      countries: countryCodes.size,
+      cities: cityKeys.size,
+      videos: videoLocations.length,
+      exploredPlaces: placeKeys.size,
+      watchedHours: Math.round(watchedSeconds / 3600),
+      visitedCountries: watchedCountryCodes.size,
+      reactions,
+    };
+  }, [videoActivity.openedIds, videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktopVideoCard(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
 
   function flash(message: string) {
     setNotice(message);
   }
 
-  function handleSaveVideo(id: string) {
-    const next = new Set(savedIds);
-    if (next.has(id)) {
-      next.delete(id);
-      flash("Video removido de guardados.");
-    } else {
-      next.add(id);
-      flash("Video guardado en tu colección.");
-    }
-    setSavedIds(next);
+  function openVotePrompt(countryCode: string | null) {
+    const normalized = String(countryCode || "").toUpperCase();
+    if (!normalized) return;
+    const country = sidebarCountries.find((item) => item.code === normalized);
+    setVotePrompt({
+      countryCode: normalized,
+      countryName: country?.name || normalized,
+    });
   }
 
-  function handleLikeVideo(id: string) {
-    const next = new Set(likedIds);
-    if (next.has(id)) {
-      next.delete(id);
-      flash("Me gusta eliminado.");
-    } else {
-      next.add(id);
-      flash("Me gusta guardado. ¡Gracias por tu apoyo!");
-    }
-    setLikedIds(next);
+  function confirmVote(countryCode: string) {
+    const normalized = String(countryCode || "").toUpperCase();
+    if (!normalized) return;
+    setLocalFanVotes((current) => ({
+      ...current,
+      [normalized]: (current[normalized] || 0) + 1,
+    }));
+    setVotedCountryCode(normalized);
+    setVotePrompt(null);
+    flash(`Voto registrado para ${countryCodeToFlag(normalized)} ${sidebarCountries.find((item) => item.code === normalized)?.name || normalized}.`);
+  }
+
+  function openMapVideo(video: TravelVideoLocation) {
+    setPinnedVideo(video);
+    setSelectedCountryCode(String(video.country_code || "").toUpperCase() || null);
+    videoActivity.markVideoOpened(video.youtube_video_id);
+    flash(`Video abierto: "${video.title}"`);
+  }
+
+  function changeMapVideo(video: TravelVideoLocation) {
+    setPinnedVideo(video);
+    setSelectedCountryCode(String(video.country_code || "").toUpperCase() || null);
+    videoActivity.markVideoStarted(video.youtube_video_id);
   }
 
   return (
@@ -338,60 +513,83 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       {/* Background glowing effects */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_18%,rgba(255,90,61,0.08),transparent_35%),linear-gradient(180deg,#04090f,#030508_60%,#010204)] pointer-events-none" />
       
-      <div className="relative grid h-screen overflow-hidden grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_340px] 3xl:grid-cols-[260px_minmax(0,1fr)_360px]">
+      <div className={cn(
+        "relative grid h-screen overflow-hidden grid-cols-1",
+        !isMapFullscreen && "lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_340px] 3xl:grid-cols-[260px_minmax(0,1fr)_360px]"
+      )}>
         
         {/* Left Sidebar */}
-        <ProposalSidebar2
-          countries={sidebarCountries}
-          activeItem={activeSidebarItem}
-          setActiveItem={(item) => {
-            setActiveSidebarItem(item);
-            flash(`Sección activa: ${item}`);
-          }}
-          onOpenMenu={() => setMenuOpen(true)}
-          onAddPlaylist={() => setShowPlaylistModal(true)}
-          onSelectPlaylist={(name) => {
-            flash(`Playlist "${name}" seleccionada en el mapa.`);
-          }}
-        />
+        {!isMapFullscreen ? (
+          <ProposalSidebar2
+            countries={sidebarCountries}
+            activeItem={activeSidebarItem}
+            setActiveItem={(item) => {
+              setActiveSidebarItem(item);
+              flash(`Sección activa: ${item}`);
+            }}
+            onOpenMenu={() => setMenuOpen(true)}
+            onSelectCountry={(countryCode, countryName) => {
+              setSelectedCountryCode(countryCode);
+              flash(`País seleccionado: ${countryName}`);
+            }}
+          />
+        ) : null}
 
         {/* Center Main Column */}
-        <section className="min-w-0 px-3 py-3 lg:px-4 flex flex-col gap-3 h-full overflow-hidden">
+        <section className={cn(
+          "min-w-0 flex h-full flex-col overflow-hidden",
+          isMapFullscreen ? "px-0 py-0 gap-0" : "gap-3 px-3 py-3 lg:px-4"
+        )}>
           
           {/* Topbar */}
+          {!isMapFullscreen ? (
           <ProposalTopbar2
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
-            onUpload={() => flash("Flujo de subida de video premium simulado.")}
-            onNotification={() => flash("Centro de notificaciones: No hay nuevas notificaciones.")}
-            onProfileClick={() => flash("Menú de perfil 'BY PUPILA' abierto.")}
+            onCopyUrl={() => flash("URL copiada al portapapeles.")}
+            onToggleViewer={() => flash("Vista Viewer activada.")}
+            lastExtractionAt={channel.last_synced_at || null}
           />
+          ) : null}
 
           {/* Map and Inspiration Section Container */}
           <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-hidden">
             
             {/* The Earth Map Box */}
-            <div className="relative flex flex-1 min-h-0 items-center justify-center overflow-hidden rounded-xl border border-white/[0.07] bg-[#050b10] shadow-[0_24px_80px_-32px_rgba(0,0,0,0.85)]">
+            <div className={cn(
+              "relative flex flex-1 min-h-0 items-center justify-center overflow-hidden bg-[#050b10] [&_.scene-container>div]:!z-[5] [&>div:first-child]:!h-full [&>div:first-child]:!min-h-0 [&>div:first-child]:!w-full",
+              isMapFullscreen ? "rounded-none border-0 shadow-none" : "rounded-xl border border-white/[0.07] shadow-[0_24px_80px_-32px_rgba(0,0,0,0.85)]"
+            )}>
               
               {/* WebGL 3D Travel Globe */}
               <TravelGlobe
                 channelData={channel}
-                videoLocations={videoLocations}
+                videoLocations={filteredVideoLocations}
                 interactive={true}
                 showControls={false}
                 showSponsorBanner={false}
+                minimalOverlay
+                maxVisibleVideos={4}
                 pointMode="video"
                 showSummaryCard={false}
-                showPointPanel={false}
+                showPointPanel={!isMapFullscreen}
+                pointPanelClassName="left-1/2 top-4 w-[340px] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl"
+                selectedCountryCode={selectedCountryCode}
+                votedCountryCode={votedCountryCode}
+                watchedVideoIds={videoActivity.seenIds}
+                videoWatchStatusById={videoActivity.watchStatusById}
                 onActiveVideoChange={setActiveVideo}
                 onPinnedVideoChange={(video) => {
                   if (video) {
-                    flash(`Mostrando video: "${video.title}" en el globo.`);
+                    openMapVideo(video);
                   } else {
-                    flash("Mapa despinado.");
+                    setPinnedVideo(null);
                   }
                 }}
                 onCountrySelect={(countryCode) => {
+                  const normalizedCountryCode = String(countryCode || "").toUpperCase() || null;
+                  setSelectedCountryCode(normalizedCountryCode);
+                  openVotePrompt(normalizedCountryCode);
                   flash(`País seleccionado en el globo: ${countryCode}`);
                 }}
                 onClusterExpandedChange={setClusterExpanded}
@@ -401,128 +599,183 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 onRotationChange={setGlobeRotationEnabled}
               />
 
-              {/* Float filter options pills (Top Left overlay) */}
-              <div className="absolute left-4 top-4 z-20 flex flex-wrap gap-1.5 pointer-events-auto">
-                {[
-                  ["all", "Todos"],
-                  ["live", "En vivo"],
-                  ["videos", "Videos"],
-                  ["creators", "Creadores"],
-                ].map(([id, label]) => (
+              {!isMapFullscreen ? (
+                <div className="pointer-events-none absolute inset-x-0 top-[92px] bottom-[92px] z-[80] hidden px-4 lg:block">
+                <div className="flex h-full items-center justify-center">
+                  <div className="pointer-events-auto w-full max-w-[480px]">
+                    <DesktopVideoMapCard
+                      videos={activeLocationVideos}
+                      currentVideo={pinnedVideo}
+                      activity={videoActivity}
+                      onClose={() => setPinnedVideo(null)}
+                      onChangeVideo={changeMapVideo}
+                      variant="youtube-theater"
+                      openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
+                      onPlaybackStateChange={(state) => {
+                        if (!pinnedVideo) return;
+                        if (state === "playing") videoActivity.markVideoStarted(pinnedVideo.youtube_video_id);
+                        if (state === "ended") videoActivity.setVideoWatchStatus(pinnedVideo.youtube_video_id, "watched");
+                      }}
+                    />
+                  </div>
+                </div>
+                </div>
+              ) : null}
+
+              <div className="absolute left-4 right-4 top-4 z-[90] flex items-start justify-between gap-2 pointer-events-none">
+                <div className="relative pointer-events-auto">
                   <button
-                    key={id}
                     type="button"
-                    className={cn(
-                      "h-8.5 rounded-full px-4 text-[11px] font-bold transition-all flex items-center h-8",
-                      filter === id 
-                        ? "bg-[#ff5a3d] text-white border border-transparent shadow-[0_4px_12px_rgba(255,90,61,0.25)]" 
-                        : "bg-[#060c12]/70 text-[#cbd3dc] border border-white/[0.04] backdrop-blur-md hover:bg-[#060c12]/90 hover:text-white"
-                    )}
-                    onClick={() => {
-                      setFilter(id as ContentFilter);
-                      flash(`Filtro del globo: ${label}`);
-                    }}
+                    className="flex h-8 items-center gap-1.5 rounded-full border border-[#ff5a3d]/60 bg-[#060c12]/60 px-3 text-[11px] font-bold text-[#ff5a3d] backdrop-blur-md"
+                    onClick={() => setDateMenuOpen((prev) => !prev)}
                   >
-                    {label}
+                    <SquaresFour size={13} />
+                    {dateFilterLabel}
+                    <CaretDown size={11} className={cn("transition", dateMenuOpen && "rotate-180")} />
                   </button>
-                ))}
+                  {dateMenuOpen ? (
+                    <div className="absolute left-0 top-[calc(100%+6px)] min-w-[145px] overflow-hidden rounded-xl border border-white/10 bg-[#050b10]/95 p-1 shadow-2xl backdrop-blur-xl">
+                      {[
+                        { id: "all", label: "Todos", Icon: SquaresFour },
+                        { id: "365", label: "365 Días", Icon: Clock },
+                        { id: "90", label: "90 Días", Icon: Clock },
+                        { id: "30", label: "30 Días", Icon: Clock },
+                      ].map(({ id, label, Icon }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={cn(
+                            "flex h-8 w-full items-center gap-1.5 rounded-lg px-2.5 text-left text-[11px] font-bold transition",
+                            filter === id ? "bg-[#ff5a3d]/12 text-[#ff7d63]" : "text-[#cbd3dc] hover:bg-white/[0.04] hover:text-white"
+                          )}
+                          onClick={() => {
+                            setFilter((current) => (current === id ? "all" : (id as ContentFilterWindow)));
+                            setDateMenuOpen(false);
+                            flash(`Filtro del globo: ${label}`);
+                          }}
+                        >
+                          <Icon size={12} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="relative pointer-events-auto">
+                  <button
+                    type="button"
+                    className="flex h-8 items-center gap-1.5 rounded-full border border-[#ff5a3d]/60 bg-[#060c12]/60 px-3 text-[11px] font-bold text-[#ff5a3d] backdrop-blur-md"
+                    onClick={() => setActivityMenuOpen((prev) => !prev)}
+                  >
+                    <ActiveActivityIcon size={13} />
+                    {activityFilterOption.label}
+                    <CaretDown size={11} className={cn("transition", activityMenuOpen && "rotate-180")} />
+                  </button>
+                  {activityMenuOpen ? (
+                    <div className="absolute right-0 top-[calc(100%+6px)] min-w-[165px] overflow-hidden rounded-xl border border-white/10 bg-[#050b10]/95 p-1 shadow-2xl backdrop-blur-xl">
+                      {ACTIVITY_FILTER_OPTIONS.map(({ id, label, Icon }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={cn(
+                            "flex h-8 w-full items-center gap-1.5 rounded-lg px-2.5 text-left text-[11px] font-bold transition",
+                            activityFilter === id ? "bg-[#ff5a3d]/12 text-[#ff7d63]" : "text-[#cbd3dc] hover:bg-white/[0.04] hover:text-white"
+                          )}
+                          onClick={() => {
+                            setActivityFilter((current) => (current === id ? "all" : id));
+                            setActivityMenuOpen(false);
+                            flash(`Filtro de actividad: ${label}`);
+                          }}
+                        >
+                          <Icon size={12} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
-              {/* Floating Filter funnel (Top Right overlay) */}
-              <button 
-                type="button" 
-                className="absolute right-4 top-4 z-20 flex h-8 items-center gap-1.5 rounded-full border border-white/[0.06] bg-[#060c12]/70 px-3.5 text-[11px] font-bold text-white backdrop-blur-md hover:bg-[#060c12]/90 transition pointer-events-auto" 
-                onClick={() => {
-                  setGlobeCommand({ id: Date.now(), action: "reset_view" });
-                  flash("Centrando globo de viaje...");
-                }}
-              >
-                <FunnelSimple size={14} />
-                Filtros
-                <CaretDown size={11} className="text-slate-400" />
-              </button>
+              {!isMapFullscreen ? (
+                <MapVotePanel2
+                  candidates={voteCandidates}
+                  prompt={votePrompt}
+                  votedCountryCode={votedCountryCode}
+                  onSelectCountry={(countryCode) => {
+                    setSelectedCountryCode(countryCode);
+                    openVotePrompt(countryCode);
+                  }}
+                  onConfirmVote={confirmVote}
+                  onCancelVote={() => setVotePrompt(null)}
+                />
+              ) : null}
 
-              {/* Map zooming floating buttons (Bottom Left overlay) */}
-              <div className="absolute bottom-4 left-4 z-20 overflow-hidden rounded-lg border border-white/[0.08] bg-[#05090e]/75 backdrop-blur-xl shadow-lg flex flex-col pointer-events-auto">
-                <button
-                  type="button"
-                  className="flex h-9 w-9 items-center justify-center border-b border-white/[0.06] text-white/80 hover:text-white hover:bg-white/[0.06] transition"
-                  onClick={() => {
-                    setGlobeCommand({ id: Date.now(), action: "zoom_in" });
-                    flash("Acercando globo...");
-                  }}
-                  aria-label="Acercar"
-                >
-                  <Plus size={15} />
-                </button>
-                <button
-                  type="button"
-                  className="flex h-9 w-9 items-center justify-center border-b border-white/[0.06] text-white/80 hover:text-white hover:bg-white/[0.06] transition"
-                  onClick={() => {
-                    setGlobeCommand({ id: Date.now(), action: "zoom_out" });
-                    flash("Alejando globo...");
-                  }}
-                  aria-label="Alejar"
-                >
-                  <Minus size={15} />
-                </button>
-                <button
-                  type="button"
-                  className="flex h-9 w-9 items-center justify-center border-b border-white/[0.06] text-white/80 hover:text-white hover:bg-[#ff5a3d]/10 transition"
-                  onClick={() => {
-                    setGlobeRotationEnabled((current) => !current);
-                    flash(globeRotationEnabled ? "Rotación del globo pausada." : "Rotación del globo reanudada.");
-                  }}
-                  aria-label="Rotación"
-                >
-                  <GlobeHemisphereWest size={15} className={globeRotationEnabled ? "text-[#ff5a3d] animate-[spin_10s_linear_infinite]" : "text-white/80"} />
-                </button>
-                <button
-                  type="button"
-                  className="flex h-9 w-9 items-center justify-center text-white/80 hover:text-white hover:bg-white/[0.06] transition"
-                  onClick={() => {
-                    setGlobeCommand({ id: Date.now(), action: "reset_view" });
-                    flash("Centrando globo de viaje...");
-                  }}
-                  aria-label="Reset"
-                >
-                  <Compass size={15} />
-                </button>
+              <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 pointer-events-auto">
+                {!isMapFullscreen ? (
+                  <button
+                    type="button"
+                    className="flex h-9 items-center gap-2 rounded-full border border-white/[0.1] bg-[#050b10]/75 px-4 text-[11px] font-bold text-white backdrop-blur-xl hover:bg-[#050b10]/95"
+                    onClick={() => setIsMapFullscreen(true)}
+                  >
+                    <ArrowsOutSimple size={14} />
+                    Pantalla Completa
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ff5a3d]/55 bg-[#050b10]/82 text-[#ff5a3d] backdrop-blur-xl hover:bg-[#050b10]"
+                    onClick={() => setIsMapFullscreen(false)}
+                    aria-label="Salir de pantalla completa"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
               </div>
-
-              {/* Bottom-right Travel List Switch */}
-              <TravelListSwitch2 active={travelList} setActive={setTravelList} onAction={flash} />
             </div>
 
             {/* Bottom Inspiration Videos */}
-            <VideoInspirationRail2
-              videos={SUGGESTED_VIDEOS}
-              savedIds={savedIds}
-              likedIds={likedIds}
-              onSave={handleSaveVideo}
-              onLike={handleLikeVideo}
-              onSelect={(video) => {
-                setSelectedVideo(video);
-                flash(`Video seleccionado: ${video.title}`);
-              }}
-            />
+            {!isMapFullscreen ? (
+              <VideoInspirationRail2
+                videos={railSourceVideos}
+                selectedCountryCode={selectedCountryCode}
+                onSelect={(video) => {
+                  openMapVideo(video);
+                }}
+              />
+            ) : null}
           </div>
         </section>
 
         {/* Right Rail (Bento Grid Sidebar) */}
-        <aside className="hidden xl:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
-          <ProposalRightRail2
-            onBecomePatron={() => setShowCheckoutModal(true)}
-            onAction={flash}
-          />
-        </aside>
+        {!isMapFullscreen ? (
+          <aside className="hidden xl:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
+            <ProposalRightRail2
+              onBecomePatron={() => setShowCheckoutModal(true)}
+              onAction={flash}
+              analytics={proposalAnalytics}
+            />
+          </aside>
+        ) : null}
       </div>
-
-      {/* Floating Notice / Alert Banner */}
-      <PrototypeNotice2 notice={notice} />
 
       {/* Drawers / Modals Simulation */}
       <MobileDrawer2 open={menuOpen} onClose={() => setMenuOpen(false)} onAction={flash} />
+
+      <VideoSelectionSheet
+        open={Boolean(pinnedVideo) && !isDesktopVideoCard}
+        videos={activeLocationVideos}
+        currentVideo={pinnedVideo}
+        activity={videoActivity}
+        onClose={() => setPinnedVideo(null)}
+        onChangeVideo={changeMapVideo}
+        openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
+        onPlaybackStateChange={(state) => {
+          if (!pinnedVideo) return;
+          if (state === "playing") videoActivity.markVideoStarted(pinnedVideo.youtube_video_id);
+          if (state === "ended") videoActivity.setVideoWatchStatus(pinnedVideo.youtube_video_id, "watched");
+        }}
+      />
 
       {/* Playlist modal */}
       {showPlaylistModal && (
@@ -652,15 +905,13 @@ function ProposalSidebar2({
   activeItem,
   setActiveItem,
   onOpenMenu,
-  onAddPlaylist,
-  onSelectPlaylist
+  onSelectCountry
 }: {
   countries: SidebarCountryItem[];
   activeItem: string;
   setActiveItem: (item: string) => void;
   onOpenMenu: () => void;
-  onAddPlaylist: () => void;
-  onSelectPlaylist: (name: string) => void;
+  onSelectCountry: (countryCode: string, countryName: string) => void;
 }) {
   const navItems = [
     { name: "Explorar", icon: Compass },
@@ -673,10 +924,10 @@ function ProposalSidebar2({
   ];
 
   return (
-    <aside className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a]/92 px-4 py-4 backdrop-blur-xl lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
+    <aside className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
       
       {/* Brand Logo Header */}
-      <div className="flex items-center justify-between lg:block mb-6">
+      <div className="mb-4 flex items-center justify-between lg:block">
         <button type="button" className="flex items-center gap-3 text-left group" onClick={() => setActiveItem("Explorar")}>
           <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#ff5a3d]/25 bg-[#ff5a3d]/10 text-[#ff7b4f] transition group-hover:scale-105">
             <svg viewBox="0 0 24 24" className="w-6 h-6 fill-none stroke-current" strokeWidth="2.5">
@@ -700,67 +951,39 @@ function ProposalSidebar2({
         </button>
       </div>
 
-      {/* Creator Profile Summary Widget */}
-      <div className="mt-2 mb-6 hidden lg:block">
-        <div className="flex items-center gap-3">
-          <span className="relative h-12 w-12 overflow-hidden rounded-full border border-white/15 bg-white/[0.06]">
-            <Image src="/creators/luisito-comunica.png" alt="BY PUPILA" fill sizes="48px" className="object-cover" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="truncate text-[14px] font-black text-white leading-tight">BY PUPILA</p>
-              <CheckCircle size={15} weight="fill" className="text-[#ff5a3d] shrink-0" />
-            </div>
-            <p className="mt-0.5 text-[10px] text-[#818a93] font-medium leading-none">Creador de Contenido</p>
-          </div>
-        </div>
-
-        {/* Flat minimalistic travel numbers stats without container box */}
-        <div className="mt-5 grid grid-cols-3 py-3 border-t border-b border-white/[0.06]">
-          <div className="text-center border-r border-white/[0.06]">
-            <p className="font-mono text-[16px] font-black leading-none text-white">2</p>
-            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Países</p>
-          </div>
-          <div className="text-center border-r border-white/[0.06]">
-            <p className="font-mono text-[16px] font-black leading-none text-white">24</p>
-            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Ciudades</p>
-          </div>
-          <div className="text-center">
-            <p className="font-mono text-[16px] font-black leading-none text-white">36</p>
-            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Videos</p>
-          </div>
-        </div>
-      </div>
-
       {/* Countries segment (from map data) */}
-      <div className="mt-6 hidden border-t border-white/[0.06] pt-5 lg:block">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="mt-2 hidden rounded-xl p-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+        <div className="mb-3">
           <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#818a93]">Países</p>
-          <button 
-            type="button" 
-            className="text-slate-400 hover:text-white transition p-1 hover:bg-white/[0.04] rounded" 
-            onClick={() => onSelectPlaylist(countries[0]?.name || "País")}
-            aria-label="Seleccionar país"
-          >
-            <GlobeHemisphereWest size={14} />
-          </button>
         </div>
         
         {/* Country list */}
-        <div className="space-y-2 max-h-[190px] overflow-y-auto pr-1">
+        <div className="space-y-2.5 overflow-y-auto bg-[#03060a] pr-1 [scrollbar-gutter:stable] lg:flex-1">
           {countries.map((country) => (
             <button 
               key={country.code} 
               type="button" 
-              className="flex w-full items-center gap-3 rounded-lg p-1 transition hover:bg-white/[0.04] group text-left" 
-              onClick={() => onSelectPlaylist(country.name)}
+              className="group relative flex w-full items-center gap-3 overflow-hidden rounded-lg border border-white/[0.05] p-1 text-left transition hover:border-[#ff5a3d]/25 hover:bg-white/[0.04]" 
+              onClick={() => onSelectCountry(country.code, country.name)}
             >
-              <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-md bg-white/[0.04] text-[18px]">
-                {countryCodeToFlag(country.code)}
+              <span className={cn(
+                "relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-md text-[18px] transition",
+                country.progress > 0 ? "border border-[#ff5a3d]/35 bg-[#ff5a3d]/10" : "border border-white/[0.04] bg-white/[0.04]"
+              )}>
+                {country.progress > 0 ? (
+                  <span
+                    className="absolute inset-y-0 left-0 bg-[#ff5a3d]/30"
+                    style={{ width: `${Math.max(10, country.progress * 100)}%` }}
+                  />
+                ) : null}
+                <span className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.08),transparent_65%)]" />
+                <span className="relative z-10">{countryCodeToFlag(country.code)}</span>
               </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[12px] font-bold text-white group-hover:text-[#ff7d63] transition">{country.name}</span>
-                <span className="text-[10px] text-[#818a93]">{country.count} videos</span>
+              <span className="relative min-w-0">
+                <span className="block truncate text-[12px] font-bold text-white transition group-hover:text-[#ff7d63]">{country.name}</span>
+                <span className="text-[10px] text-[#818a93]">
+                  {country.watchedCount} de {country.count} videos
+                </span>
               </span>
             </button>
           ))}
@@ -768,7 +991,7 @@ function ProposalSidebar2({
       </div>
 
       {/* Main navigation menu items */}
-      <nav className="mt-6 hidden lg:block space-y-1">
+      <nav className="mt-2 hidden lg:block space-y-1 rounded-xl p-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeItem === item.name;
@@ -796,16 +1019,6 @@ function ProposalSidebar2({
           );
         })}
       </nav>
-
-      {/* Nueva playlist trigger bottom */}
-      <button 
-        type="button" 
-        className="mt-4 hidden h-10 w-full items-center justify-between rounded-lg border border-dashed border-white/10 bg-white/[0.01] px-3.5 text-[11px] font-bold text-white/70 transition hover:bg-white/[0.03] hover:text-white lg:flex" 
-        onClick={onAddPlaylist}
-      >
-        <span className="flex items-center gap-1.5"><Plus size={13} /> Nueva playlist</span>
-        <Plus size={12} className="opacity-40" />
-      </button>
     </aside>
   );
 }
@@ -814,64 +1027,68 @@ function ProposalSidebar2({
 function ProposalTopbar2({
   searchQuery,
   setSearchQuery,
-  onUpload,
-  onNotification,
-  onProfileClick
+  onCopyUrl,
+  onToggleViewer,
+  lastExtractionAt
 }: {
   searchQuery: string;
   setSearchQuery: (value: string) => void;
-  onUpload: () => void;
-  onNotification: () => void;
-  onProfileClick: () => void;
+  onCopyUrl: () => void;
+  onToggleViewer: () => void;
+  lastExtractionAt: string | null;
 }) {
+  const lastExtractionLabel = lastExtractionAt
+    ? new Date(lastExtractionAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+    : "Sin dato";
+
   return (
-    <header className="relative z-30 grid gap-3 lg:grid-cols-[1fr_auto] items-center">
+    <header className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
       {/* Broadened Sleek Search Bar */}
-      <label className="flex h-11 min-w-0 items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all">
-        <MagnifyingGlass size={17} className="text-[#818b95]" />
-        <input
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-[#818b95]"
-          placeholder="Buscar destinos, creadores o videos..."
-        />
-        {searchQuery ? (
-          <button type="button" onClick={() => setSearchQuery("")} aria-label="Limpiar busqueda" className="text-slate-400 hover:text-white">
-            <X size={15} />
-          </button>
-        ) : null}
-      </label>
+      <div className="flex min-w-0 items-center gap-3">
+        <label className="flex h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all">
+          <MagnifyingGlass size={17} className="text-[#818b95]" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-[#818b95]"
+            placeholder="Buscar destinos, creadores o videos..."
+          />
+          {searchQuery ? (
+            <button type="button" onClick={() => setSearchQuery("")} aria-label="Limpiar busqueda" className="text-slate-400 hover:text-white">
+              <X size={15} />
+            </button>
+          ) : null}
+        </label>
+        <div className="hidden shrink-0 px-1 py-1 text-left sm:block">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#8f98a3]">Última extracción</p>
+          <p className="mt-0.5 text-[11px] leading-4 text-[#d8dee6]">{lastExtractionLabel}</p>
+        </div>
+      </div>
 
       {/* Control buttons & Avatar */}
       <div className="flex items-center justify-end gap-2 shrink-0">
-        <button 
-          type="button" 
-          className="flex h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-[12px] font-bold text-white transition hover:bg-white/[0.07]" 
-          onClick={onUpload}
+        <button
+          type="button"
+          className="flex h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-transparent px-4 text-[12px] font-bold text-[#ff5a3d] transition hover:bg-[#ff5a3d]/10"
+          onClick={onToggleViewer}
         >
-          <UploadSimple size={15} />
-          Subir video
+          <Eye size={15} />
+          Viewer
         </button>
-        
-        <button 
-          type="button" 
-          className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white transition hover:bg-white/[0.07]" 
-          onClick={onNotification} 
-          aria-label="Notificaciones"
+        <button
+          type="button"
+          className="flex h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] px-4 text-[12px] font-bold text-white transition hover:bg-[#ff6a50]"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(window.location.href);
+              onCopyUrl();
+            } catch {
+              onCopyUrl();
+            }
+          }}
         >
-          <Bell size={16} />
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ff5a3d]" />
-        </button>
-
-        <button 
-          type="button" 
-          className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] p-1 pr-1.5 transition hover:bg-white/[0.07]" 
-          onClick={onProfileClick}
-        >
-          <span className="relative h-7.5 w-7.5 overflow-hidden rounded-full bg-white/[0.08] flex h-7 w-7">
-            <Image src="/creators/luisito-comunica.png" alt="BY PUPILA" fill sizes="30px" className="object-cover" />
-          </span>
-          <CaretDown size={12} className="text-slate-400" />
+          <CopySimple size={15} />
+          Copiar URL
         </button>
       </div>
     </header>
@@ -879,89 +1096,164 @@ function ProposalTopbar2({
 }
 
 
-
-// Travel List Switch Selector
-function TravelListSwitch2({
-  active,
-  setActive,
-  onAction
+function MapVotePanel2({
+  candidates,
+  prompt,
+  votedCountryCode,
+  onSelectCountry,
+  onConfirmVote,
+  onCancelVote,
 }: {
-  active: TravelList;
-  setActive: (value: TravelList) => void;
-  onAction: (message: string) => void;
+  candidates: Array<{ code: string; name: string; count: number; votes: number }>;
+  prompt: LocalVotePrompt | null;
+  votedCountryCode: string | null;
+  onSelectCountry: (countryCode: string) => void;
+  onConfirmVote: (countryCode: string) => void;
+  onCancelVote: () => void;
 }) {
-  const items: Array<{ id: TravelList; label: string; icon: any }> = [
-    { id: "trips", label: "Mis viajes", icon: SquaresFour },
-    { id: "wishlist", label: "Quiero ir", icon: Heart },
-    { id: "explored", label: "Explorados", icon: Flag },
-  ];
+  const totalVotes = candidates.reduce((sum, country) => sum + country.votes, 0);
+  const [isMinimized, setIsMinimized] = useState(false);
+
   return (
-    <div className="absolute bottom-[130px] right-4 z-30 hidden flex-col gap-1 rounded-xl border border-white/[0.08] bg-[#050b10]/80 p-1.5 backdrop-blur-xl shadow-2xl md:flex w-[120px]">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const isActive = active === item.id;
-        return (
+    <div className="pointer-events-none absolute bottom-4 left-4 z-[70] w-[min(190px,calc(100%-2rem))]">
+      {prompt && !isMinimized ? (
+        <div className="pointer-events-auto mb-2 rounded-xl border border-[#ff5a3d]/28 bg-[#050b10]/92 p-3 text-white shadow-2xl backdrop-blur-xl">
+          <p className="text-[11px] font-bold leading-5 text-[#dce4ed]">
+            Votar por{" "}
+            <span className="text-white">
+              {countryCodeToFlag(prompt.countryCode)} {prompt.countryName}
+            </span>
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#ff5a3d]/40 bg-[#ff5a3d]/16 px-3 text-[11px] font-black text-[#ff7d63] transition hover:bg-[#ff5a3d]/24"
+              onClick={() => onConfirmVote(prompt.countryCode)}
+            >
+              <CheckCircle size={14} weight="fill" />
+              Confirmar
+            </button>
+            <button
+              type="button"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[#cbd3dc] transition hover:bg-white/[0.08]"
+              onClick={onCancelVote}
+              aria-label="Cancelar voto"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <section className="pointer-events-auto rounded-xl border border-white/[0.08] bg-[#050b10]/82 p-3 text-white shadow-2xl backdrop-blur-xl">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#ff5a3d]">Fan vote</p>
+            <h3 className="text-[12px] font-black leading-tight text-white">Próximo destino</h3>
+          </div>
           <button
-            key={item.id}
             type="button"
-            className={cn(
-              "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[10px] font-bold transition-all",
-              isActive 
-                ? "bg-white/[0.08] text-white border border-white/5" 
-                : "text-[#c4cdd6] hover:bg-white/[0.04]"
-            )}
-            onClick={() => {
-              setActive(item.id);
-              onAction(`Filtro: ${item.label}`);
-            }}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ff5a3d]/30 bg-[#ff5a3d]/10 text-[15px] font-black leading-none text-[#ff5a3d] transition hover:bg-[#ff5a3d]/18"
+            onClick={() => setIsMinimized((current) => !current)}
+            aria-label={isMinimized ? "Expandir fan vote" : "Minimizar fan vote"}
           >
-            <Icon size={13} weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#ff5a3d]" : ""} />
-            {item.label}
+            <span className="flex h-full translate-y-[-1px] items-center justify-center leading-none">
+              {isMinimized ? "+" : "-"}
+            </span>
           </button>
-        );
-      })}
+        </div>
+        {!isMinimized ? (
+          <>
+            <div className="space-y-1.5">
+              {candidates.map((country, index) => {
+                const active = votedCountryCode === country.code;
+                const width = totalVotes > 0 ? Math.max(12, Math.round((country.votes / totalVotes) * 100)) : 12;
+
+                return (
+                  <button
+                    key={country.code}
+                    type="button"
+                    className={cn(
+                      "group relative flex h-10 w-full items-center gap-2 overflow-hidden rounded-lg border px-2 text-left transition",
+                      active
+                        ? "border-[#ff5a3d]/55 bg-[#ff5a3d]/10"
+                        : "border-white/[0.06] bg-white/[0.035] hover:border-[#ff5a3d]/35 hover:bg-white/[0.06]"
+                    )}
+                    onClick={() => onSelectCountry(country.code)}
+                  >
+                    {country.votes > 0 ? (
+                      <span className="absolute inset-y-1 left-1 rounded-md bg-[#ff5a3d]/18" style={{ width: `${width}%` }} />
+                    ) : null}
+                    <span className="relative z-10 shrink-0 text-[10px] font-black text-[#ff5a3d]">#{index + 1}</span>
+                    <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/10 bg-black/25 text-[14px]">
+                      {countryCodeToFlag(country.code)}
+                    </span>
+                    <span className="relative z-10 min-w-0 flex-1">
+                      <span className="block truncate text-[11px] font-bold text-white">{country.name}</span>
+                      <span className="text-[9px] font-semibold text-[#8d98a5]">{country.votes} votos</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-center text-[10px] leading-4 text-[#8d98a5]">
+              Click en un país para votar.
+            </p>
+          </>
+        ) : null}
+      </section>
     </div>
   );
 }
 
+
+
 // Bottom Inspiration videos row
 function VideoInspirationRail2({
   videos,
-  savedIds,
-  likedIds,
-  onSave,
-  onLike,
+  selectedCountryCode,
   onSelect
 }: {
-  videos: typeof SUGGESTED_VIDEOS;
-  savedIds: Set<string>;
-  likedIds: Set<string>;
-  onSave: (id: string) => void;
-  onLike: (id: string) => void;
-  onSelect: (video: typeof SUGGESTED_VIDEOS[0]) => void;
+  videos: TravelVideoLocation[];
+  selectedCountryCode: string | null;
+  onSelect: (video: TravelVideoLocation) => void;
 }) {
+  const selectedCountryName =
+    selectedCountryCode
+      ? videos.find((video) => String(video.country_code || "").toUpperCase() === selectedCountryCode)?.country_name
+      : null;
+  const railVideos = videos.slice(0, 14);
+
   return (
     <section className="bg-[#03060a]/50 p-4 border border-white/[0.06] rounded-xl shrink-0 h-[190px]">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[14px] font-black uppercase tracking-wider text-white">Videos para inspirarte</h2>
-        <button type="button" className="text-[10px] font-bold text-[#b9c1cb] hover:text-white transition">
-          Ver todos
-        </button>
+        <h2 className="text-[14px] font-black uppercase tracking-wider text-white">
+          {selectedCountryCode ? (
+            <>
+              Videos en {countryCodeToFlag(selectedCountryCode)}{" "}
+              <span className="text-[#ff5a3d]">{selectedCountryName || selectedCountryCode}</span>
+            </>
+          ) : (
+            "Videos para inspirarte"
+          )}
+        </h2>
+        <span className="text-[14px] font-black uppercase tracking-wider text-[#ff5a3d]">{videos.length} videos</span>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-1.5 scrollbar-thin select-none pr-8">
-        {videos.map((video) => {
-          const isSaved = savedIds.has(video.id);
-          const isLiked = likedIds.has(video.id);
-          
+        {railVideos.map((video) => {
+          const countryCode = String(video.country_code || "").toUpperCase();
+          const videoViews = Number(video.view_count || 0);
+          const durationMinutes = Math.max(1, Math.round(Number(video.duration_seconds || 0) / 60));
+
           return (
             <div 
-              key={video.id} 
+              key={video.youtube_video_id} 
               className="group relative h-[126px] w-[215px] shrink-0 overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.02] transition hover:border-[#ff5a3d]/20"
             >
               {/* Image background cover */}
               <Image 
-                src={video.thumbnail} 
+                src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} 
                 alt={video.title} 
                 fill 
                 sizes="215px" 
@@ -972,22 +1264,12 @@ function VideoInspirationRail2({
 
               {/* Top metadata tags */}
               <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
-                {video.live ? (
-                  <span className="rounded bg-[#ff4d3f] px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider text-white">
-                    En vivo
-                  </span>
-                ) : (
-                  <span className="bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-bold text-slate-300 flex items-center gap-1">
-                    <Clock size={10} /> {video.duration}
-                  </span>
-                )}
-
-                {/* Simulated view tags in top right */}
-                {video.live && (
-                  <span className="bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-1">
-                    <Eye size={10} /> {video.views}
-                  </span>
-                )}
+                <span className="rounded bg-black/40 backdrop-blur-sm px-1.5 py-0.5 text-[8px] font-bold text-slate-300 flex items-center gap-1">
+                  <Clock size={10} /> {durationMinutes} min
+                </span>
+                <span className="bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-1">
+                  <Eye size={10} /> {formatCompactMetric(videoViews)}
+                </span>
               </div>
 
               {/* Bottom text block with creator avatar */}
@@ -1002,14 +1284,11 @@ function VideoInspirationRail2({
                   </span>
                   
                   {/* Creator and location inline tag */}
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <span className="relative h-4.5 w-4.5 overflow-hidden rounded-full border border-white/20 bg-white/[0.06] block h-4.5 w-4.5 shrink-0">
-                      <Image src={video.creatorAvatar} alt={video.creator} fill sizes="18px" className="object-cover" />
-                    </span>
-                    <span className="text-[9px] text-[#cbd3dc] font-bold truncate">
-                      {video.creator} <span className="opacity-40">•</span> {video.location}
-                    </span>
-                  </div>
+                  <span className="mt-1.5 inline-flex items-center gap-1.5 text-[9px] font-bold text-[#cbd3dc]">
+                    <span>{countryCodeToFlag(countryCode)}</span>
+                    <span className="opacity-40">•</span>
+                    <span className="truncate">{video.country_name || countryCode || "Destino"}</span>
+                  </span>
                 </div>
               </button>
             </div>
@@ -1021,7 +1300,10 @@ function VideoInspirationRail2({
           <button 
             type="button" 
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#050b10]/60 hover:bg-[#050b10]/95 hover:border-white/20 text-white transition shadow-lg"
-            onClick={() => onSelect(SUGGESTED_VIDEOS[0])}
+            onClick={() => {
+              const first = railVideos[0];
+              if (first) onSelect(first);
+            }}
           >
             <CaretDown size={15} className="rotate-[-90deg] text-[#ff5a3d]" />
           </button>
@@ -1034,13 +1316,43 @@ function VideoInspirationRail2({
 // Right Sidebar (Metrics, Sponsors and Patrons CTA)
 function ProposalRightRail2({
   onBecomePatron,
-  onAction
+  onAction,
+  analytics
 }: {
   onBecomePatron: () => void;
   onAction: (m: string) => void;
+  analytics: ProposalAnalytics;
 }) {
   return (
     <div className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
+      <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm">
+        <div className="flex items-center justify-center gap-3 text-center">
+          <span className="relative h-12 w-12 overflow-hidden rounded-full border border-white/15 bg-white/[0.06]">
+            <Image src="/creators/luisito-comunica.png" alt="BY PUPILA" fill sizes="48px" className="object-cover" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center justify-center gap-1.5">
+              <p className="truncate text-[14px] font-black leading-tight text-white">BY PUPILA</p>
+              <CheckCircle size={15} weight="fill" className="shrink-0 text-[#ff5a3d]" />
+            </div>
+            <p className="mt-0.5 text-[10px] font-medium leading-none text-[#818a93]">Creador de Contenido</p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 py-3">
+          <div className="border-r border-white/[0.06] text-center">
+            <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.countries)}</p>
+            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Paises</p>
+          </div>
+          <div className="border-r border-white/[0.06] text-center">
+            <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.cities)}</p>
+            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Ciudades</p>
+          </div>
+          <div className="text-center">
+            <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.videos)}</p>
+            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Videos</p>
+          </div>
+        </div>
+      </section>
       
       {/* 1. Trip metrics box */}
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm flex flex-col">
@@ -1051,41 +1363,41 @@ function ProposalRightRail2({
         {/* Metric widgets grouped horizontally */}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
               <MapPin size={17} weight="fill" />
             </span>
             <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">87</p>
+              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.exploredPlaces)}</p>
               <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Lugares explorados</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
               <Clock size={17} weight="fill" />
             </span>
             <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">129</p>
+              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.watchedHours)}</p>
               <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Horas vistas del canal</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
               <GlobeHemisphereWest size={17} weight="fill" />
             </span>
             <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">15</p>
+              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.visitedCountries)}</p>
               <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Países visitados</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
               <Heart size={17} weight="fill" />
             </span>
             <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">8.4K</p>
+              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.reactions)}</p>
               <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Reacciones recibidas</p>
             </div>
           </div>
@@ -1149,7 +1461,7 @@ function ProposalRightRail2({
         <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ff937d]">
           Apoya mi contenido
         </h2>
-        <p className="mt-2 text-[11px] leading-relaxed text-[#c4cdd6] font-medium">
+        <p className="mt-2 truncate whitespace-nowrap text-[11px] leading-relaxed text-[#c4cdd6] font-medium">
           Tu apoyo me permite seguir explorando nuevos rincones de este maravilloso planeta.
         </p>
 
@@ -1180,7 +1492,7 @@ function ProposalRightRail2({
         {/* Action buttonHazte Patrocinador */}
         <button 
           type="button" 
-          className="mt-4.5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#ff6d4e_0%,#e03d1a_100%)] text-[12px] font-black text-white shadow-[0_12px_24px_-8px_rgba(224,61,26,0.3)] hover:scale-[1.01] active:scale-[0.99] transition-all" 
+          className="mt-[18px] flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#ff6d4e_0%,#e03d1a_100%)] text-[12px] font-black text-white shadow-[0_12px_24px_-8px_rgba(224,61,26,0.3)] hover:scale-[1.01] active:scale-[0.99] transition-all"
           onClick={onBecomePatron}
         >
           <Heart size={15} weight="fill" className="animate-pulse" />
