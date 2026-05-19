@@ -21,6 +21,7 @@ import {
   formatCompactNumber,
   formatVideoDate,
   formatVideoPlace,
+  getCountryNameInSpanish,
   getYouTubeHref,
   getVideoWatchStateLabel,
   getVideoWatchStateTone,
@@ -81,6 +82,7 @@ export function DesktopVideoMapCard({
     openedInYoutube: isOpenedInYoutube,
     watchStatus,
   });
+  const selectedCountryName = getCountryNameInSpanish(selectedVideo.country_code, selectedVideo.country_name);
 
   function go(direction: -1 | 1) {
     if (orderedVideos.length === 0) return;
@@ -113,48 +115,49 @@ export function DesktopVideoMapCard({
         <article className="group relative overflow-hidden rounded-xl border border-red-500/35 bg-[#080808] text-sm text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
           <div className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.04),transparent_60%)]" />
 
-          <header className="flex items-start justify-between gap-3 px-4 pb-3 pt-4">
+          <header className="flex items-start gap-3 px-4 pb-3 pt-4">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 justify-center">
-                <h2 className="line-clamp-2 text-sm font-extrabold leading-tight text-white">{selectedVideo.title}</h2>
+              <h2 className="text-sm font-extrabold leading-tight text-white">{selectedVideo.title}</h2>
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold text-zinc-500">
+                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white">
+                    {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName}
+                  </span>
+                  <span>•</span>
+                  <span className="text-[#ff5a3d]">Video {currentIndex + 1} de {Math.max(1, orderedVideos.length)}</span>
+                </p>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => activity.toggleVideoFeatured(selectedVideo.youtube_video_id)}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1 rounded border px-2.5 text-[10px] font-bold transition-all active:scale-95",
+                      isFeatured ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-white/[0.06] bg-white/[0.02] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                    )}
+                  >
+                    <Star size={11} weight={isFeatured ? "fill" : "regular"} />
+                    Favorito
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later");
+                      if (!isSaved) activity.toggleVideoSaved(selectedVideo.youtube_video_id);
+                    }}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1 rounded border px-2.5 text-[10px] font-bold transition-all active:scale-95",
+                      watchStatus === "watch_later" || isSaved
+                        ? "border-red-500/30 bg-red-500/10 text-red-400"
+                        : "border-white/[0.06] bg-white/[0.02] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                    )}
+                  >
+                    <BookmarkSimple size={11} weight={isSaved ? "fill" : "regular"} />
+                    Ver Más Tarde
+                  </button>
+                </div>
               </div>
-              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-zinc-500">
-                <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white">
-                  {countryCodeToFlag(selectedVideo.country_code)} {selectedVideo.country_name || selectedVideo.country_code}
-                </span>
-                <span>•</span>
-                <span className="text-[#ff5a3d]">Video {currentIndex + 1} de {Math.max(1, orderedVideos.length)}</span>
-              </p>
             </div>
-
             <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => activity.toggleVideoFeatured(selectedVideo.youtube_video_id)}
-                className={cn(
-                  "inline-flex h-7 items-center gap-1 rounded border px-2.5 text-[10px] font-bold transition-all active:scale-95",
-                  isFeatured ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-white/[0.06] bg-white/[0.02] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
-                )}
-              >
-                <Star size={11} weight={isFeatured ? "fill" : "regular"} />
-                Favorito
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later");
-                  if (!isSaved) activity.toggleVideoSaved(selectedVideo.youtube_video_id);
-                }}
-                className={cn(
-                  "inline-flex h-7 items-center gap-1 rounded border px-2.5 text-[10px] font-bold transition-all active:scale-95",
-                  watchStatus === "watch_later" || isSaved
-                    ? "border-red-500/30 bg-red-500/10 text-red-400"
-                    : "border-white/[0.06] bg-white/[0.02] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
-                )}
-              >
-                <BookmarkSimple size={11} weight={isSaved ? "fill" : "regular"} />
-                Ver Más Tarde
-              </button>
               <button
                 type="button"
                 onClick={onClose}
@@ -165,6 +168,44 @@ export function DesktopVideoMapCard({
             </div>
           </header>
 
+          <div className="grid grid-cols-3 items-center gap-2 border-t border-white/[0.04] bg-[#0c0c0c]/85 px-4 py-3">
+            <button type="button" onClick={() => go(-1)} className="flex h-8 items-center justify-center gap-1 rounded border border-white/[0.04] bg-[#141414] text-[11px] font-bold text-zinc-300 transition-all hover:border-red-500/20 hover:bg-red-600/10 hover:text-red-500 active:scale-95">
+              <CaretLeft size={13} weight="bold" />
+              ANTERIOR
+            </button>
+
+            <div className="relative justify-self-center">
+              <button
+                type="button"
+                onClick={() => setWatchMenuOpen((current) => !current)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1 rounded border px-2.5 text-[9px] font-black tracking-wider transition-all",
+                  watchBadgeTone === "success"
+                    ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400"
+                    : watchBadgeTone === "active"
+                      ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
+                      : "border-white/[0.08] bg-white/[0.03] text-zinc-400"
+                )}
+              >
+                <BatteryCharging size={11} weight="fill" className="animate-pulse" />
+                {watchBadgeLabel}
+                <CaretDown size={10} />
+              </button>
+              {watchMenuOpen ? (
+                <div className="absolute left-1/2 bottom-[calc(100%+6px)] z-20 min-w-[130px] -translate-x-1/2 overflow-hidden rounded border border-white/[0.08] bg-[#080808] p-1 shadow-2xl">
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-amber-300">INICIADO</button>
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watched"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-emerald-500">COMPLETADO</button>
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-white">VER MÁS TARDE</button>
+                </div>
+              ) : null}
+            </div>
+
+            <button type="button" onClick={() => go(1)} className="flex h-8 items-center justify-center gap-1 rounded border border-white/[0.04] bg-[#141414] text-[11px] font-bold text-zinc-300 transition-all hover:border-red-500/20 hover:bg-red-600/10 hover:text-red-500 active:scale-95">
+              SIGUIENTE
+              <CaretRight size={13} weight="bold" />
+            </button>
+          </div>
+
           <div className="px-4 pb-2">
             <div className="relative overflow-hidden bg-black">
               <YouTubeEmbedPlayer
@@ -174,60 +215,40 @@ export function DesktopVideoMapCard({
                 thumbnailUrl={selectedVideo.thumbnail_url}
                 openButtonLabel="YouTube"
                 frameClassName="rounded-none border-0"
+                hideFooter
                 playbackCommand={playbackCommand}
                 onOpenInYouTube={openYouTubeVideo}
                 onPlaybackStateChange={onPlaybackStateChange}
                 isMadeForKids={Boolean(selectedVideo.made_for_kids)}
               />
             </div>
+
+            <div className="flex items-center justify-between gap-2 border-t border-white/[0.04] bg-[#0c0c0c]/85 py-2">
+              <span className="text-[11px] text-[#8f98a3]">
+                {selectedVideo.made_for_kids
+                  ? "Contenido Made for Kids: tracking local desactivado."
+                  : "Reproductor oficial de YouTube."}
+              </span>
+              <button
+                type="button"
+                onClick={openYouTubeVideo}
+                disabled={!youtubeHref}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-white/10 bg-[#1b1f26] px-2.5 text-[11px] font-medium text-[#b7bfcb] transition hover:bg-[#232a33] disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Abrir en YouTube"
+              >
+                YouTube
+              </button>
+            </div>
           </div>
 
           <div className="border-t border-white/[0.04] bg-[#0c0c0c]/85 px-4 py-3">
-            <div className="grid grid-cols-3 items-center gap-2">
-              <button type="button" onClick={() => go(-1)} className="flex h-8 items-center justify-center gap-1 rounded border border-white/[0.04] bg-[#141414] text-[11px] font-bold text-zinc-300 transition-all hover:border-red-500/20 hover:bg-red-600/10 hover:text-red-500 active:scale-95">
-                <CaretLeft size={13} weight="bold" />
-                ANTERIOR
-              </button>
-
-              <div className="relative justify-self-center">
-                <button
-                  type="button"
-                  onClick={() => setWatchMenuOpen((current) => !current)}
-                  className={cn(
-                    "inline-flex h-8 items-center gap-1 rounded border px-2.5 text-[9px] font-black tracking-wider transition-all",
-                    watchBadgeTone === "success"
-                      ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400"
-                      : "border-red-500/20 bg-red-500/5 text-red-400"
-                  )}
-                >
-                  <BatteryCharging size={11} weight="fill" className="animate-pulse" />
-                  {watchBadgeLabel === "COMPLETADO" ? "COMPLETADO" : "INICIADO"}
-                  <CaretDown size={10} />
-                </button>
-                {watchMenuOpen ? (
-                  <div className="absolute left-1/2 top-[calc(100%+6px)] z-20 min-w-[130px] -translate-x-1/2 overflow-hidden rounded border border-white/[0.08] bg-[#080808] p-1 shadow-2xl">
-                    <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-red-500">INICIADO</button>
-                    <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watched"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-emerald-500">COMPLETADO</button>
-                    <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-white">VER MÁS TARDE</button>
-                  </div>
-                ) : null}
-              </div>
-
-              <button type="button" onClick={() => go(1)} className="flex h-8 items-center justify-center gap-1 rounded border border-white/[0.04] bg-[#141414] text-[11px] font-bold text-zinc-300 transition-all hover:border-red-500/20 hover:bg-red-600/10 hover:text-red-500 active:scale-95">
-                SIGUIENTE
-                <CaretRight size={13} weight="bold" />
-              </button>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between border-t border-white/[0.03] pt-2.5 text-[11px] text-zinc-500">
-              <span className="flex min-w-0 max-w-[120px] items-center gap-1 truncate font-semibold">
+            <div className="grid grid-cols-3 items-center divide-x divide-white/[0.08] text-[11px] text-zinc-500">
+              <span className="flex min-w-0 items-center justify-center gap-1 truncate px-2 font-semibold">
                 <MapPin size={11} className="text-red-500" />
                 <span className="truncate">{formatVideoPlace(selectedVideo)}</span>
               </span>
-              <span>|</span>
-              <span className="flex items-center gap-1"><Eye size={11} />{formatCompactNumber(Number(selectedVideo.view_count || 0))} vistas</span>
-              <span>|</span>
-              <span className="flex items-center gap-1"><Clock size={11} />{formatVideoDate(selectedVideo.published_at)}</span>
+              <span className="flex items-center justify-center gap-1 px-2"><Eye size={11} />{formatCompactNumber(Number(selectedVideo.view_count || 0))} vistas</span>
+              <span className="flex items-center justify-center gap-1 px-2"><Clock size={11} />{formatVideoDate(selectedVideo.published_at)}</span>
             </div>
           </div>
         </article>
@@ -256,12 +277,12 @@ export function DesktopVideoMapCard({
                 <h2 className="truncate text-[12px] font-extrabold text-white">{selectedVideo.title}</h2>
               </div>
               <p className="mt-1 truncate text-[11px] text-zinc-400">
-                {countryCodeToFlag(selectedVideo.country_code)} {selectedVideo.country_name || selectedVideo.country_code} · Video {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
+                {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName} · Video {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
               </p>
             </>
           ) : (
             <p className="mt-0.5 truncate text-[12px] text-[#d8dee6]">
-            {countryCodeToFlag(selectedVideo.country_code)} {selectedVideo.country_name || selectedVideo.country_code} · {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
+            {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName} · {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
             </p>
           )}
         </div>
@@ -379,7 +400,7 @@ export function DesktopVideoMapCard({
                 <button
                   type="button"
                   onClick={() => {
-                    activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished");
+                    activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later");
                     if (!isSaved) activity.toggleVideoSaved(selectedVideo.youtube_video_id);
                     setWatchMenuOpen(false);
                   }}

@@ -9,6 +9,7 @@ import { feature } from "topojson-client";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { SponsorBanner } from "@/components/sponsors/sponsor-banner";
+import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 
 type PointKind = "country" | "video";
 
@@ -49,6 +50,7 @@ type GeoBounds = {
 interface TravelGlobeProps {
   channelData: TravelChannel;
   videoLocations: TravelVideoLocation[];
+  allVideoLocationsForProgress?: TravelVideoLocation[];
   compact?: boolean;
   initialCountryCode?: string | null;
   focusCountryCode?: string | null;
@@ -79,6 +81,7 @@ interface TravelGlobeProps {
 export function TravelGlobe({
   channelData,
   videoLocations,
+  allVideoLocationsForProgress,
   compact = false,
   initialCountryCode = null,
   focusCountryCode = null,
@@ -115,16 +118,17 @@ export function TravelGlobe({
   const [openedClusterIds, setOpenedClusterIds] = useState<Set<string>>(() => new Set());
   const [internalRotationEnabled, setInternalRotationEnabled] = useState(true);
   const [polygonsData, setPolygonsData] = useState<object[]>([]);
-  const [hoveredPolygonCode, setHoveredPolygonCode] = useState<string | null>(null);
   const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null);
   const didApplyInitialSelection = useRef(false);
   const didApplyFocusSelection = useRef<string | null>(null);
   const didApplyFocusVideo = useRef<string | null>(null);
+  const syncedSelectedCountryRef = useRef<string | null>(null);
   const hoveredPointRef = useRef<GlobePoint | null>(null);
   const hoverClearTimeoutRef = useRef<number | null>(null);
   const suppressPolygonClickUntilRef = useRef(0);
   const rotationPointOfViewRef = useRef({ lat: 20, lng: -10, altitude: 2.3 });
   const rotationEnabled = controlledRotationEnabled ?? internalRotationEnabled;
+  void votedCountryCode;
 
   const updateRotationEnabled = useCallback(
     (enabled: boolean) => {
@@ -165,13 +169,14 @@ export function TravelGlobe({
       const countryCode = resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex);
       if (!countryCode || videoCountryCodes.has(countryCode.toUpperCase())) continue;
 
-      const centroid = geoCentroid(polygon as any);
+      const centroid = geoCentroid(polygon as object);
       if (!Number.isFinite(centroid[0]) || !Number.isFinite(centroid[1])) continue;
 
       const properties = (polygon as { properties?: { name?: string } }).properties || {};
-      const countryName =
-        Country.getCountryByCode(countryCode)?.name ||
-        String(properties.name || countryCode || "Unknown");
+      const countryName = getCountryNameInSpanish(
+        countryCode,
+        Country.getCountryByCode(countryCode)?.name || String(properties.name || countryCode || "Unknown")
+      );
 
       points.push({
         point_id: `country-empty-${countryCode.toUpperCase()}`,
@@ -216,26 +221,48 @@ export function TravelGlobe({
     () => (pointMode === "country" ? getTopArcs(pointsData.filter((point) => point.video_count > 0)) : []),
     [pointMode, pointsData]
   );
+  const progressSourceVideos = allVideoLocationsForProgress || videoLocations;
   const watchedCountryProgress = useMemo(() => {
-    const progress = new Map<string, { total: number; watched: number; ratio: number }>();
+    const progress = new Map<string, { total: number; watched: number; started: number; ratio: number }>();
 
-    for (const video of videoLocations) {
+    for (const video of progressSourceVideos) {
       const countryCode = String(video.country_code || "").toUpperCase().trim();
       if (!countryCode) continue;
-      const current = progress.get(countryCode) || { total: 0, watched: 0, ratio: 0 };
+      const current = progress.get(countryCode) || { total: 0, watched: 0, started: 0, ratio: 0 };
       current.total += 1;
       if (isVideoComplete(video.youtube_video_id, watchedVideoIds, videoWatchStatusById)) {
         current.watched += 1;
+      }
+      if (isVideoStartedButIncomplete(video.youtube_video_id, watchedVideoIds, videoWatchStatusById)) {
+        current.started += 1;
       }
       current.ratio = current.total > 0 ? current.watched / current.total : 0;
       progress.set(countryCode, current);
     }
 
     return progress;
-  }, [videoLocations, videoWatchStatusById, watchedVideoIds]);
+  }, [progressSourceVideos, videoWatchStatusById, watchedVideoIds]);
 
   const activePoint = hoveredPoint || selectedPoint;
   const visibleVideos = activePoint ? activePoint.videos.slice(0, maxVisibleVideos) : [];
+  const selectedCountrySummary = useMemo(() => {
+    const normalizedCode = String(selectedCountryCode || "").toUpperCase().trim();
+    if (!normalizedCode) return null;
+    const stats = watchedCountryProgress.get(normalizedCode) || { total: 0, watched: 0, started: 0, ratio: 0 };
+    const matchedVideo = videoLocations.find((video) => String(video.country_code || "").toUpperCase().trim() === normalizedCode);
+    const matchedPoint = pointsData.find((point) => point.country_code.toUpperCase() === normalizedCode);
+    const countryName = getCountryNameInSpanish(
+      normalizedCode,
+      matchedPoint?.country_name || matchedVideo?.country_name || Country.getCountryByCode(normalizedCode)?.name || normalizedCode
+    );
+    return {
+      countryCode: normalizedCode,
+      countryName,
+      totalVideos: stats.total,
+      watchedVideos: stats.watched,
+      ratio: stats.ratio,
+    };
+  }, [pointsData, selectedCountryCode, videoLocations, watchedCountryProgress]);
   const activePointCountryProgress = activePoint
     ? watchedCountryProgress.get(activePoint.country_code.toUpperCase()) || { total: activePoint.video_count, watched: 0, ratio: 0 }
     : null;
@@ -247,13 +274,17 @@ export function TravelGlobe({
         watchedVideos: activePointCountryProgress?.watched || 0,
         ratio: activePointCountryProgress?.ratio || 0,
       }
-    : null);
+    : selectedCountrySummary);
   const panelCountryCode = summaryCountry?.countryCode || activePoint?.country_code || "";
   const panelCountryName = summaryCountry?.countryName || activePoint?.country_name || "";
   const panelWatchedVideos = summaryCountry?.watchedVideos ?? activePointCountryProgress?.watched ?? 0;
   const panelTotalVideos = summaryCountry?.totalVideos ?? activePointCountryProgress?.total ?? activePoint?.video_count ?? 0;
   const panelRatio = summaryCountry?.ratio ?? activePointCountryProgress?.ratio ?? 0;
   const panelPointId = activePoint?.point_id || panelCountryCode || "country";
+  const panelPercent = Math.max(0, Math.min(100, Math.round(panelRatio * 100)));
+  const panelProgressComplete = panelPercent >= 100 && panelTotalVideos > 0;
+  const panelProgressZero = panelWatchedVideos <= 0;
+  const panelProgressTone = panelProgressZero ? "gray" : panelProgressComplete ? "green" : "yellow";
 
   const showHoverPoint = useCallback((point: GlobePoint) => {
     if (hoverClearTimeoutRef.current) {
@@ -271,13 +302,13 @@ export function TravelGlobe({
     });
   }, [watchedCountryProgress]);
 
-  const scheduleHoverPointClear = useCallback((pointId?: string) => {
+  const scheduleHoverPointClear = useCallback((pointId?: string, delayMs = 1000) => {
     if (hoverClearTimeoutRef.current) window.clearTimeout(hoverClearTimeoutRef.current);
     hoverClearTimeoutRef.current = window.setTimeout(() => {
       setHoveredPoint((previous) => (!pointId || previous?.point_id === pointId ? null : previous));
       setHoveredCountryPreview((previous) => (!pointId || previous ? null : previous));
       hoverClearTimeoutRef.current = null;
-    }, 3000);
+    }, delayMs);
   }, []);
 
   useEffect(() => {
@@ -424,6 +455,27 @@ export function TravelGlobe({
   }, [focusCountryCode, videoLocations, pointMode, pointsData, focusCountryOnGlobe]);
 
   useEffect(() => {
+    const normalizedSelected = String(selectedCountryCode || "").toUpperCase().trim();
+    if (!normalizedSelected) {
+      syncedSelectedCountryRef.current = null;
+      return;
+    }
+    if (syncedSelectedCountryRef.current === normalizedSelected) return;
+
+    const fallbackSelectionSource = allVideoLocationsForProgress || videoLocations;
+    const candidate =
+      pointsData.find(
+        (point) => point.kind === "country" && point.country_code.toUpperCase() === normalizedSelected
+      ) || buildCountrySelectionPoint(fallbackSelectionSource, normalizedSelected);
+    if (!candidate) return;
+
+    syncedSelectedCountryRef.current = normalizedSelected;
+    didApplyFocusSelection.current = normalizedSelected;
+    setExpandedClusterId(null);
+    focusCountryOnGlobe(candidate);
+  }, [allVideoLocationsForProgress, focusCountryOnGlobe, pointsData, selectedCountryCode, videoLocations]);
+
+  useEffect(() => {
     const normalizedVideoId = String(focusVideoId || "").trim();
     if (!normalizedVideoId || pointsData.length === 0 || !globeRef.current) return;
     if (didApplyFocusVideo.current === normalizedVideoId) return;
@@ -482,8 +534,9 @@ export function TravelGlobe({
       const nextView = { lat: candidate.lat, lng: candidate.lng, altitude: pointMode === "video" ? 0.72 : 1.2 };
       rotationPointOfViewRef.current = nextView;
       globeRef.current?.pointOfView(nextView, 850);
+      onPinnedVideoChange?.(candidate.videos[0] || null);
     },
-    [onCountrySelect, pointMode, pointsData, updateRotationEnabled, videoLocations]
+    [onCountrySelect, onPinnedVideoChange, pointMode, pointsData, updateRotationEnabled, videoLocations]
   );
 
   useEffect(() => {
@@ -497,6 +550,12 @@ export function TravelGlobe({
   function handlePointSelection(selected: GlobePoint) {
     updateRotationEnabled(false);
     setSelectedPoint(selected);
+
+    // Any pin that represents a single video should open it directly.
+    if (selected.kind === "video" || selected.video_count === 1) {
+      onPinnedVideoChange?.(selected.videos?.[0] || null);
+      return;
+    }
 
     if (isDenseVideoCluster(selected)) {
       setOpenedClusterIds((previous) => {
@@ -513,14 +572,9 @@ export function TravelGlobe({
       return;
     }
 
-    if (selected.kind === "video") {
-      onPinnedVideoChange?.(selected.videos?.[0] || null);
-      return;
-    }
-
     onCountrySelect?.(selected.country_code.toUpperCase(), "country");
     focusCountryOnGlobe(selected);
-    onPinnedVideoChange?.(null);
+    onPinnedVideoChange?.(selected.videos[0] || null);
   }
 
   return (
@@ -543,37 +597,46 @@ export function TravelGlobe({
           polygonAltitude={() => 0.005}
           polygonCapColor={(polygon) => {
             const polygonCode = resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex);
-            const countryStats = polygonCode ? watchedCountryProgress.get(polygonCode.toUpperCase()) || { total: 0, watched: 0, ratio: 0 } : { total: 0, watched: 0, ratio: 0 };
-            const watchedProgress = countryStats.ratio;
+            const countryStats = polygonCode
+              ? watchedCountryProgress.get(polygonCode.toUpperCase()) || { total: 0, watched: 0, started: 0, ratio: 0 }
+              : { total: 0, watched: 0, started: 0, ratio: 0 };
             if (countryStats.total === 0) {
               return "rgba(255, 68, 68, 0.24)";
             }
-            if (watchedProgress >= 1) {
+            if (countryStats.watched >= countryStats.total) {
               return "rgba(34, 197, 94, 0.26)";
             }
-            const alpha = Math.min(0.28, 0.12 + Math.max(0.02, watchedProgress) * 0.18);
-            return `rgba(250, 204, 21, ${alpha})`;
+            if (countryStats.watched > 0 || countryStats.started > 0) {
+              return "rgba(250, 204, 21, 0.24)";
+            }
+            return "rgba(148, 163, 184, 0.2)";
           }}
           polygonSideColor={() => "rgba(15,23,42,0.25)"}
           polygonStrokeColor={(polygon) => {
             const polygonCode = resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex);
-            const countryStats = polygonCode ? watchedCountryProgress.get(polygonCode.toUpperCase()) || { total: 0, watched: 0, ratio: 0 } : { total: 0, watched: 0, ratio: 0 };
-            const watchedProgress = countryStats.ratio;
+            const countryStats = polygonCode
+              ? watchedCountryProgress.get(polygonCode.toUpperCase()) || { total: 0, watched: 0, started: 0, ratio: 0 }
+              : { total: 0, watched: 0, started: 0, ratio: 0 };
             if (countryStats.total === 0) {
               return "rgba(255, 68, 68, 0.9)";
             }
-            if (watchedProgress >= 1) {
+            if (countryStats.watched >= countryStats.total) {
               return "rgba(34, 197, 94, 0.95)";
             }
-            return "rgba(250, 204, 21, 0.9)";
+            if (countryStats.watched > 0 || countryStats.started > 0) {
+              return "rgba(250, 204, 21, 0.9)";
+            }
+            return "rgba(148, 163, 184, 0.82)";
           }}
           onPolygonHover={
             interactive
               ? (polygon) => {
-                  const name = String((polygon as { properties?: { name?: string } } | null)?.properties?.name || "");
                   const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex) : null;
-                  setHoveredPolygonCode(code);
-                  if (!code || !name || hoveredPointRef.current) {
+                  const polygonName = String((polygon as { properties?: { name?: string } } | null)?.properties?.name || "");
+      const fullCountryName = code
+        ? getCountryNameInSpanish(code, Country.getCountryByCode(code.toUpperCase())?.name || polygonName)
+        : polygonName;
+                  if (!code || !fullCountryName || hoveredPointRef.current) {
                     if (!code) {
                       scheduleHoverPointClear();
                       setHoveredCountryPreview(null);
@@ -581,16 +644,16 @@ export function TravelGlobe({
                     onCountryHoverChange?.(null);
                     return;
                   }
-                  const stats = watchedCountryProgress.get(code.toUpperCase()) || { total: 0, watched: 0, ratio: 0 };
+                  const stats = watchedCountryProgress.get(code.toUpperCase()) || { total: 0, watched: 0, started: 0, ratio: 0 };
                   setHoveredCountryPreview({
                     countryCode: code,
-                    countryName: name,
+                    countryName: fullCountryName,
                     totalVideos: stats.total,
                     watchedVideos: stats.watched,
                     ratio: stats.ratio,
                   });
                   scheduleHoverPointClear();
-                  onCountryHoverChange?.({ countryCode: code, countryName: name });
+                  onCountryHoverChange?.({ countryCode: code, countryName: fullCountryName });
                 }
               : undefined
           }
@@ -676,7 +739,6 @@ export function TravelGlobe({
                   updateRotationEnabled(false);
                   setHoveredPoint(null);
                   setHoveredCountryPreview(null);
-                  setHoveredPolygonCode(null);
                   onCountryHoverChange?.(null);
                   setSelectedPoint(null);
                   setExpandedClusterId(null);
@@ -720,34 +782,29 @@ export function TravelGlobe({
         <aside
           className={`absolute z-30 text-white backdrop-blur-xl ${
             minimalOverlay
-              ? pointPanelClassName || "left-1/2 top-4 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl"
+              ? pointPanelClassName || "left-1/2 top-4 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2"
               : "right-0 top-0 h-full w-full max-w-[380px] border-l border-white/10 bg-black/85 p-4 sm:p-5"
           }`}
         >
           {minimalOverlay ? (
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-lg">
-                {countryCodeToFlag(panelCountryCode)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate text-base font-semibold">{panelCountryName}</h2>
-                <p className="mt-1 text-xs text-slate-300">
-                  {panelWatchedVideos} de {panelTotalVideos} videos vistos
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/10">
-                    <span
-                      className="block h-full rounded-full bg-[#22c55e]"
-                      style={{ width: `${Math.round(panelRatio * 100)}%` }}
-                    />
-                  </div>
-                  <span className="w-9 text-right text-[11px] font-bold text-[#86efac]">
-                    {Math.round(panelRatio * 100)}%
-                  </span>
-                </div>
-                <p className="mt-2 text-center text-[10px] leading-4 text-[#8d98a5]">
-                  Vota para que el creador viaje.
-                </p>
+            <div className="flex items-center justify-between gap-4 overflow-hidden rounded-full border border-white/[0.08] bg-[#05090f]/75 py-2 pl-3 pr-3.5">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-lg leading-none">{countryCodeToFlag(panelCountryCode)}</span>
+                <h2 className="truncate text-xs font-semibold tracking-[0.02em] text-[#d5dde6]">{panelCountryName}</h2>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className={panelProgressTone === "green" ? "text-[10px] font-mono text-emerald-300" : panelProgressTone === "yellow" ? "text-[10px] font-mono text-yellow-300" : "text-[10px] font-mono text-slate-400"}>
+                  {panelWatchedVideos}/{panelTotalVideos}
+                </span>
+                <span className={panelProgressTone === "green" ? "h-0.5 w-10 overflow-hidden rounded-full bg-emerald-500/25" : panelProgressTone === "yellow" ? "h-0.5 w-10 overflow-hidden rounded-full bg-yellow-500/25" : "h-0.5 w-10 overflow-hidden rounded-full bg-slate-500/25"}>
+                  <span
+                    className={panelProgressTone === "green" ? "block h-full rounded-full bg-emerald-400/90" : panelProgressTone === "yellow" ? "block h-full rounded-full bg-yellow-300/90" : "block h-full rounded-full bg-slate-400/90"}
+                    style={{ width: `${panelPercent}%` }}
+                  />
+                </span>
+                <span className={panelProgressTone === "green" ? "w-8 text-right font-mono text-[11px] font-bold text-emerald-300" : panelProgressTone === "yellow" ? "w-8 text-right font-mono text-[11px] font-bold text-yellow-300" : "w-8 text-right font-mono text-[11px] font-bold text-slate-400"}>
+                  {panelPercent}%
+                </span>
               </div>
             </div>
           ) : (
@@ -820,6 +877,35 @@ export function TravelGlobe({
             />
           ) : null}
         </aside>
+      ) : null}
+
+      {minimalOverlay && hoveredPoint?.kind === "video" && hoveredPoint.videos?.[0] ? (
+        <button
+          type="button"
+          className="pointer-events-auto absolute left-1/2 top-[68px] z-[24] w-[280px] -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#050910]/92 text-left shadow-2xl backdrop-blur-md"
+          onMouseEnter={() => {
+            if (hoverClearTimeoutRef.current) {
+              window.clearTimeout(hoverClearTimeoutRef.current);
+              hoverClearTimeoutRef.current = null;
+            }
+          }}
+          onMouseLeave={() => scheduleHoverPointClear(hoveredPoint.point_id, 1000)}
+          onClick={() => onPinnedVideoChange?.(hoveredPoint.videos[0] || null)}
+        >
+          <div className="relative h-[126px] w-full">
+            <Image
+              src={toCompactYouTubeThumbnail(hoveredPoint.videos[0].thumbnail_url) || hoveredPoint.videos[0].thumbnail_url || "https://via.placeholder.com/360x202/111827/9CA3AF?text=Video"}
+              alt={hoveredPoint.videos[0].title}
+              fill
+              sizes="280px"
+              className="object-cover"
+            />
+          </div>
+          <div className="border-t border-white/[0.08] px-3 py-2">
+            <p className="line-clamp-2 text-[11px] font-bold text-white">{hoveredPoint.videos[0].title}</p>
+            <p className="mt-1 text-[10px] text-[#a9b4c0]">{countryCodeToFlag(hoveredPoint.country_code)} {getCountryNameInSpanish(hoveredPoint.country_code, hoveredPoint.country_name)}</p>
+          </div>
+        </button>
       ) : null}
 
       {showControls ? (
@@ -925,7 +1011,7 @@ function buildSingleVideoPoint(row: TravelVideoLocation, index: number, parentCl
     kind: "video",
     is_expanded_video: Boolean(parentClusterId),
     country_code: row.country_code || "XX",
-    country_name: row.country_name || row.country_code || "Unknown",
+    country_name: getCountryNameInSpanish(row.country_code, row.country_name || row.country_code || "Unknown"),
     lat: Number(row.lat),
     lng: Number(row.lng),
     videos: [row],
@@ -974,7 +1060,7 @@ function groupVideosByDensePlace(videoLocations: TravelVideoLocation[]) {
     groups.set(key, {
       key,
       country_code: countryCode,
-      country_name: row.country_name || countryCode,
+      country_name: getCountryNameInSpanish(countryCode, row.country_name || countryCode),
       location_name: locationName,
       videos: [row],
       total_views: Number(row.view_count || 0),
@@ -1297,7 +1383,7 @@ function getDensePlaceClusterKey(row: TravelVideoLocation) {
 }
 
 function getDensePlaceDisplayName(row: TravelVideoLocation) {
-  return String(row.city || row.location_label || row.region || row.country_name || row.country_code || "Unknown");
+  return String(row.city || row.location_label || row.region || getCountryNameInSpanish(row.country_code, row.country_name) || "Unknown");
 }
 
 function normalizeDensePlaceLabel(raw: string | null | undefined) {
@@ -1334,7 +1420,7 @@ function groupVideosByCountry(videoLocations: TravelVideoLocation[]) {
     if (!groups.has(key)) {
       groups.set(key, {
         country_code: row.country_code,
-        country_name: row.country_name || row.country_code,
+        country_name: getCountryNameInSpanish(row.country_code, row.country_name || row.country_code),
         lat: row.lat,
         lng: row.lng,
         videos: [],
@@ -1480,8 +1566,6 @@ function createFlagPinElement(
   const watchedProgress = Math.max(0, Math.min(1, Number(markerState?.watchedProgress || 0)));
   const isComplete = watched || watchedProgress >= 1;
   const isPartialWatch = partiallyWatched || (watchedProgress > 0 && !isComplete);
-  const hasVideoContent = point.videos.length > 0;
-  const isEmptyCountry = point.kind === "country" && !hasVideoContent;
   const inactiveCluster = denseCluster && hasExpandedCluster && !expandedCluster;
   if (interactive) marker.setAttribute("type", "button");
   marker.setAttribute("data-globe-marker", "true");
@@ -1506,21 +1590,18 @@ function createFlagPinElement(
   marker.style.alignItems = "center";
   marker.style.justifyContent = "center";
   marker.style.borderRadius = "999px";
-  const markerBackground = denseCluster
-    ? expandedCluster
-      ? "rgba(4,7,14,0.94)"
-      : inactiveCluster
-        ? "rgba(4,7,14,0.68)"
-        : isComplete
-          ? "rgba(12,64,34,0.9)"
-          : isPartialWatch
-            ? "rgba(250,204,21,0.18)"
-            : "rgba(4,7,14,0.88)"
-    : isComplete
-      ? "rgba(12,64,34,0.88)"
+  const markerBackground = "#04070e";
+  const markerTone = denseCluster
+    ? isComplete
+      ? "rgba(34,197,94,0.34)"
       : isPartialWatch
-        ? "rgba(250,204,21,0.14)"
-        : "rgba(4,7,14,0.78)";
+        ? "rgba(250,204,21,0.32)"
+        : "rgba(148,163,184,0.24)"
+    : isComplete
+      ? "rgba(34,197,94,0.3)"
+      : isPartialWatch
+        ? "rgba(250,204,21,0.28)"
+        : "rgba(148,163,184,0.2)";
   const markerBorder = denseCluster
     ? isComplete
       ? "1px solid rgba(34,197,94,0.98)"
@@ -1563,6 +1644,15 @@ function createFlagPinElement(
   marker.style.overflow = "hidden";
   marker.style.position = "relative";
 
+  const tone = document.createElement("span");
+  tone.setAttribute("aria-hidden", "true");
+  tone.style.position = "absolute";
+  tone.style.inset = "0";
+  tone.style.background = markerTone;
+  tone.style.pointerEvents = "none";
+  tone.style.zIndex = "0";
+  marker.append(tone);
+
   if (watchedProgress > 0) {
     const fill = document.createElement("span");
     fill.setAttribute("aria-hidden", "true");
@@ -1571,7 +1661,7 @@ function createFlagPinElement(
     fill.style.width = `${Math.round(watchedProgress * 100)}%`;
     fill.style.background = isComplete ? "rgba(34,197,94,0.88)" : "rgba(250,204,21,0.46)";
     fill.style.pointerEvents = "none";
-    fill.style.zIndex = "0";
+    fill.style.zIndex = "1";
     marker.append(fill);
   }
 
@@ -1580,7 +1670,7 @@ function createFlagPinElement(
     flag.textContent = countryCodeToFlag(point.country_code);
     flag.style.lineHeight = "1";
     flag.style.position = "relative";
-    flag.style.zIndex = "1";
+    flag.style.zIndex = "2";
 
     const count = document.createElement("span");
     count.textContent = formatClusterCount(point.video_count);
@@ -1604,14 +1694,14 @@ function createFlagPinElement(
     count.style.color = isComplete || expandedCluster || openedCluster || isPartialWatch ? "#111827" : "#fff";
     count.style.whiteSpace = "nowrap";
     count.style.pointerEvents = "none";
-    count.style.zIndex = "2";
+    count.style.zIndex = "3";
 
     marker.append(flag, count);
   } else {
     const flag = document.createElement("span");
     flag.textContent = countryCodeToFlag(point.country_code);
     flag.style.position = "relative";
-    flag.style.zIndex = "1";
+    flag.style.zIndex = "2";
     flag.style.lineHeight = "1";
     marker.append(flag);
   }
@@ -1651,7 +1741,8 @@ function isVideoStartedButIncomplete(
   if (!normalized) return false;
   const status = videoWatchStatusById?.[normalized];
   if (status === "not_finished") return true;
-  if (status === "watched" || status === "watch_later") return false;
+  if (status === "watch_later") return true;
+  if (status === "watched") return false;
   return watchedVideoIds?.has(normalized) === true;
 }
 
@@ -1705,7 +1796,7 @@ function buildCountrySelectionPoint(videoLocations: TravelVideoLocation[], count
     point_id: `country-selected-${countryCode.toUpperCase()}`,
     kind: "country",
     country_code: countryCode.toUpperCase(),
-    country_name: videos[0].country_name || countryCode.toUpperCase(),
+    country_name: getCountryNameInSpanish(countryCode, videos[0].country_name || countryCode.toUpperCase()),
     lat: aggregates.lat / videos.length,
     lng: aggregates.lng / videos.length,
     videos,

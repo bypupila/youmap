@@ -10,14 +10,12 @@ import {
   Compass,
   CopySimple,
   Eye,
-  Flag,
+  FunnelSimple,
   GlobeHemisphereWest,
   Heart,
-  House,
   List,
   MagnifyingGlass,
   MapPin,
-  Play,
   SquaresFour,
   Star,
   Users,
@@ -25,19 +23,34 @@ import {
   Video,
   X,
 } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { TravelGlobe } from "@/components/travel-globe";
 import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
-import { useLocalVideoActivity } from "@/components/map/video-activity";
+import { useLocalVideoActivity, type VideoActivityController } from "@/components/map/video-activity";
 import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
+import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 
 type ContentFilterWindow = "all" | "365" | "90" | "30";
-type ActivityFilter = "all" | "favorites" | "saved" | "watched" | "incomplete";
+type ActivityFilter = "all" | "favorites" | "saved" | "watched" | "watch_later" | "incomplete";
 type LocalVotePrompt = {
   countryCode: string;
   countryName: string;
+};
+
+type VideoPlaybackState = "playing" | "paused" | "ended";
+
+type VideoExitPromptState = {
+  videoId: string;
+  title: string;
+  action: () => void;
+};
+
+type PlaybackTrackerState = {
+  videoId: string | null;
+  startedAtMs: number | null;
+  elapsedMsById: Record<string, number>;
 };
 
 interface MapProposalPrototype2Props {
@@ -50,6 +63,7 @@ type SidebarCountryItem = {
   name: string;
   count: number;
   watchedCount: number;
+  activeCount: number;
   progress: number;
 };
 
@@ -62,6 +76,9 @@ type ProposalAnalytics = {
   visitedCountries: number;
   reactions: number;
 };
+
+type ProposalVideoWatchState = "watched" | "incomplete" | "none";
+type CountrySortMode = "seen" | "alphabetical";
 
 function countryCodeToFlag(code: string) {
   const normalized = code.trim().toUpperCase();
@@ -79,11 +96,55 @@ function formatCompactMetric(value: number) {
   return String(Math.round(value));
 }
 
+function normalizeSortLabel(value: string) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function stableTextCompare(a: string, b: string) {
+  const aa = normalizeSortLabel(a);
+  const bb = normalizeSortLabel(b);
+  if (aa < bb) return -1;
+  if (aa > bb) return 1;
+  return 0;
+}
+
+function formatStableDateTime(value: string | null) {
+  if (!value) return "Sin dato";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin dato";
+  return new Intl.DateTimeFormat("es-AR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function getProposalVideoWatchState(
+  videoId: string | null | undefined,
+  activity: Pick<VideoActivityController, "seenIds" | "watchStatusById">
+): ProposalVideoWatchState {
+  const normalized = String(videoId || "").trim();
+  if (!normalized) return "none";
+
+  const explicitStatus = activity.watchStatusById[normalized];
+  if (explicitStatus === "watched") return "watched";
+  if (explicitStatus === "not_finished" || explicitStatus === "watch_later") return "incomplete";
+
+  return activity.seenIds.has(normalized) ? "watched" : "none";
+}
+
+const VIDEO_EXIT_PROMPT_THRESHOLD_MS = 60 * 1000;
+
 const ACTIVITY_FILTER_OPTIONS: Array<{ id: ActivityFilter; label: string; Icon: typeof Star }> = [
   { id: "all", label: "Todos", Icon: SquaresFour },
   { id: "favorites", label: "Favoritos", Icon: Star },
   { id: "saved", label: "Guardados", Icon: BookmarkSimple },
   { id: "watched", label: "Vistos", Icon: CheckCircle },
+  { id: "watch_later", label: "Ver más tarde", Icon: BookmarkSimple },
   { id: "incomplete", label: "Incompletos", Icon: Clock },
 ];
 
@@ -140,162 +201,6 @@ function BookingLogo() {
   );
 }
 
-const PLAYLISTS = [
-  { 
-    title: "Patagonia", 
-    count: 18, 
-    code: "CL", 
-    image: "https://images.unsplash.com/photo-1517760444937-f6397edcbbcd?auto=format&fit=crop&w=150&h=150&q=80" 
-  },
-  { 
-    title: "Europa en Van", 
-    count: 14, 
-    code: "IT", 
-    image: "https://images.unsplash.com/photo-1527631746610-bca00a040d60?auto=format&fit=crop&w=150&h=150&q=80" 
-  },
-  { 
-    title: "Asia Secreta", 
-    count: 9, 
-    code: "JP", 
-    image: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=150&h=150&q=80" 
-  },
-  { 
-    title: "Roadtrips", 
-    count: 11, 
-    code: "US", 
-    image: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&h=150&q=80" 
-  },
-];
-
-const SUGGESTED_VIDEOS = [
-  {
-    id: "dolomitas",
-    title: "Amanecer en los Dolomitas",
-    location: "Italia",
-    creator: "Pau de Viaje",
-    creatorAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&h=80&q=80",
-    thumbnail: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80",
-    live: true,
-    views: "342",
-    duration: "24:18"
-  },
-  {
-    id: "islandia",
-    title: "Roadtrip por Islandia",
-    location: "Islandia",
-    creator: "Luisito Comunica",
-    creatorAvatar: "/creators/luisito-comunica.png",
-    thumbnail: "https://images.unsplash.com/photo-1504893524553-ac55fce698be?auto=format&fit=crop&w=400&q=80",
-    live: false,
-    duration: "24:18"
-  },
-  {
-    id: "japon",
-    title: "Explorando Japón",
-    location: "Japón",
-    creator: "Alan x el Mundo",
-    creatorAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80",
-    thumbnail: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=400&q=80",
-    live: false,
-    duration: "19:36"
-  },
-  {
-    id: "bali",
-    title: "Aventura en Bali",
-    location: "Indonesia",
-    creator: "Viajando con Vero",
-    creatorAvatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=80&h=80&q=80",
-    thumbnail: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=400&q=80",
-    live: false,
-    duration: "16:42"
-  },
-  {
-    id: "tanzania",
-    title: "Safari en Tanzania",
-    location: "Tanzania",
-    creator: "Pau de Viaje",
-    creatorAvatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=80&h=80&q=80",
-    thumbnail: "https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=400&q=80",
-    live: false,
-    duration: "22:10"
-  }
-];
-
-const STATIC_MARKERS = [
-  {
-    id: "marker-na",
-    x: 23,
-    y: 35,
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150&q=80",
-    badge: 12,
-    badgeColor: "bg-[#ff5a3d]",
-    borderColor: "border-[#6be596]",
-    lat: 38,
-    lng: -98
-  },
-  {
-    id: "marker-sa",
-    x: 31,
-    y: 71,
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80",
-    badge: 7,
-    badgeColor: "bg-[#ff5a3d]",
-    borderColor: "border-[#ff5a3d]",
-    lat: -38,
-    lng: -72
-  },
-  {
-    id: "marker-iceland",
-    x: 44,
-    y: 20,
-    isGlowDot: true,
-    lat: 64,
-    lng: -20
-  },
-  {
-    id: "marker-eu",
-    x: 52,
-    y: 28,
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80",
-    badge: 8,
-    badgeColor: "bg-[#ff5a3d]",
-    borderColor: "border-white/70",
-    lat: 47,
-    lng: 12
-  },
-  {
-    id: "marker-as",
-    x: 64,
-    y: 24,
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&h=150&q=80",
-    badge: 6,
-    badgeColor: "bg-[#8b6cff]",
-    borderColor: "border-white/70",
-    lat: 53,
-    lng: 70
-  },
-  {
-    id: "marker-af",
-    x: 55.5,
-    y: 56.6,
-    avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=150&h=150&q=80",
-    isGreenDotBadge: true,
-    borderColor: "border-[#6be596]",
-    lat: -12,
-    lng: 20
-  },
-  {
-    id: "marker-au",
-    x: 84.1,
-    y: 65.5,
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&h=150&q=80",
-    isGreenDotBadge: true,
-    borderColor: "border-[#6be596]",
-    lat: -28,
-    lng: 130
-  }
-];
-
 export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPrototype2Props) {
   const [filter, setFilter] = useState<ContentFilterWindow>("all");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
@@ -304,56 +209,101 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSidebarItem, setActiveSidebarItem] = useState("Explorar");
-  const [zoom, setZoom] = useState(1);
   const [selectedCountryCode, setSelectedCountryCode] = useState<string | null>(null);
 
   // TravelGlobe interactive state controls
   const [globeRotationEnabled, setGlobeRotationEnabled] = useState(true);
-  const [globeCommand, setGlobeCommand] = useState<{ id: number; action: "reset_view" | "zoom_in" | "zoom_out" | "toggle_rotation" | "collapse_cluster" } | null>(null);
-  const [clusterExpanded, setClusterExpanded] = useState(false);
-  const [hoveredCountryPin, setHoveredCountryPin] = useState<{ countryCode: string; countryName: string } | null>(null);
   const [activeVideo, setActiveVideo] = useState<TravelVideoLocation | null>(null);
   const [pinnedVideo, setPinnedVideo] = useState<TravelVideoLocation | null>(null);
   const [isDesktopVideoCard, setIsDesktopVideoCard] = useState(false);
+  const [videoExitPrompt, setVideoExitPrompt] = useState<VideoExitPromptState | null>(null);
+  const [videoPlaybackCommand, setVideoPlaybackCommand] = useState<{ id: number; action: "pause" | "play" } | null>(null);
+  const playbackTrackerRef = useRef<PlaybackTrackerState>({
+    videoId: null,
+    startedAtMs: null,
+    elapsedMsById: {},
+  });
   const videoActivity = useLocalVideoActivity();
 
   // States for interactive simulations
-  const [notice, setNotice] = useState("Prototipo Premium /map-proposal-2. Presiona elementos para simular interacción.");
   const [showSponsorModal, setShowSponsorModal] = useState(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [showAllVideosModal, setShowAllVideosModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [localFanVotes, setLocalFanVotes] = useState<Record<string, number>>({});
   const [votePrompt, setVotePrompt] = useState<LocalVotePrompt | null>(null);
   const [votedCountryCode, setVotedCountryCode] = useState<string | null>(null);
+  const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("alphabetical");
+  const [hasMounted, setHasMounted] = useState(false);
   const sidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     const bucket = new Map<string, SidebarCountryItem>();
     for (const video of videoLocations) {
       const code = String(video.country_code || "").toUpperCase().trim();
-      const name = String(video.country_name || "").trim();
+      const name = getCountryNameInSpanish(video.country_code, video.country_name);
       if (!code || !name) continue;
       const current = bucket.get(code);
       if (current) {
         current.count += 1;
       } else {
-        bucket.set(code, { code, name, count: 1, watchedCount: 0, progress: 0 });
+        bucket.set(code, { code, name, count: 1, watchedCount: 0, activeCount: 0, progress: 0 });
       }
     }
     for (const video of videoLocations) {
       const code = String(video.country_code || "").toUpperCase().trim();
       const id = String(video.youtube_video_id || "").trim();
-      if (!code || !id || !videoActivity.seenIds.has(id)) continue;
+      if (!code || !id) continue;
       const current = bucket.get(code);
       if (!current) continue;
+      const watchState = getProposalVideoWatchState(id, {
+        seenIds: videoActivity.seenIds,
+        watchStatusById: videoActivity.watchStatusById,
+      });
+      if (watchState === "none") continue;
+      current.activeCount += 1;
+      if (watchState !== "watched") continue;
       current.watchedCount += 1;
     }
     for (const item of bucket.values()) {
-      item.progress = item.count > 0 ? Math.min(1, item.watchedCount / item.count) : 0;
+      item.progress = item.count > 0 ? Math.min(1, item.activeCount / item.count) : 0;
     }
-    return Array.from(bucket.values())
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-      ;
-  }, [videoActivity.seenIds, videoLocations]);
+    return Array.from(bucket.values());
+  }, [videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
+  const sortedSidebarCountries = useMemo<SidebarCountryItem[]>(() => {
+    if (countrySortMode === "alphabetical") {
+      return [...sidebarCountries].sort((a, b) => stableTextCompare(a.name, b.name));
+    }
+
+    const countryPriority = (country: SidebarCountryItem) => {
+      const isComplete = country.count > 0 && country.watchedCount >= country.count;
+      const isPartial = country.activeCount > 0 && !isComplete;
+      if (isPartial) return 0; // amarillo primero
+      if (!isComplete) return 1; // gris segundo
+      return 2; // verde al final
+    };
+
+    const recentByCountry = new Map<string, number>();
+    for (const video of videoLocations) {
+      const code = String(video.country_code || "").toUpperCase().trim();
+      if (!code) continue;
+      const state = getProposalVideoWatchState(video.youtube_video_id, videoActivity);
+      if (state === "none") continue;
+      const published = video.published_at ? new Date(video.published_at).getTime() : 0;
+      const current = recentByCountry.get(code) || 0;
+      recentByCountry.set(code, Math.max(current, Number.isFinite(published) ? published : 0));
+    }
+
+    return [...sidebarCountries].sort((a, b) => {
+      const priorityDiff = countryPriority(a) - countryPriority(b);
+      if (priorityDiff !== 0) return priorityDiff;
+
+      const aRecent = recentByCountry.get(a.code) || 0;
+      const bRecent = recentByCountry.get(b.code) || 0;
+      if (aRecent !== bRecent) return bRecent - aRecent;
+
+      return stableTextCompare(a.name, b.name);
+    });
+  }, [countrySortMode, sidebarCountries, videoActivity, videoLocations]);
   const filteredVideoLocations = useMemo(() => {
     const dateFiltered = (() => {
       if (filter === "all") return videoLocations;
@@ -365,15 +315,39 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       });
     })();
 
-    if (activityFilter === "all") return dateFiltered;
-    return dateFiltered.filter((video) => {
+    const query = normalizeSortLabel(searchQuery);
+    const searchFiltered = !query
+      ? dateFiltered
+      : dateFiltered.filter((video) => {
+          const haystack = [
+            video.title,
+            video.country_name,
+            getCountryNameInSpanish(video.country_code, video.country_name),
+            video.country_code,
+            video.city,
+            video.region,
+            video.location_label,
+          ]
+            .map((value) => normalizeSortLabel(String(value || "")))
+            .join(" ");
+          return haystack.includes(query);
+        });
+
+    if (activityFilter === "all") return searchFiltered;
+    return searchFiltered.filter((video) => {
       const id = String(video.youtube_video_id || "");
       if (activityFilter === "favorites") return videoActivity.featuredIds.has(id);
       if (activityFilter === "saved") return videoActivity.savedIds.has(id);
-      if (activityFilter === "watched") return videoActivity.watchStatusById[id] === "watched" || videoActivity.seenIds.has(id);
+      if (activityFilter === "watched") {
+        return getProposalVideoWatchState(id, {
+          seenIds: videoActivity.seenIds,
+          watchStatusById: videoActivity.watchStatusById,
+        }) === "watched";
+      }
+      if (activityFilter === "watch_later") return videoActivity.watchStatusById[id] === "watch_later";
       return videoActivity.watchStatusById[id] === "not_finished";
     });
-  }, [activityFilter, filter, videoActivity.featuredIds, videoActivity.savedIds, videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
+  }, [activityFilter, filter, searchQuery, videoActivity.featuredIds, videoActivity.savedIds, videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
 
   const dateFilterLabel = useMemo(() => {
     if (filter === "365") return "365 Días";
@@ -381,11 +355,6 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
     if (filter === "30") return "30 Días";
     return "Todos";
   }, [filter]);
-  const activityFilterOption = useMemo(
-    () => ACTIVITY_FILTER_OPTIONS.find((option) => option.id === activityFilter) || ACTIVITY_FILTER_OPTIONS[0],
-    [activityFilter]
-  );
-  const ActiveActivityIcon = activityFilterOption.Icon;
   const voteCandidates = useMemo(() => {
     return sidebarCountries
       .map((country) => ({
@@ -394,7 +363,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
         count: country.count,
         votes: localFanVotes[country.code] || 0,
       }))
-      .sort((a, b) => b.votes - a.votes || b.count - a.count || a.name.localeCompare(b.name))
+      .sort((a, b) => b.votes - a.votes || b.count - a.count || stableTextCompare(a.name, b.name))
       .slice(0, 3);
   }, [localFanVotes, sidebarCountries]);
   const activeLocationVideos = useMemo(() => {
@@ -409,6 +378,11 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
     if (filteredVideoLocations.length > 0) return filteredVideoLocations;
     return videoLocations;
   }, [activeLocationVideos, filteredVideoLocations, videoLocations]);
+  const railVideoTotal = useMemo(() => {
+    const countryCode = String(selectedCountryCode || "").toUpperCase();
+    if (!countryCode) return filteredVideoLocations.length || videoLocations.length;
+    return sidebarCountries.find((country) => country.code === countryCode)?.count || railSourceVideos.length;
+  }, [filteredVideoLocations.length, railSourceVideos.length, selectedCountryCode, sidebarCountries, videoLocations.length]);
   const proposalAnalytics = useMemo<ProposalAnalytics>(() => {
     const countryCodes = new Set<string>();
     const cityKeys = new Set<string>();
@@ -436,7 +410,10 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       reactions += Number(video.like_count || 0) + Number(video.comment_count || 0);
 
       const id = String(video.youtube_video_id || "");
-      const wasWatched = videoActivity.watchStatusById[id] === "watched" || videoActivity.seenIds.has(id) || videoActivity.openedIds.has(id);
+      const wasWatched = getProposalVideoWatchState(id, {
+        seenIds: videoActivity.seenIds,
+        watchStatusById: videoActivity.watchStatusById,
+      }) === "watched";
       if (wasWatched) watchedSeconds += Number(video.duration_seconds || 0);
     }
 
@@ -444,7 +421,10 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       videoLocations
         .filter((video) => {
           const id = String(video.youtube_video_id || "");
-          return videoActivity.watchStatusById[id] === "watched" || videoActivity.seenIds.has(id) || videoActivity.openedIds.has(id);
+          return getProposalVideoWatchState(id, {
+            seenIds: videoActivity.seenIds,
+            watchStatusById: videoActivity.watchStatusById,
+          }) === "watched";
         })
         .map((video) => String(video.country_code || "").toUpperCase().trim())
         .filter(Boolean)
@@ -459,9 +439,10 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       visitedCountries: watchedCountryCodes.size,
       reactions,
     };
-  }, [videoActivity.openedIds, videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
+  }, [videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
 
   useEffect(() => {
+    setHasMounted(true);
     const query = window.matchMedia("(min-width: 1024px)");
     const sync = () => setIsDesktopVideoCard(query.matches);
     sync();
@@ -470,7 +451,113 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
   }, []);
 
   function flash(message: string) {
-    setNotice(message);
+    void message;
+    // Intentionally quiet: this prototype no longer renders transient toast copy over the map.
+  }
+
+  const commitPlaybackElapsed = useCallback((videoId: string | null | undefined) => {
+    const normalized = String(videoId || "").trim();
+    const tracker = playbackTrackerRef.current;
+    if (!normalized || tracker.videoId !== normalized || tracker.startedAtMs === null) return;
+
+    const elapsed = Math.max(0, Date.now() - tracker.startedAtMs);
+    tracker.elapsedMsById[normalized] = (tracker.elapsedMsById[normalized] || 0) + elapsed;
+    tracker.startedAtMs = null;
+  }, []);
+
+  const getPlaybackElapsedMs = useCallback((videoId: string | null | undefined) => {
+    const normalized = String(videoId || "").trim();
+    if (!normalized) return 0;
+
+    const tracker = playbackTrackerRef.current;
+    const storedElapsed = tracker.elapsedMsById[normalized] || 0;
+    if (tracker.videoId !== normalized || tracker.startedAtMs === null) return storedElapsed;
+
+    return storedElapsed + Math.max(0, Date.now() - tracker.startedAtMs);
+  }, []);
+
+  const handleVideoPlaybackStateChange = useCallback(
+    (video: TravelVideoLocation, state: VideoPlaybackState) => {
+      const videoId = String(video.youtube_video_id || "").trim();
+      if (!videoId) return;
+
+      if (state === "playing") {
+        const tracker = playbackTrackerRef.current;
+        if (tracker.videoId && tracker.videoId !== videoId) {
+          commitPlaybackElapsed(tracker.videoId);
+        }
+        tracker.videoId = videoId;
+        if (tracker.startedAtMs === null) tracker.startedAtMs = Date.now();
+        videoActivity.markVideoStarted(videoId);
+        return;
+      }
+
+      if (state === "paused") {
+        commitPlaybackElapsed(videoId);
+        return;
+      }
+
+      commitPlaybackElapsed(videoId);
+      videoActivity.setVideoWatchStatus(videoId, "watched");
+    },
+    [commitPlaybackElapsed, videoActivity]
+  );
+
+  const requestVideoExit = useCallback(
+    (action: () => void) => {
+      const currentVideo = pinnedVideo;
+      const videoId = String(currentVideo?.youtube_video_id || "").trim();
+      if (!currentVideo || !videoId) {
+        action();
+        return;
+      }
+
+      const watchStatus = videoActivity.watchStatusById[videoId];
+      const hasStarted = watchStatus === "not_finished" || watchStatus === "watch_later" || videoActivity.seenIds.has(videoId) || videoActivity.openedIds.has(videoId);
+      const shouldPrompt =
+        hasStarted &&
+        watchStatus !== "watched" &&
+        getPlaybackElapsedMs(videoId) >= VIDEO_EXIT_PROMPT_THRESHOLD_MS;
+
+      if (!shouldPrompt) {
+        action();
+        return;
+      }
+
+      setVideoPlaybackCommand({ id: Date.now(), action: "pause" });
+      setVideoExitPrompt({
+        videoId,
+        title: currentVideo.title,
+        action,
+      });
+    },
+    [getPlaybackElapsedMs, pinnedVideo, videoActivity.openedIds, videoActivity.seenIds, videoActivity.watchStatusById]
+  );
+
+  function confirmVideoExitComplete() {
+    if (!videoExitPrompt) return;
+    commitPlaybackElapsed(videoExitPrompt.videoId);
+    videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "watched");
+    const nextAction = videoExitPrompt.action;
+    setVideoExitPrompt(null);
+    nextAction();
+  }
+
+  function continueWatchingVideo() {
+    setVideoExitPrompt(null);
+    setVideoPlaybackCommand({ id: Date.now(), action: "play" });
+  }
+
+  function watchLaterPendingVideoExit() {
+    if (!videoExitPrompt) return;
+    commitPlaybackElapsed(videoExitPrompt.videoId);
+    videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "watch_later");
+    if (!videoActivity.savedIds.has(videoExitPrompt.videoId)) {
+      videoActivity.toggleVideoSaved(videoExitPrompt.videoId);
+    }
+    const nextAction = videoExitPrompt.action;
+    setVideoExitPrompt(null);
+    nextAction();
   }
 
   function openVotePrompt(countryCode: string | null) {
@@ -479,7 +566,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
     const country = sidebarCountries.find((item) => item.code === normalized);
     setVotePrompt({
       countryCode: normalized,
-      countryName: country?.name || normalized,
+      countryName: country?.name || getCountryNameInSpanish(normalized),
     });
   }
 
@@ -492,21 +579,21 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
     }));
     setVotedCountryCode(normalized);
     setVotePrompt(null);
-    flash(`Voto registrado para ${countryCodeToFlag(normalized)} ${sidebarCountries.find((item) => item.code === normalized)?.name || normalized}.`);
+    flash(`Voto registrado para ${countryCodeToFlag(normalized)} ${sidebarCountries.find((item) => item.code === normalized)?.name || getCountryNameInSpanish(normalized)}.`);
   }
 
   function openMapVideo(video: TravelVideoLocation) {
     setPinnedVideo(video);
     setSelectedCountryCode(String(video.country_code || "").toUpperCase() || null);
-    videoActivity.markVideoOpened(video.youtube_video_id);
     flash(`Video abierto: "${video.title}"`);
   }
 
   function changeMapVideo(video: TravelVideoLocation) {
     setPinnedVideo(video);
     setSelectedCountryCode(String(video.country_code || "").toUpperCase() || null);
-    videoActivity.markVideoStarted(video.youtube_video_id);
   }
+
+  const isVideoFocusMode = Boolean(pinnedVideo) && isDesktopVideoCard && !isMapFullscreen;
 
   return (
     <div className="relative h-screen overflow-hidden bg-[#03060a] text-[#f5f7fb] font-sans antialiased">
@@ -521,14 +608,18 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
         {/* Left Sidebar */}
         {!isMapFullscreen ? (
           <ProposalSidebar2
-            countries={sidebarCountries}
+            countries={hasMounted ? sortedSidebarCountries : []}
             activeItem={activeSidebarItem}
+            selectedCountryCode={selectedCountryCode}
+            countrySortMode={countrySortMode}
+            onChangeCountrySortMode={setCountrySortMode}
             setActiveItem={(item) => {
               setActiveSidebarItem(item);
               flash(`Sección activa: ${item}`);
             }}
             onOpenMenu={() => setMenuOpen(true)}
             onSelectCountry={(countryCode, countryName) => {
+              setActiveSidebarItem("Destinos");
               setSelectedCountryCode(countryCode);
               flash(`País seleccionado: ${countryName}`);
             }}
@@ -547,7 +638,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
-            onToggleViewer={() => flash("Vista Viewer activada.")}
+            onToggleViewer={() => setIsMapFullscreen(true)}
             lastExtractionAt={channel.last_synced_at || null}
           />
           ) : null}
@@ -565,6 +656,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
               <TravelGlobe
                 channelData={channel}
                 videoLocations={filteredVideoLocations}
+                allVideoLocationsForProgress={videoLocations}
                 interactive={true}
                 showControls={false}
                 showSponsorBanner={false}
@@ -573,31 +665,32 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 pointMode="video"
                 showSummaryCard={false}
                 showPointPanel={!isMapFullscreen}
-                pointPanelClassName="left-1/2 top-4 w-[340px] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl"
+                pointPanelClassName="left-1/2 top-4 w-[340px] -translate-x-1/2"
                 selectedCountryCode={selectedCountryCode}
-                votedCountryCode={votedCountryCode}
                 watchedVideoIds={videoActivity.seenIds}
                 videoWatchStatusById={videoActivity.watchStatusById}
                 onActiveVideoChange={setActiveVideo}
                 onPinnedVideoChange={(video) => {
                   if (video) {
-                    openMapVideo(video);
+                    requestVideoExit(() => openMapVideo(video));
                   } else {
-                    setPinnedVideo(null);
+                    requestVideoExit(() => setPinnedVideo(null));
                   }
                 }}
                 onCountrySelect={(countryCode) => {
                   const normalizedCountryCode = String(countryCode || "").toUpperCase() || null;
+                  setActiveSidebarItem("Destinos");
                   setSelectedCountryCode(normalizedCountryCode);
                   openVotePrompt(normalizedCountryCode);
                   flash(`País seleccionado en el globo: ${countryCode}`);
                 }}
-                onClusterExpandedChange={setClusterExpanded}
-                onCountryHoverChange={setHoveredCountryPin}
-                command={globeCommand}
                 rotationEnabled={globeRotationEnabled}
                 onRotationChange={setGlobeRotationEnabled}
               />
+
+              {isVideoFocusMode ? (
+                <div className="pointer-events-none absolute inset-0 z-[72] bg-black/62 backdrop-blur-[4px]" />
+              ) : null}
 
               {!isMapFullscreen ? (
                 <div className="pointer-events-none absolute inset-x-0 top-[92px] bottom-[92px] z-[80] hidden px-4 lg:block">
@@ -607,14 +700,14 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                       videos={activeLocationVideos}
                       currentVideo={pinnedVideo}
                       activity={videoActivity}
-                      onClose={() => setPinnedVideo(null)}
-                      onChangeVideo={changeMapVideo}
+                      onClose={() => requestVideoExit(() => setPinnedVideo(null))}
+                      onChangeVideo={(video) => requestVideoExit(() => changeMapVideo(video))}
                       variant="youtube-theater"
                       openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
+                      playbackCommand={videoPlaybackCommand}
                       onPlaybackStateChange={(state) => {
                         if (!pinnedVideo) return;
-                        if (state === "playing") videoActivity.markVideoStarted(pinnedVideo.youtube_video_id);
-                        if (state === "ended") videoActivity.setVideoWatchStatus(pinnedVideo.youtube_video_id, "watched");
+                        handleVideoPlaybackStateChange(pinnedVideo, state);
                       }}
                     />
                   </div>
@@ -622,11 +715,12 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 </div>
               ) : null}
 
-              <div className="absolute left-4 right-4 top-4 z-[90] flex items-start justify-between gap-2 pointer-events-none">
+              {!isVideoFocusMode ? (
+              <div className="pointer-events-none absolute right-4 top-4 z-[90] flex items-start gap-2">
                 <div className="relative pointer-events-auto">
                   <button
                     type="button"
-                    className="flex h-8 items-center gap-1.5 rounded-full border border-[#ff5a3d]/60 bg-[#060c12]/60 px-3 text-[11px] font-bold text-[#ff5a3d] backdrop-blur-md"
+                    className="flex h-8 items-center gap-1.5 rounded-full border border-white/20 bg-[#060c12]/60 px-3 text-[11px] font-bold text-white backdrop-blur-md"
                     onClick={() => setDateMenuOpen((prev) => !prev)}
                   >
                     <SquaresFour size={13} />
@@ -665,11 +759,11 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 <div className="relative pointer-events-auto">
                   <button
                     type="button"
-                    className="flex h-8 items-center gap-1.5 rounded-full border border-[#ff5a3d]/60 bg-[#060c12]/60 px-3 text-[11px] font-bold text-[#ff5a3d] backdrop-blur-md"
+                    className="flex h-8 items-center gap-1.5 rounded-full border border-white/20 bg-[#060c12]/60 px-3 text-[11px] font-bold text-white backdrop-blur-md"
                     onClick={() => setActivityMenuOpen((prev) => !prev)}
                   >
-                    <ActiveActivityIcon size={13} />
-                    {activityFilterOption.label}
+                    <FunnelSimple size={13} />
+                    Filtros
                     <CaretDown size={11} className={cn("transition", activityMenuOpen && "rotate-180")} />
                   </button>
                   {activityMenuOpen ? (
@@ -696,10 +790,11 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                   ) : null}
                 </div>
               </div>
+              ) : null}
 
-              {!isMapFullscreen ? (
+              {!isMapFullscreen && !isVideoFocusMode ? (
                 <MapVotePanel2
-                  candidates={voteCandidates}
+                  candidates={hasMounted ? voteCandidates : []}
                   prompt={votePrompt}
                   votedCountryCode={votedCountryCode}
                   onSelectCountry={(countryCode) => {
@@ -735,12 +830,16 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
             </div>
 
             {/* Bottom Inspiration Videos */}
-            {!isMapFullscreen ? (
+            {!isMapFullscreen && !isVideoFocusMode ? (
               <VideoInspirationRail2
                 videos={railSourceVideos}
                 selectedCountryCode={selectedCountryCode}
+                activity={videoActivity}
+                totalVideos={railVideoTotal}
+                highlightedVideoId={String(pinnedVideo?.youtube_video_id || "").trim() || null}
+                onOpenAllVideos={() => setShowAllVideosModal(true)}
                 onSelect={(video) => {
-                  openMapVideo(video);
+                  requestVideoExit(() => openMapVideo(video));
                 }}
               />
             ) : null}
@@ -752,6 +851,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
           <aside className="hidden xl:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
             <ProposalRightRail2
               onBecomePatron={() => setShowCheckoutModal(true)}
+              onManageSponsors={() => setShowSponsorModal(true)}
               onAction={flash}
               analytics={proposalAnalytics}
             />
@@ -760,22 +860,45 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       </div>
 
       {/* Drawers / Modals Simulation */}
-      <MobileDrawer2 open={menuOpen} onClose={() => setMenuOpen(false)} onAction={flash} />
+      <MobileDrawer2
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onNavigate={(label) => {
+          if (label === "Sponsors") {
+            setShowSponsorModal(true);
+            return;
+          }
+          if (label === "Patrocinadores") {
+            setShowCheckoutModal(true);
+            return;
+          }
+          setActiveSidebarItem(label === "Videos en vivo" ? "En vivo" : label);
+        }}
+      />
 
       <VideoSelectionSheet
         open={Boolean(pinnedVideo) && !isDesktopVideoCard}
         videos={activeLocationVideos}
         currentVideo={pinnedVideo}
         activity={videoActivity}
-        onClose={() => setPinnedVideo(null)}
-        onChangeVideo={changeMapVideo}
+        onClose={() => requestVideoExit(() => setPinnedVideo(null))}
+        onChangeVideo={(video) => requestVideoExit(() => changeMapVideo(video))}
         openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
+        playbackCommand={videoPlaybackCommand}
         onPlaybackStateChange={(state) => {
           if (!pinnedVideo) return;
-          if (state === "playing") videoActivity.markVideoStarted(pinnedVideo.youtube_video_id);
-          if (state === "ended") videoActivity.setVideoWatchStatus(pinnedVideo.youtube_video_id, "watched");
+          handleVideoPlaybackStateChange(pinnedVideo, state);
         }}
       />
+
+      {videoExitPrompt ? (
+        <VideoExitPrompt2
+          title={videoExitPrompt.title}
+          onComplete={confirmVideoExitComplete}
+          onContinue={continueWatchingVideo}
+          onWatchLater={watchLaterPendingVideoExit}
+        />
+      ) : null}
 
       {/* Playlist modal */}
       {showPlaylistModal && (
@@ -805,6 +928,53 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
           </div>
         </div>
       )}
+
+      {showAllVideosModal ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/82 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#081017] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
+              <h3 className="text-base font-black text-white">Todos los videos</h3>
+              <button type="button" onClick={() => setShowAllVideosModal(false)} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="grid max-h-[70vh] grid-cols-1 gap-3 overflow-y-auto p-4 md:grid-cols-2 xl:grid-cols-3">
+              {railSourceVideos.map((video) => {
+                const watchState = getProposalVideoWatchState(video.youtube_video_id, videoActivity);
+                const isWatched = watchState === "watched";
+                const isInProgress = watchState === "incomplete";
+                return (
+                  <button
+                    key={`all-${video.youtube_video_id}`}
+                    type="button"
+                    className={cn(
+                      "group relative overflow-hidden rounded-xl border bg-black/30 text-left transition",
+                      isWatched
+                        ? "border-emerald-400/45"
+                        : isInProgress
+                          ? "border-yellow-300/45"
+                          : "border-white/[0.08]"
+                    )}
+                    onClick={() => {
+                      setShowAllVideosModal(false);
+                      requestVideoExit(() => openMapVideo(video));
+                    }}
+                  >
+                    <div className="relative h-36 w-full">
+                      <Image src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} fill sizes="420px" className="object-cover" />
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/90 to-black/10" />
+                    </div>
+                    <div className="p-3">
+                      <p className="line-clamp-2 text-[12px] font-bold text-white">{video.title}</p>
+                      <p className="mt-1 text-[10px] text-[#a8b1bb]">{countryCodeToFlag(String(video.country_code || "").toUpperCase())} {getCountryNameInSpanish(video.country_code, video.country_name)}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Sponsor modal */}
       {showSponsorModal && (
@@ -903,12 +1073,18 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
 function ProposalSidebar2({
   countries,
   activeItem,
+  selectedCountryCode,
+  countrySortMode,
+  onChangeCountrySortMode,
   setActiveItem,
   onOpenMenu,
   onSelectCountry
 }: {
   countries: SidebarCountryItem[];
   activeItem: string;
+  selectedCountryCode: string | null;
+  countrySortMode: CountrySortMode;
+  onChangeCountrySortMode: (mode: CountrySortMode) => void;
   setActiveItem: (item: string) => void;
   onOpenMenu: () => void;
   onSelectCountry: (countryCode: string, countryName: string) => void;
@@ -954,38 +1130,90 @@ function ProposalSidebar2({
       {/* Countries segment (from map data) */}
       <div className="mt-2 hidden rounded-xl p-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
         <div className="mb-3">
-          <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#818a93]">Países</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#818a93]">Países</p>
+            <div className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] p-0.5">
+              <button
+                type="button"
+                className={cn(
+                  "h-6 rounded-full px-2 text-[9px] font-bold uppercase tracking-[0.08em] transition",
+                  countrySortMode === "seen" ? "bg-white/[0.14] text-white" : "text-[#99a5b3] hover:text-white"
+                )}
+                onClick={() => onChangeCountrySortMode("seen")}
+              >
+                Vistos
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "h-6 rounded-full px-2 text-[9px] font-bold uppercase tracking-[0.08em] transition",
+                  countrySortMode === "alphabetical" ? "bg-white/[0.14] text-white" : "text-[#99a5b3] hover:text-white"
+                )}
+                onClick={() => onChangeCountrySortMode("alphabetical")}
+              >
+                Alfabético
+              </button>
+            </div>
+          </div>
         </div>
         
         {/* Country list */}
         <div className="space-y-2.5 overflow-y-auto bg-[#03060a] pr-1 [scrollbar-gutter:stable] lg:flex-1">
           {countries.map((country) => (
-            <button 
-              key={country.code} 
-              type="button" 
-              className="group relative flex w-full items-center gap-3 overflow-hidden rounded-lg border border-white/[0.05] p-1 text-left transition hover:border-[#ff5a3d]/25 hover:bg-white/[0.04]" 
+            (() => {
+              const isComplete = country.count > 0 && country.watchedCount >= country.count;
+              const isPartial = country.activeCount > 0 && !isComplete;
+              const toneClasses = isComplete
+                ? {
+                    box: "border border-emerald-400/40 bg-emerald-500/12",
+                    fill: "bg-emerald-400/30",
+                    text: "text-emerald-200",
+                  }
+                : isPartial
+                  ? {
+                      box: "border border-yellow-300/40 bg-yellow-400/12",
+                      fill: "bg-yellow-300/35",
+                      text: "text-yellow-100",
+                    }
+                  : {
+                      box: "border border-white/[0.04] bg-white/[0.04]",
+                      fill: "bg-transparent",
+                      text: "text-white",
+                    };
+              return (
+            <button
+              key={country.code}
+              type="button"
+              className={cn(
+                "group relative flex w-full items-center gap-3 overflow-hidden rounded-lg border p-1 text-left transition",
+                String(selectedCountryCode || "").toUpperCase() === country.code
+                  ? "border-[#ff5a3d]/35 bg-white/[0.06]"
+                  : "border-white/[0.05] hover:border-[#ff5a3d]/25 hover:bg-white/[0.04]"
+              )}
               onClick={() => onSelectCountry(country.code, country.name)}
             >
               <span className={cn(
                 "relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-md text-[18px] transition",
-                country.progress > 0 ? "border border-[#ff5a3d]/35 bg-[#ff5a3d]/10" : "border border-white/[0.04] bg-white/[0.04]"
+                toneClasses.box
               )}>
                 {country.progress > 0 ? (
                   <span
-                    className="absolute inset-y-0 left-0 bg-[#ff5a3d]/30"
+                    className={cn("absolute inset-y-0 left-0", toneClasses.fill)}
                     style={{ width: `${Math.max(10, country.progress * 100)}%` }}
                   />
                 ) : null}
                 <span className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.08),transparent_65%)]" />
-                <span className="relative z-10">{countryCodeToFlag(country.code)}</span>
+                <span className={cn("relative z-10", toneClasses.text)}>{countryCodeToFlag(country.code)}</span>
               </span>
               <span className="relative min-w-0">
                 <span className="block truncate text-[12px] font-bold text-white transition group-hover:text-[#ff7d63]">{country.name}</span>
                 <span className="text-[10px] text-[#818a93]">
-                  {country.watchedCount} de {country.count} videos
+                  {country.activeCount} de {country.count} videos
                 </span>
               </span>
             </button>
+              );
+            })()
           ))}
         </div>
       </div>
@@ -1037,9 +1265,7 @@ function ProposalTopbar2({
   onToggleViewer: () => void;
   lastExtractionAt: string | null;
 }) {
-  const lastExtractionLabel = lastExtractionAt
-    ? new Date(lastExtractionAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
-    : "Sin dato";
+  const lastExtractionLabel = formatStableDateTime(lastExtractionAt);
 
   return (
     <header className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
@@ -1115,36 +1341,7 @@ function MapVotePanel2({
   const [isMinimized, setIsMinimized] = useState(false);
 
   return (
-    <div className="pointer-events-none absolute bottom-4 left-4 z-[70] w-[min(190px,calc(100%-2rem))]">
-      {prompt && !isMinimized ? (
-        <div className="pointer-events-auto mb-2 rounded-xl border border-[#ff5a3d]/28 bg-[#050b10]/92 p-3 text-white shadow-2xl backdrop-blur-xl">
-          <p className="text-[11px] font-bold leading-5 text-[#dce4ed]">
-            Votar por{" "}
-            <span className="text-white">
-              {countryCodeToFlag(prompt.countryCode)} {prompt.countryName}
-            </span>
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              type="button"
-              className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#ff5a3d]/40 bg-[#ff5a3d]/16 px-3 text-[11px] font-black text-[#ff7d63] transition hover:bg-[#ff5a3d]/24"
-              onClick={() => onConfirmVote(prompt.countryCode)}
-            >
-              <CheckCircle size={14} weight="fill" />
-              Confirmar
-            </button>
-            <button
-              type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[#cbd3dc] transition hover:bg-white/[0.08]"
-              onClick={onCancelVote}
-              aria-label="Cancelar voto"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-      ) : null}
-
+    <div className="pointer-events-none absolute left-4 top-4 z-[70] w-[min(190px,calc(100%-2rem))]">
       <section className="pointer-events-auto rounded-xl border border-white/[0.08] bg-[#050b10]/82 p-3 text-white shadow-2xl backdrop-blur-xl">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -1202,25 +1399,113 @@ function MapVotePanel2({
           </>
         ) : null}
       </section>
+
+      {prompt && !isMinimized ? (
+        <div className="pointer-events-auto mt-2 rounded-xl border border-[#ff5a3d]/28 bg-[#050b10]/92 p-3 text-white shadow-2xl backdrop-blur-xl">
+          <p className="text-[11px] font-bold leading-5 text-[#dce4ed]">
+            Votar por{" "}
+            <span className="text-white">
+              {countryCodeToFlag(prompt.countryCode)} {prompt.countryName}
+            </span>
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#ff5a3d]/40 bg-[#ff5a3d]/16 px-3 text-[11px] font-black text-[#ff7d63] transition hover:bg-[#ff5a3d]/24"
+              onClick={() => onConfirmVote(prompt.countryCode)}
+            >
+              <CheckCircle size={14} weight="fill" />
+              Confirmar
+            </button>
+            <button
+              type="button"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[#cbd3dc] transition hover:bg-white/[0.08]"
+              onClick={onCancelVote}
+              aria-label="Cancelar voto"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
+
+function VideoExitPrompt2({
+  title,
+  onComplete,
+  onContinue,
+  onWatchLater,
+}: {
+  title: string;
+  onComplete: () => void;
+  onContinue: () => void;
+  onWatchLater: () => void;
+}) {
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-[1200] flex items-center justify-center bg-black/72 px-4 backdrop-blur-md">
+      <div className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#05070b] p-5 text-center text-white shadow-[0_30px_120px_-42px_rgba(0,0,0,0.96)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ff5a4f]">Video en progreso</p>
+        <h2 className="mt-3 text-xl font-semibold leading-tight text-[#f7f8fb]">¿Terminaste de ver el video completo?</h2>
+        <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#aeb7c2]">{title}</p>
+        <p className="mt-3 text-[12px] font-semibold leading-5 text-[#ff5a4f]">
+          Detectamos más de 1 minuto de reproducción. Confirma si ya lo completaste o guárdalo para seguir después.
+        </p>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onComplete}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#55c87b]/45 bg-[#55c87b]/15 px-4 text-[12px] font-black uppercase tracking-[0.12em] text-[#d6ffe2] transition hover:bg-[#55c87b]/24"
+          >
+            COMPLETO
+          </button>
+          <button
+            type="button"
+            onClick={onContinue}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] px-4 text-[12px] font-black uppercase tracking-[0.12em] text-[#f4f7fb] transition hover:bg-white/[0.1]"
+          >
+            SEGUIR VIENDO
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onWatchLater}
+          className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#ff5a4f]/35 bg-[#ff5a4f]/10 px-4 text-[12px] font-black uppercase tracking-[0.12em] text-[#ffb2aa] transition hover:bg-[#ff5a4f]/16"
+        >
+          VER MÁS TARDE
+        </button>
+      </div>
+    </div>
+  );
+}
 
 
 // Bottom Inspiration videos row
 function VideoInspirationRail2({
   videos,
   selectedCountryCode,
+  activity,
+  totalVideos,
+  highlightedVideoId,
+  onOpenAllVideos,
   onSelect
 }: {
   videos: TravelVideoLocation[];
   selectedCountryCode: string | null;
+  activity: Pick<VideoActivityController, "seenIds" | "watchStatusById">;
+  totalVideos: number;
+  highlightedVideoId: string | null;
+  onOpenAllVideos: () => void;
   onSelect: (video: TravelVideoLocation) => void;
 }) {
   const selectedCountryName =
     selectedCountryCode
-      ? videos.find((video) => String(video.country_code || "").toUpperCase() === selectedCountryCode)?.country_name
+      ? getCountryNameInSpanish(
+          selectedCountryCode,
+          videos.find((video) => String(video.country_code || "").toUpperCase() === selectedCountryCode)?.country_name
+        )
       : null;
   const railVideos = videos.slice(0, 14);
 
@@ -1237,7 +1522,16 @@ function VideoInspirationRail2({
             "Videos para inspirarte"
           )}
         </h2>
-        <span className="text-[14px] font-black uppercase tracking-wider text-[#ff5a3d]">{videos.length} videos</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[14px] font-black uppercase tracking-wider text-[#ff5a3d]">{totalVideos} videos</span>
+          <button
+            type="button"
+            className="h-7 rounded-full border border-white/15 bg-white/[0.04] px-3 text-[10px] font-black uppercase tracking-[0.1em] text-white transition hover:bg-white/[0.1]"
+            onClick={onOpenAllVideos}
+          >
+            Ver todos
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-1.5 scrollbar-thin select-none pr-8">
@@ -1245,11 +1539,22 @@ function VideoInspirationRail2({
           const countryCode = String(video.country_code || "").toUpperCase();
           const videoViews = Number(video.view_count || 0);
           const durationMinutes = Math.max(1, Math.round(Number(video.duration_seconds || 0) / 60));
+          const watchState = getProposalVideoWatchState(video.youtube_video_id, activity);
+          const isWatched = watchState === "watched";
+          const isIncomplete = watchState === "incomplete";
+          const videoId = String(video.youtube_video_id || "").trim();
+          const isHighlighted = Boolean(videoId) && videoId === String(highlightedVideoId || "").trim();
 
           return (
             <div 
               key={video.youtube_video_id} 
-              className="group relative h-[126px] w-[215px] shrink-0 overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.02] transition hover:border-[#ff5a3d]/20"
+              className={cn(
+                "group relative h-[126px] w-[215px] shrink-0 overflow-hidden rounded-xl border bg-white/[0.02] transition",
+                isHighlighted && "border-[#ff7d63] ring-1 ring-[#ff7d63]/70",
+                isWatched && "border-emerald-400/60 bg-emerald-500/[0.08] hover:border-emerald-300/80",
+                isIncomplete && "border-yellow-300/60 bg-yellow-300/[0.08] hover:border-yellow-200/80",
+                !isWatched && !isIncomplete && !isHighlighted && "border-white/[0.07] hover:border-[#ff5a3d]/20"
+              )}
             >
               {/* Image background cover */}
               <Image 
@@ -1261,6 +1566,8 @@ function VideoInspirationRail2({
               />
               {/* Card gradient overlay */}
               <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.85))]" />
+              {isWatched ? <span className="absolute inset-0 bg-emerald-500/18 mix-blend-screen" /> : null}
+              {isIncomplete ? <span className="absolute inset-0 bg-yellow-300/16 mix-blend-screen" /> : null}
 
               {/* Top metadata tags */}
               <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
@@ -1287,7 +1594,7 @@ function VideoInspirationRail2({
                   <span className="mt-1.5 inline-flex items-center gap-1.5 text-[9px] font-bold text-[#cbd3dc]">
                     <span>{countryCodeToFlag(countryCode)}</span>
                     <span className="opacity-40">•</span>
-                    <span className="truncate">{video.country_name || countryCode || "Destino"}</span>
+                    <span className="truncate">{getCountryNameInSpanish(video.country_code, video.country_name)}</span>
                   </span>
                 </div>
               </button>
@@ -1316,10 +1623,12 @@ function VideoInspirationRail2({
 // Right Sidebar (Metrics, Sponsors and Patrons CTA)
 function ProposalRightRail2({
   onBecomePatron,
+  onManageSponsors,
   onAction,
   analytics
 }: {
   onBecomePatron: () => void;
+  onManageSponsors: () => void;
   onAction: (m: string) => void;
   analytics: ProposalAnalytics;
 }) {
@@ -1413,7 +1722,7 @@ function ProposalRightRail2({
           <button 
             type="button" 
             className="text-[10px] font-bold text-[#b9c1cb] hover:text-white transition"
-            onClick={() => onAction("Gestor de sponsors abierto (Simulación).")}
+            onClick={onManageSponsors}
           >
             Gestionar
           </button>
@@ -1445,7 +1754,10 @@ function ProposalRightRail2({
                 <button 
                   type="button" 
                   className="h-8 shrink-0 rounded-full border border-white/10 bg-white/[0.02] px-3.5 text-[9px] font-black text-white hover:bg-white/[0.07] hover:border-white/20 transition-all flex items-center" 
-                  onClick={() => onAction(`Redirigiendo a sponsor: ${sponsor.name}`)}
+                  onClick={() => {
+                    onAction(`Redirigiendo a sponsor: ${sponsor.name}`);
+                    window.open(`https://${sponsor.url}`, "_blank", "noopener");
+                  }}
                 >
                   Ir al sitio
                 </button>
@@ -1503,24 +1815,15 @@ function ProposalRightRail2({
   );
 }
 
-// Bottom banner notification
-function PrototypeNotice2({ notice }: { notice: string }) {
-  return (
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-[80] w-[min(94vw,560px)] -translate-x-1/2 rounded-full border border-white/[0.08] bg-[#050b10]/90 px-5 py-2.5 text-center text-[10px] font-bold text-[#e1e7ee] shadow-[0_20px_60px_-16px_rgba(0,0,0,0.92)] backdrop-blur-2xl transition duration-500 animate-bounce">
-      <span className="text-[#ff5a3d] mr-1.5">⚡ Info:</span> {notice}
-    </div>
-  );
-}
-
 // Sidebar Drawer layout on mobile views
 function MobileDrawer2({
   open,
   onClose,
-  onAction
+  onNavigate
 }: {
   open: boolean;
   onClose: () => void;
-  onAction: (msg: string) => void;
+  onNavigate: (label: string) => void;
 }) {
   if (!open) return null;
   return (
@@ -1547,7 +1850,10 @@ function MobileDrawer2({
               key={label} 
               type="button" 
               className="flex h-10 w-full items-center rounded-lg border border-white/[0.04] bg-white/[0.01] hover:bg-white/[0.05] px-3.5 text-left text-[11px] font-bold text-white transition" 
-              onClick={() => { onAction(`${label} cargado.`); onClose(); }}
+              onClick={() => {
+                onNavigate(label);
+                onClose();
+              }}
             >
               {label}
             </button>

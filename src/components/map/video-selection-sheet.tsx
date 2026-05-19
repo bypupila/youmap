@@ -32,10 +32,11 @@ interface VideoSelectionSheetProps {
   onChangeVideo: (video: TravelVideoLocation) => void;
   onOpenInYouTube?: (video: TravelVideoLocation) => void;
   openButtonLabel?: string;
+  playbackCommand?: { id: number; action: "pause" | "play" } | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
 }
 
-export function VideoSelectionSheet({ open, videos, currentVideo, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, onPlaybackStateChange }: VideoSelectionSheetProps) {
+export function VideoSelectionSheet({ open, videos, currentVideo, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, playbackCommand, onPlaybackStateChange }: VideoSelectionSheetProps) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
   const sections = useMemo(() => buildCountryVideoSections(videos, currentVideo), [currentVideo, videos]);
 
@@ -47,7 +48,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
   const currentSection = sections.find((section) => section.country_code === currentCountryCode) || sections[0] || null;
   const currentSeen = Boolean(currentVideo?.youtube_video_id && activity.seenIds.has(currentVideo.youtube_video_id));
   const currentOpenedInYoutube = Boolean(currentVideo?.youtube_video_id && activity.openedIds.has(currentVideo.youtube_video_id));
-  const currentWatchStatus = currentVideo?.youtube_video_id ? activity.watchStatusById[currentVideo.youtube_video_id] || (currentSeen ? "watched" : undefined) : undefined;
+  const currentWatchStatus = currentVideo?.youtube_video_id ? activity.watchStatusById[currentVideo.youtube_video_id] || (currentSeen ? "not_finished" : undefined) : undefined;
   const currentWatchBadgeLabel = getVideoWatchStateLabel({
     openedInYoutube: currentOpenedInYoutube,
     watchStatus: currentWatchStatus,
@@ -130,6 +131,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
                     youtubeHref={youtubeHref}
                     thumbnailUrl={currentVideo?.thumbnail_url || null}
                     openButtonLabel={openButtonLabel || (currentOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
+                    playbackCommand={playbackCommand}
                     onOpenInYouTube={openYouTubeVideo}
                     onPlaybackStateChange={onPlaybackStateChange}
                     isMadeForKids={Boolean(currentVideo?.made_for_kids)}

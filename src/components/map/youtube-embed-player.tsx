@@ -20,6 +20,7 @@ interface YouTubeEmbedPlayerProps {
   allowFullscreen?: boolean;
   isMadeForKids?: boolean;
   openButtonLabel?: string;
+  hideFooter?: boolean;
   playbackCommand?: { id: number; action: "pause" | "play" } | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
   onOpenInYouTube?: () => void;
@@ -114,6 +115,7 @@ export function YouTubeEmbedPlayer({
   allowFullscreen = true,
   isMadeForKids = false,
   openButtonLabel = "Abrir en YouTube",
+  hideFooter = false,
   playbackCommand = null,
   onPlaybackStateChange,
   onOpenInYouTube,
@@ -219,7 +221,14 @@ export function YouTubeEmbedPlayer({
 
   return (
     <div className={cn("space-y-2", className)}>
-      <div className={cn("relative aspect-video min-h-[202px] overflow-hidden rounded-xl border border-white/10 bg-black", frameClassName)}>
+      <div
+        className={cn("relative aspect-video min-h-[202px] overflow-hidden rounded-xl border border-white/10 bg-black", frameClassName)}
+        onPointerDownCapture={() => {
+          if (showFallback || hasObservedPlayingRef.current) return;
+          hasObservedPlayingRef.current = true;
+          onPlaybackStateChangeRef.current?.("playing");
+        }}
+      >
         <div
           ref={playerContainerRef}
           className="absolute inset-0"
@@ -263,6 +272,7 @@ export function YouTubeEmbedPlayer({
         ) : null}
       </div>
 
+      {hideFooter ? null : (
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-[#8f98a3]">
           {isMadeForKids
@@ -280,6 +290,7 @@ export function YouTubeEmbedPlayer({
           <ArrowSquareOut size={12} />
         </button>
       </div>
+      )}
     </div>
   );
 }

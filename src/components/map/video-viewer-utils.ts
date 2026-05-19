@@ -6,6 +6,9 @@ export type CountryVideoBucket = {
   videos: TravelVideoLocation[];
 };
 
+const countryDisplayNamesEs =
+  typeof Intl !== "undefined" ? new Intl.DisplayNames(["es"], { type: "region" }) : null;
+
 const YOUTUBE_HOSTS = new Set([
   "youtube.com",
   "www.youtube.com",
@@ -26,7 +29,7 @@ export function buildCountryVideoSections(videos: TravelVideoLocation[], current
     const code = String(video.country_code || "").toUpperCase() || "TM";
     const bucket = buckets.get(code) || {
       country_code: code,
-      country_name: video.country_name || code,
+      country_name: getCountryNameInSpanish(code, video.country_name),
       videos: [],
     };
     bucket.videos.push(video);
@@ -41,8 +44,35 @@ export function buildCountryVideoSections(videos: TravelVideoLocation[], current
     .sort((a, b) => {
       if (a.country_code === currentCountryCode) return -1;
       if (b.country_code === currentCountryCode) return 1;
-      return b.videos.length - a.videos.length || a.country_name.localeCompare(b.country_name);
+      return b.videos.length - a.videos.length || stableTextCompare(a.country_name, b.country_name);
     });
+}
+
+function stableTextCompare(a: string, b: string) {
+  const aa = String(a || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+  const bb = String(b || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+  if (aa < bb) return -1;
+  if (aa > bb) return 1;
+  return 0;
+}
+
+export function getCountryNameInSpanish(countryCode?: string | null, fallbackName?: string | null) {
+  const code = String(countryCode || "").toUpperCase().trim();
+  if (/^[A-Z]{2}$/.test(code) && countryDisplayNamesEs) {
+    const display = countryDisplayNamesEs.of(code);
+    if (display) return display;
+  }
+  const fallback = String(fallbackName || "").trim();
+  if (fallback && fallback.length > 2) return fallback;
+  return "País sin nombre";
 }
 
 export function isValidYouTubeVideoId(videoId?: string | null) {
@@ -108,8 +138,8 @@ export function getVideoWatchStateLabel(input: {
   watchStatus?: string | null;
 }) {
   if (input.watchStatus === "watched") return "COMPLETADO";
-  if (input.watchStatus === "not_finished" || input.openedInYoutube) return "INICIADO";
   if (input.watchStatus === "watch_later") return "POR TERMINAR";
+  if (input.watchStatus === "not_finished" || input.openedInYoutube) return "INICIADO";
   return "SIN INICIAR";
 }
 
@@ -118,6 +148,7 @@ export function getVideoWatchStateTone(input: {
   watchStatus?: string | null;
 }) {
   if (input.watchStatus === "watched") return "success" as const;
+  if (input.watchStatus === "watch_later") return "active" as const;
   if (input.watchStatus === "not_finished" || input.openedInYoutube) return "active" as const;
   return "idle" as const;
 }
@@ -164,7 +195,7 @@ export function getVideoCityLabel(video?: TravelVideoLocation | null) {
 export function formatVideoPlace(video?: TravelVideoLocation | null) {
   if (!video) return "Ubicacion mapeada";
   const city = getVideoCityLabel(video);
-  return [city, video.country_name || video.country_code].filter(Boolean).join(", ") || "Ubicacion mapeada";
+  return [city, getCountryNameInSpanish(video.country_code, video.country_name)].filter(Boolean).join(", ") || "Ubicacion mapeada";
 }
 
 export function formatCompactNumber(value: number) {

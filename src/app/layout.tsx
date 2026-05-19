@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Outfit } from "next/font/google";
 import "@/app/globals.css";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,13 @@ export const metadata: Metadata = {
     shortcut: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

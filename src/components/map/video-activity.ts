@@ -151,7 +151,7 @@ export function useLocalVideoActivity(): VideoActivityController {
     const normalized = String(videoId || "").trim();
     if (!normalized) return;
     setWatchStatusById((current) => {
-      if (current[normalized] === "watched" || current[normalized] === "watch_later") return current;
+      if (current[normalized] === "watched") return current;
       if (current[normalized] === "not_finished") return current;
       const next = { ...current, [normalized]: "not_finished" as VideoWatchStatus };
       writeWatchStatusById(next);
