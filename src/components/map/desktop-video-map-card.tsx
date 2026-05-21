@@ -115,8 +115,8 @@ export function DesktopVideoMapCard({
         <article className="group relative overflow-hidden rounded-xl border border-red-500/35 bg-[#080808] text-sm text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
           <div className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.04),transparent_60%)]" />
 
-          <header className="flex items-start gap-3 px-4 pb-3 pt-4">
-            <div className="min-w-0 flex-1">
+          <header className="relative flex items-start gap-3 px-4 pb-3 pt-4">
+            <div className="min-w-0 flex-1 text-center">
               <h2 className="text-sm font-extrabold leading-tight text-white">{selectedVideo.title}</h2>
               <div className="mt-1.5 flex items-center justify-between gap-2">
                 <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold text-zinc-500">
@@ -192,10 +192,11 @@ export function DesktopVideoMapCard({
                 <CaretDown size={10} />
               </button>
               {watchMenuOpen ? (
-                <div className="absolute left-1/2 bottom-[calc(100%+6px)] z-20 min-w-[130px] -translate-x-1/2 overflow-hidden rounded border border-white/[0.08] bg-[#080808] p-1 shadow-2xl">
-                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-amber-300">INICIADO</button>
-                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watched"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-emerald-500">COMPLETADO</button>
-                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-white">VER MÁS TARDE</button>
+                <div className="absolute left-1/2 top-[calc(100%+6px)] z-20 min-w-[130px] -translate-x-1/2 overflow-hidden rounded border border-white/[0.08] bg-[#080808] p-1 shadow-2xl">
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_started"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-white">SIN INICIAR</button>
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-amber-300">INICIADO</button>
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watched"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-emerald-500">COMPLETADO</button>
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-white">VER MÁS TARDE</button>
                 </div>
               ) : null}
             </div>
@@ -374,11 +375,24 @@ export function DesktopVideoMapCard({
                 <button
                   type="button"
                   onClick={() => {
+                    activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_started");
+                    setWatchMenuOpen(false);
+                  }}
+                  className={cn(
+                    "block w-full rounded-md px-2 py-1.5 text-center text-[11px] hover:bg-white/[0.08]",
+                    watchStatus === "not_started" && "text-[#d8dee6]"
+                  )}
+                >
+                  SIN INICIAR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished");
                     setWatchMenuOpen(false);
                   }}
                   className={cn(
-                    "block w-full rounded-md px-2 py-1.5 text-left text-[11px] hover:bg-white/[0.08]",
+                    "block w-full rounded-md px-2 py-1.5 text-center text-[11px] hover:bg-white/[0.08]",
                     watchStatus === "not_finished" && "text-[#ffd37c]"
                   )}
                 >
@@ -391,7 +405,7 @@ export function DesktopVideoMapCard({
                     setWatchMenuOpen(false);
                   }}
                   className={cn(
-                    "block w-full rounded-md px-2 py-1.5 text-left text-[11px] hover:bg-white/[0.08]",
+                    "block w-full rounded-md px-2 py-1.5 text-center text-[11px] hover:bg-white/[0.08]",
                     watchStatus === "watched" && "text-[#7de1a2]"
                   )}
                 >
@@ -405,7 +419,7 @@ export function DesktopVideoMapCard({
                     setWatchMenuOpen(false);
                   }}
                   className={cn(
-                    "block w-full rounded-md px-2 py-1.5 text-left text-[11px] hover:bg-white/[0.08]",
+                    "block w-full rounded-md px-2 py-1.5 text-center text-[11px] hover:bg-white/[0.08]",
                     (watchStatus === "watch_later" || !watchStatus) && "text-[#d8dee6]"
                   )}
                 >

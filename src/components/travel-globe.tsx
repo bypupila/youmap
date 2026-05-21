@@ -58,7 +58,7 @@ interface TravelGlobeProps {
   selectedCountryCode?: string | null;
   votedCountryCode?: string | null;
   watchedVideoIds?: Set<string>;
-  videoWatchStatusById?: Record<string, "not_finished" | "watched" | "watch_later">;
+  videoWatchStatusById?: Record<string, "not_started" | "not_finished" | "watched" | "watch_later">;
   interactive?: boolean;
   showControls?: boolean;
   minimalOverlay?: boolean;
@@ -68,6 +68,7 @@ interface TravelGlobeProps {
   showSummaryCard?: boolean;
   showPointPanel?: boolean;
   pointPanelClassName?: string;
+  openVideoOnCountrySelect?: boolean;
   onActiveVideoChange?: (video: TravelVideoLocation | null) => void;
   onPinnedVideoChange?: (video: TravelVideoLocation | null) => void;
   onCountrySelect?: (countryCode: string | null, source?: "polygon" | "cluster" | "country") => void;
@@ -99,6 +100,7 @@ export function TravelGlobe({
   showSummaryCard = true,
   showPointPanel = true,
   pointPanelClassName,
+  openVideoOnCountrySelect = true,
   onActiveVideoChange,
   onPinnedVideoChange,
   onCountrySelect,
@@ -126,6 +128,7 @@ export function TravelGlobe({
   const hoveredPointRef = useRef<GlobePoint | null>(null);
   const hoverClearTimeoutRef = useRef<number | null>(null);
   const suppressPolygonClickUntilRef = useRef(0);
+  const suppressGlobeClickUntilRef = useRef(0);
   const rotationPointOfViewRef = useRef({ lat: 20, lng: -10, altitude: 2.3 });
   const rotationEnabled = controlledRotationEnabled ?? internalRotationEnabled;
   void votedCountryCode;
@@ -534,9 +537,9 @@ export function TravelGlobe({
       const nextView = { lat: candidate.lat, lng: candidate.lng, altitude: pointMode === "video" ? 0.72 : 1.2 };
       rotationPointOfViewRef.current = nextView;
       globeRef.current?.pointOfView(nextView, 850);
-      onPinnedVideoChange?.(candidate.videos[0] || null);
+      onPinnedVideoChange?.(openVideoOnCountrySelect ? candidate.videos[0] || null : null);
     },
-    [onCountrySelect, onPinnedVideoChange, pointMode, pointsData, updateRotationEnabled, videoLocations]
+    [onCountrySelect, onPinnedVideoChange, openVideoOnCountrySelect, pointMode, pointsData, updateRotationEnabled, videoLocations]
   );
 
   useEffect(() => {
@@ -574,7 +577,7 @@ export function TravelGlobe({
 
     onCountrySelect?.(selected.country_code.toUpperCase(), "country");
     focusCountryOnGlobe(selected);
-    onPinnedVideoChange?.(selected.videos[0] || null);
+    onPinnedVideoChange?.(openVideoOnCountrySelect ? selected.videos[0] || null : null);
   }
 
   return (
@@ -663,6 +666,7 @@ export function TravelGlobe({
                   if (Date.now() < suppressPolygonClickUntilRef.current) return;
                   const code = polygon ? resolveCountryCodeFromPolygon(polygon as object, polygonCountryIndex) : null;
                   if (!code) return;
+                  suppressGlobeClickUntilRef.current = Date.now() + 350;
                   selectCountryFromPolygon(code);
                 }
               : undefined
@@ -685,6 +689,7 @@ export function TravelGlobe({
             createFlagPinElement(d as GlobePoint, {
               onClick: (point) => {
                 suppressPolygonClickUntilRef.current = Date.now() + 500;
+                suppressGlobeClickUntilRef.current = Date.now() + 350;
                 handlePointSelection(point);
               },
               onHoverStart: (point) => {
@@ -714,7 +719,7 @@ export function TravelGlobe({
           arcDashAnimateTime={2800}
           arcStroke={0.45}
           onPointClick={
-            interactive
+            interactive && pointMode !== "video"
               ? (point) => {
                   handlePointSelection(point as GlobePoint);
                 }
@@ -736,6 +741,7 @@ export function TravelGlobe({
           onGlobeClick={
             interactive
               ? () => {
+                  if (Date.now() < suppressGlobeClickUntilRef.current) return;
                   updateRotationEnabled(false);
                   setHoveredPoint(null);
                   setHoveredCountryPreview(null);
@@ -1583,6 +1589,7 @@ function createFlagPinElement(
   marker.style.lineHeight = "1";
   marker.style.transform = "translate(-50%, -50%)";
   marker.style.pointerEvents = interactive ? "auto" : "none";
+  marker.style.touchAction = "manipulation";
 
   marker.style.width = denseCluster ? "24px" : expandedVideo ? "15px" : "20px";
   marker.style.height = denseCluster ? "24px" : expandedVideo ? "15px" : "20px";
@@ -1709,17 +1716,23 @@ function createFlagPinElement(
   if (interactive) {
     marker.addEventListener("mouseenter", () => handlers.onHoverStart(point));
     marker.addEventListener("mouseleave", () => handlers.onHoverEnd(point));
-    marker.addEventListener("click", (event) => {
+    let lastActivationAt = 0;
+    const activateMarker = (event: Event) => {
       event.preventDefault();
       event.stopPropagation();
+      const now = Date.now();
+      if (now - lastActivationAt < 250) return;
+      lastActivationAt = now;
       handlers.onClick(point);
-    });
+    };
+    marker.addEventListener("pointerdown", activateMarker);
+    marker.addEventListener("click", activateMarker);
   }
 
   return marker;
 }
 
-type VideoWatchStatusMap = Record<string, "not_finished" | "watched" | "watch_later">;
+type VideoWatchStatusMap = Record<string, "not_started" | "not_finished" | "watched" | "watch_later">;
 
 function isVideoComplete(
   videoId: string | null | undefined,
@@ -1740,6 +1753,7 @@ function isVideoStartedButIncomplete(
   const normalized = String(videoId || "").trim();
   if (!normalized) return false;
   const status = videoWatchStatusById?.[normalized];
+  if (status === "not_started") return false;
   if (status === "not_finished") return true;
   if (status === "watch_later") return true;
   if (status === "watched") return false;

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { MapProposalPrototype2 } from "@/components/map/map-proposal-prototype-2";
+import { MapExperienceV2 } from "@/components/map/map-experience-v2";
 import { loadLuisitoMapData } from "@/lib/luisito-map-data";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -19,7 +19,7 @@ export default async function MapProposalPage2() {
 
   return (
     <main className="h-screen overflow-hidden bg-[#03080d] text-white">
-      <MapProposalPrototype2 channel={channel} videoLocations={videoLocations} />
+      <MapExperienceV2 channel={channel} videoLocations={videoLocations} viewMode="demo" />
     </main>
   );
 }

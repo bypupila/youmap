@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { RoleManagementCard } from "@/components/admin/role-management-card";
-import { MapExperience } from "@/components/map/map-experience";
+import { MapExperienceV2 } from "@/components/map/map-experience-v2";
 import { buildPublicShareUrl, loadPublicMapPayload, loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 import { DEMO_CHANNEL_SLUG, DEMO_USER, DEMO_USERNAME } from "@/lib/demo-data";
 import type { MapDataPayload } from "@/lib/map-data";
@@ -113,7 +113,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
       <div className="absolute inset-0">
-        <MapExperience
+        <MapExperienceV2
           channel={payload.channel}
           videoLocations={payload.videoLocations}
           manualQueue={payload.manualQueue}
@@ -152,8 +152,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
       ) : null}
-
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
     </main>
   );
 }

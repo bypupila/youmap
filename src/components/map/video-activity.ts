@@ -18,7 +18,7 @@ const LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS = {
 } as const;
 
 export type VideoActivityTab = "all" | "watched" | "opened" | "saved" | "featured" | "watch_later" | "incomplete";
-export type VideoWatchStatus = "not_finished" | "watched" | "watch_later";
+export type VideoWatchStatus = "not_started" | "not_finished" | "watched" | "watch_later";
 
 export type VideoActivityController = {
   seenIds: Set<string>;
@@ -105,7 +105,7 @@ function readWatchStatusById() {
     const next: Record<string, VideoWatchStatus> = {};
     for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
       if (!key) continue;
-      if (value === "watched" || value === "not_finished" || value === "watch_later") next[key] = value;
+      if (value === "watched" || value === "not_started" || value === "not_finished" || value === "watch_later") next[key] = value;
     }
     return next;
   } catch {

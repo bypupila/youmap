@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import {
   ArrowsOutSimple,
   BookmarkSimple,
@@ -132,6 +133,7 @@ function getProposalVideoWatchState(
 
   const explicitStatus = activity.watchStatusById[normalized];
   if (explicitStatus === "watched") return "watched";
+  if (explicitStatus === "not_started") return "none";
   if (explicitStatus === "not_finished" || explicitStatus === "watch_later") return "incomplete";
 
   return activity.seenIds.has(normalized) ? "watched" : "none";
@@ -664,8 +666,9 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 maxVisibleVideos={4}
                 pointMode="video"
                 showSummaryCard={false}
-                showPointPanel={!isMapFullscreen}
+                showPointPanel
                 pointPanelClassName="left-1/2 top-4 w-[340px] -translate-x-1/2"
+                openVideoOnCountrySelect={false}
                 selectedCountryCode={selectedCountryCode}
                 watchedVideoIds={videoActivity.seenIds}
                 videoWatchStatusById={videoActivity.watchStatusById}
@@ -692,8 +695,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 <div className="pointer-events-none absolute inset-0 z-[72] bg-black/62 backdrop-blur-[4px]" />
               ) : null}
 
-              {!isMapFullscreen ? (
-                <div className="pointer-events-none absolute inset-x-0 top-[92px] bottom-[92px] z-[80] hidden px-4 lg:block">
+              <div className="pointer-events-none absolute inset-x-0 top-[92px] bottom-[92px] z-[80] hidden px-4 lg:block">
                 <div className="flex h-full items-center justify-center">
                   <div className="pointer-events-auto w-full max-w-[480px]">
                     <DesktopVideoMapCard
@@ -712,8 +714,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                     />
                   </div>
                 </div>
-                </div>
-              ) : null}
+              </div>
 
               {!isVideoFocusMode ? (
               <div className="pointer-events-none absolute right-4 top-4 z-[90] flex items-start gap-2">
@@ -792,7 +793,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
               </div>
               ) : null}
 
-              {!isMapFullscreen && !isVideoFocusMode ? (
+              {!isVideoFocusMode ? (
                 <MapVotePanel2
                   candidates={hasMounted ? voteCandidates : []}
                   prompt={votePrompt}
@@ -819,11 +820,12 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 ) : (
                   <button
                     type="button"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ff5a3d]/55 bg-[#050b10]/82 text-[#ff5a3d] backdrop-blur-xl hover:bg-[#050b10]"
+                    className="flex h-9 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-[#050b10]/82 px-3 text-[11px] font-bold text-[#ff5a3d] backdrop-blur-xl hover:bg-[#050b10]"
                     onClick={() => setIsMapFullscreen(false)}
                     aria-label="Salir de pantalla completa"
                   >
                     <X size={16} />
+                    Cerrar Pantalla Completa
                   </button>
                 )}
               </div>
@@ -1104,7 +1106,7 @@ function ProposalSidebar2({
       
       {/* Brand Logo Header */}
       <div className="mb-4 flex items-center justify-between lg:block">
-        <button type="button" className="flex items-center gap-3 text-left group" onClick={() => setActiveItem("Explorar")}>
+        <Link href="/" className="group flex items-center gap-3 text-left">
           <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#ff5a3d]/25 bg-[#ff5a3d]/10 text-[#ff7b4f] transition group-hover:scale-105">
             <svg viewBox="0 0 24 24" className="w-6 h-6 fill-none stroke-current" strokeWidth="2.5">
               <path d="M4.5 16.5 L12 3 L19.5 16.5 Z M12 3 L12 16.5" />
@@ -1117,7 +1119,7 @@ function ProposalSidebar2({
               BY PUPILA
             </span>
           </div>
-        </button>
+        </Link>
         <button 
           type="button" 
           className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] lg:hidden hover:bg-white/[0.08]" 

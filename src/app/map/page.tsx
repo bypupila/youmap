@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { MapExperience } from "@/components/map/map-experience";
+import { MapExperienceV2 } from "@/components/map/map-experience-v2";
 import { Button } from "@/components/ui/button";
 import { getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
@@ -76,7 +76,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
       <div className="absolute inset-0">
-        <MapExperience
+        <MapExperienceV2
           channel={payload.channel}
           videoLocations={payload.videoLocations}
           manualQueue={payload.manualQueue}
@@ -93,8 +93,6 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           viewMode={isDemoMap ? "demo" : payload.viewer.isOwner ? "creator" : "viewer"}
         />
       </div>
-
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.34),rgba(17,20,22,0.08)_32%,rgba(17,20,22,0.38))]" />
     </main>
   );
 }

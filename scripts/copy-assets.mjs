@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
 
-const srcDir = "/Users/bypupila/.gemini/antigravity/brain/ac9d1317-d547-40ac-b988-d1e02348e44b";
-const destCreatorsDir = "./public/creators";
+const DEFAULT_SRC_DIR = "/Users/bypupila/.gemini/antigravity/brain/ac9d1317-d547-40ac-b988-d1e02348e44b";
+const srcDir = process.env.GEMINI_ASSETS_SRC_DIR || DEFAULT_SRC_DIR;
+const destCreatorsDir = process.env.GEMINI_ASSETS_DEST_DIR || "./public/creators";
 
 const filesToCopy = [
   { src: "drew_binsky_avatar_1779057496237.png", dest: "drew-binsky.png" },
@@ -17,8 +18,23 @@ console.log(`Source directory: ${srcDir}`);
 console.log(`Destination: ${destCreatorsDir}`);
 console.log("--------------------------------------------------");
 
+if (!fs.existsSync(srcDir)) {
+  console.error(`⨯ Source directory does not exist: ${srcDir}`);
+  process.exit(1);
+}
+
 if (!fs.existsSync(destCreatorsDir)) {
   fs.mkdirSync(destCreatorsDir, { recursive: true });
+}
+
+const sourceRealPath = fs.realpathSync(srcDir);
+const destinationRealPath = fs.realpathSync(destCreatorsDir);
+
+if (sourceRealPath === destinationRealPath) {
+  console.error("⨯ Refusing to copy assets because source and destination are the same directory.");
+  console.error(`  source: ${sourceRealPath}`);
+  console.error(`  destination: ${destinationRealPath}`);
+  process.exit(1);
 }
 
 let successCount = 0;
