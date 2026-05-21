@@ -1741,7 +1741,7 @@ function isVideoComplete(
 ) {
   const normalized = String(videoId || "").trim();
   if (!normalized) return false;
-  if (videoWatchStatusById?.[normalized]) return videoWatchStatusById[normalized] === "watched";
+  if (videoWatchStatusById?.[normalized] === "watched") return true;
   return watchedVideoIds?.has(normalized) === true;
 }
 
@@ -1757,7 +1757,7 @@ function isVideoStartedButIncomplete(
   if (status === "not_finished") return true;
   if (status === "watch_later") return true;
   if (status === "watched") return false;
-  return watchedVideoIds?.has(normalized) === true;
+  return false;
 }
 
 function isPointWatched(
