@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -10,7 +10,10 @@ const outDir = path.join(projectRoot, "docs", "visual-library", "versions", vers
 const pagesDir = path.join(outDir, "pages");
 const componentsDir = path.join(outDir, "components");
 const issuesDir = path.join(outDir, "ui-issues");
+const issuesComponentsDir = path.join(issuesDir, "components");
 const responsiveDir = path.join(outDir, "responsive");
+const VIEWPORT = { width: 1440, height: 1000 };
+const MAP_MAX_COMPONENT_MULTIPLIER = 1.35;
 
 const routes = [
   { name: "HomePage", path: "/" },
@@ -92,7 +95,7 @@ async function buildInventory() {
 }
 
 async function preparePage(browser) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const page = await browser.newPage({ viewport: VIEWPORT });
   await page.route("**/*", async (requestRoute) => {
     const requestUrl = requestRoute.request().url();
     const parsedUrl = new URL(requestUrl);
@@ -112,6 +115,7 @@ async function captureRoute(browser, route) {
   const pageFile = path.join(pagesDir, `${routeSlug}.png`);
   const issueFile = path.join(issuesDir, `${routeSlug}.png`);
   const components = [];
+  const routeLikelyMap = route.path.includes("/map");
 
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -119,10 +123,15 @@ async function captureRoute(browser, route) {
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
     await waitForVisualReadiness(page, route);
     const finalUrl = page.url();
-    await page.screenshot({ path: pageFile, fullPage: true });
+    const qualityAudit = await auditRouteVisualState(page);
+    const routeHasUiIssues = qualityAudit.issues.length > 0;
+    const routeScreenshotPath = routeHasUiIssues ? issueFile : pageFile;
+    // Avoid Playwright full-page stitching for WebGL map views because it may clip/corrupt canvas frames.
+    await page.screenshot({ path: routeScreenshotPath, fullPage: !qualityAudit.isMapRoute });
 
     const handles = await page.locator("[data-component]").elementHandles();
     const seen = new Map();
+    const componentOutputDir = routeHasUiIssues ? issuesComponentsDir : componentsDir;
 
     for (const handle of handles) {
       const name = await handle.getAttribute("data-component");
@@ -133,13 +142,13 @@ async function captureRoute(browser, route) {
       const count = (seen.get(name) || 0) + 1;
       seen.set(name, count);
       const fileName = `${slugify(name)}__${routeSlug}${count > 1 ? `__${count}` : ""}.png`;
-      const filePath = path.join(componentsDir, fileName);
+      const filePath = path.join(componentOutputDir, fileName);
       await handle.screenshot({ path: filePath }).catch(async () => {
         const clipped = {
           x: Math.max(0, box.x),
           y: Math.max(0, box.y),
-          width: Math.max(1, Math.min(box.width, 1440 - Math.max(0, box.x))),
-          height: Math.max(1, Math.min(box.height, 1000 - Math.max(0, box.y))),
+          width: Math.max(1, Math.min(box.width, VIEWPORT.width - Math.max(0, box.x))),
+          height: Math.max(1, Math.min(box.height, VIEWPORT.height - Math.max(0, box.y))),
         };
         await page.screenshot({ path: filePath, clip: clipped });
       });
@@ -153,16 +162,28 @@ async function captureRoute(browser, route) {
       });
     }
 
+    if (routeHasUiIssues) {
+      return {
+        ...route,
+        url,
+        finalUrl,
+        status: "visual_issue",
+        error: qualityAudit.issues.join(" | "),
+        screenshot: path.relative(outDir, routeScreenshotPath),
+        components,
+      };
+    }
+
     return {
       ...route,
       url,
       finalUrl,
       status: "captured",
-      screenshot: path.relative(outDir, pageFile),
+      screenshot: path.relative(outDir, routeScreenshotPath),
       components,
     };
   } catch (error) {
-    await page.screenshot({ path: issueFile, fullPage: true }).catch(() => {});
+    await page.screenshot({ path: issueFile, fullPage: !routeLikelyMap }).catch(() => {});
     return {
       ...route,
       url,
@@ -238,6 +259,76 @@ async function waitForVisualReadiness(page, route) {
   if (!globeIsVisible) {
     throw new Error(`Globe canvas did not render visible pixels for ${route.name}`);
   }
+}
+
+async function auditRouteVisualState(page) {
+  const isMapRoute = (await page.locator("[data-component='MapExperienceCore']").count()) > 0;
+  if (!isMapRoute) return { isMapRoute: false, issues: [] };
+
+  const metrics = await page.evaluate(() => {
+    const readRect = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return {
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      };
+    };
+
+    const stage = document.querySelector("[data-component='MapGlobeStage']");
+    const canvas = stage?.querySelector("canvas") || document.querySelector("canvas");
+    const canvasStats = (() => {
+      if (!canvas || canvas.width < 100 || canvas.height < 100) return null;
+      const sample = document.createElement("canvas");
+      sample.width = 160;
+      sample.height = 160;
+      const context = sample.getContext("2d");
+      if (!context) return null;
+      context.drawImage(canvas, 0, 0, sample.width, sample.height);
+      const pixels = context.getImageData(0, 0, sample.width, sample.height).data;
+      let nonDark = 0;
+      let bright = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        const brightness = (pixels[index] + pixels[index + 1] + pixels[index + 2]) / 3;
+        if (brightness > 26) nonDark += 1;
+        if (brightness > 60) bright += 1;
+      }
+      return { nonDark, bright };
+    })();
+
+    return {
+      viewportHeight: window.innerHeight,
+      core: readRect("[data-component='MapExperienceCore']"),
+      stage: readRect("[data-component='MapGlobeStage']"),
+      sidebar: readRect("[data-component='ProposalSidebar2']"),
+      rightRailShell: readRect("[data-component='ProposalRightRail2Shell']"),
+      markerCount: document.querySelectorAll("[data-globe-marker]").length,
+      canvasStats,
+    };
+  });
+
+  const maxHeight = Math.round(metrics.viewportHeight * MAP_MAX_COMPONENT_MULTIPLIER);
+  const issues = [];
+  if (!metrics.stage) {
+    issues.push("MapGlobeStage ausente");
+  } else if (metrics.stage.height > maxHeight) {
+    issues.push(`MapGlobeStage altura anómala: ${metrics.stage.height}px (> ${maxHeight}px)`);
+  }
+  if (metrics.sidebar && metrics.sidebar.height > maxHeight) {
+    issues.push(`ProposalSidebar2 altura anómala: ${metrics.sidebar.height}px (> ${maxHeight}px)`);
+  }
+  if (metrics.rightRailShell && metrics.rightRailShell.height > maxHeight) {
+    issues.push(`ProposalRightRail2Shell altura anómala: ${metrics.rightRailShell.height}px (> ${maxHeight}px)`);
+  }
+  if ((metrics.markerCount || 0) === 0) {
+    issues.push("Sin marcadores renderizados en el mapa");
+  }
+  if (!metrics.canvasStats || metrics.canvasStats.nonDark < 160 || metrics.canvasStats.bright < 60) {
+    issues.push("Canvas del globo sin señal visual suficiente");
+  }
+
+  return { isMapRoute: true, issues };
 }
 
 async function hideCaptureOverlays(page) {
@@ -392,9 +483,11 @@ function renderIndex(results, responsiveResults, inventory) {
 </html>`;
 }
 
+await rm(outDir, { recursive: true, force: true });
 await mkdir(pagesDir, { recursive: true });
 await mkdir(componentsDir, { recursive: true });
 await mkdir(issuesDir, { recursive: true });
+await mkdir(issuesComponentsDir, { recursive: true });
 await mkdir(responsiveDir, { recursive: true });
 
 const inventory = await buildInventory();

@@ -8,6 +8,7 @@ Biblioteca local para revisar la plataforma visualmente sin depender de memoria 
 - `versions/<fecha>/components/`: crops de componentes renderizados con `data-component`.
 - `versions/<fecha>/responsive/`: capturas de estados responsive relevantes.
 - `versions/<fecha>/ui-issues/`: capturas que fallaron validaciones visuales y requieren corrección antes de usarse como referencia.
+- `versions/<fecha>/ui-issues/components/`: componentes extraidos de rutas con errores visuales (para backlog de UI).
 - `versions/<fecha>/manifest.json`: inventario de paginas, componentes detectados en `src` y capturas generadas.
 - `versions/<fecha>/index.html`: galeria local navegable.
 - `LATEST.md`: puntero a la version mas reciente.
@@ -36,4 +37,6 @@ VISUAL_LIBRARY_BASE_URL=http://localhost:3000 VISUAL_LIBRARY_VERSION=2026-05-21 
 
 Los nombres visuales salen de `data-component` cuando existe. El inventario de `manifest.json` tambien lista los nombres reales detectados en archivos `.tsx`, para cruzar pagina, componente y archivo fuente.
 
-Las rutas con mapa no se guardan como referencia si el canvas WebGL sigue negro, si no hay markers o si el sidebar/rail no tienen contenido. En ese caso la captura se manda a `ui-issues/`.
+Las rutas con mapa no se guardan como referencia si el canvas WebGL sigue negro, si no hay markers, si no carga texto base del layout o si hay alturas anómalas (sidebar/rail/stage fuera de viewport). En ese caso la ruta pasa a `ui-issues/` y sus componentes se guardan en `ui-issues/components/`.
+
+Para evitar capturas incompletas de WebGL, las rutas de mapa se capturan en viewport (no `fullPage`) después de los checks de readiness.

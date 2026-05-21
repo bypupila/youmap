@@ -1,7 +1,7 @@
 # Visual Library Latest
 
-Version: 2026-05-21-current
+Version: 2026-05-21
 
-Open: [index.html](versions/2026-05-21-current/index.html)
+Open: [index.html](versions/2026-05-21/index.html)
 
-Manifest: [manifest.json](versions/2026-05-21-current/manifest.json)
+Manifest: [manifest.json](versions/2026-05-21/manifest.json)
