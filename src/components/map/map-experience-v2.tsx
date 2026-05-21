@@ -46,7 +46,7 @@ function resolveViewMode({
   viewMode,
   isDemoMode,
 }: Pick<MapExperienceV2Props, "viewer" | "viewMode" | "isDemoMode">): MapViewMode {
-  if (isDemoMode) return "viewer";
+  if (isDemoMode) return "creator";
   if (viewer?.isOwner || viewer?.role === "creator" || viewer?.role === "superadmin") return "creator";
   return viewMode || "viewer";
 }

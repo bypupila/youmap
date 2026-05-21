@@ -134,7 +134,7 @@ export function MapProposalPrototype({ channel, videoLocations }: MapProposalPro
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-[#03080d] text-[#f5f7fb]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_18%,rgba(255,94,59,0.18),transparent_24%),linear-gradient(180deg,#06111a,#03070d_52%,#020408)]" />
-      <div className="relative grid min-h-[100dvh] grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)] 2xl:grid-cols-[285px_minmax(0,1fr)_360px]">
+      <div className="relative grid min-h-[100dvh] grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] 2xl:grid-cols-[240px_minmax(0,1fr)_300px]">
         <ProposalSidebar
           channel={channel}
           role={role}
@@ -163,7 +163,7 @@ export function MapProposalPrototype({ channel, videoLocations }: MapProposalPro
             onNotice={flash}
           />
 
-          <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-1">
+          <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-1">
             <div className="min-w-0">
               <div className="relative min-h-[640px] overflow-hidden rounded-lg border border-white/10 bg-[#07121b] shadow-[0_32px_110px_-54px_rgba(0,0,0,0.92)] lg:min-h-[calc(100dvh-118px)]">
                 <WorldMapCanvas
@@ -281,7 +281,7 @@ function ProposalSidebar({
   onAction: (message: string) => void;
 }) {
   return (
-    <aside className="relative z-20 border-b border-white/10 bg-[#040b12]/88 px-3 py-3 backdrop-blur-2xl lg:min-h-[100dvh] lg:border-b-0 lg:border-r">
+    <aside className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
       <div className="flex items-center justify-between lg:block">
         <button type="button" className="flex items-center gap-3 text-left" onClick={() => onSelectCountry(null)}>
           <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#ff7048]/35 bg-[#ff7048]/10 text-[#ff7b4f]">

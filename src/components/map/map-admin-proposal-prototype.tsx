@@ -226,7 +226,7 @@ export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminP
       {/* Background glow layers */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_18%,rgba(255,90,61,0.06),transparent_35%),linear-gradient(180deg,#04080e,#030508_60%,#010204)] pointer-events-none" />
 
-      <div className="relative grid h-screen overflow-hidden grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[275px_minmax(0,1fr)]">
+      <div className="relative grid h-screen overflow-hidden grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)]">
         
         {/* Left Sidebar */}
         <ProposalSidebar
@@ -294,7 +294,7 @@ export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminP
           </nav>
 
           {/* Main Layout Grid (Bento columns) */}
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1 grid gap-4 xl:grid-cols-[minmax(0,1fr)_330px] 2xl:grid-cols-[minmax(0,1fr)_340px] pb-6 scrollbar-thin">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px] pb-6 scrollbar-thin">
             
             {/* Bento Middle Column */}
             <div className="min-w-0 flex flex-col gap-4">
@@ -423,7 +423,7 @@ function ProposalSidebar({
   ];
 
   return (
-    <aside className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a]/92 px-4 py-4 backdrop-blur-xl lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
+    <aside className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
       
       {/* Sidebar Header Brand Logo */}
       <div className="flex items-center justify-between lg:block mb-6">

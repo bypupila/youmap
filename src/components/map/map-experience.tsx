@@ -1580,7 +1580,7 @@ function MapAppShell(props: MapShellProps) {
 
           <div
             data-map-scroll="true"
-            className="pointer-events-auto grid min-h-0 grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 lg:pointer-events-none lg:grid-cols-[minmax(210px,250px)_minmax(360px,1fr)_minmax(210px,250px)] lg:overflow-hidden xl:grid-cols-[minmax(282px,318px)_minmax(460px,1fr)_minmax(282px,318px)] xl:gap-3 xl:px-5 xl:pb-5 2xl:grid-cols-[minmax(360px,430px)_minmax(560px,1fr)_minmax(360px,430px)]"
+            className="pointer-events-auto grid min-h-0 grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 lg:pointer-events-none lg:grid-cols-[minmax(180px,220px)_minmax(360px,1fr)_minmax(180px,220px)] lg:overflow-hidden xl:grid-cols-[minmax(210px,240px)_minmax(460px,1fr)_minmax(210px,240px)] xl:gap-3 xl:px-5 xl:pb-5 2xl:grid-cols-[minmax(230px,260px)_minmax(560px,1fr)_minmax(230px,260px)]"
           >
             <MapOverviewRail {...props} />
             <MapCenterStage {...props} />

@@ -127,11 +127,12 @@ function formatStableDateTime(value: string | null) {
   if (!value) return "Sin dato";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Sin dato";
-  return new Intl.DateTimeFormat("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(date);
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = String(date.getUTCFullYear()).slice(-2);
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${day}/${month}/${year}, ${hours}:${minutes} UTC`;
 }
 
 function getProposalVideoWatchState(
@@ -659,18 +660,18 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
   const isVideoFocusMode = Boolean(pinnedVideo) && isDesktopVideoCard && !isMapFullscreen;
 
   return (
-    <div className="relative h-screen overflow-hidden bg-[#03060a] text-[#f5f7fb] font-sans antialiased">
+    <div data-component="MapExperienceCore" className="relative h-screen overflow-hidden bg-[#03060a] text-[#f5f7fb] font-sans antialiased">
       {/* Background glowing effects */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_18%,rgba(255,90,61,0.08),transparent_35%),linear-gradient(180deg,#04090f,#030508_60%,#010204)] pointer-events-none" />
       
       <div className={cn(
         "relative grid h-screen overflow-hidden grid-cols-1",
-        !isMapFullscreen && "lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[250px_minmax(0,1fr)_340px] 3xl:grid-cols-[260px_minmax(0,1fr)_360px]"
+        !isMapFullscreen && "lg:grid-cols-[220px_minmax(0,1fr)_270px] xl:grid-cols-[230px_minmax(0,1fr)_280px] 2xl:grid-cols-[240px_minmax(0,1fr)_300px] 3xl:grid-cols-[250px_minmax(0,1fr)_320px]"
       )}>
         
         {/* Left Sidebar */}
         {!isMapFullscreen ? (
-          <aside className="hidden 2xl:block">
+          <aside className="hidden lg:block">
             <ProposalSidebar2
               countries={hasMounted ? sortedSidebarCountries : []}
               activeItem={activeSidebarItem}
@@ -718,7 +719,7 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
           <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-hidden">
             
             {/* The Earth Map Box */}
-            <div className={cn(
+            <div data-component="MapGlobeStage" className={cn(
               "relative flex flex-1 min-h-0 items-center justify-center overflow-hidden bg-[#050b10] [&_.scene-container>div]:!z-[5] [&>div:first-child]:!h-full [&>div:first-child]:!min-h-0 [&>div:first-child]:!w-full",
               isMapFullscreen ? "rounded-none border-0 shadow-none" : "rounded-xl border border-white/[0.07] shadow-[0_24px_80px_-32px_rgba(0,0,0,0.85)]"
             )}>
@@ -920,7 +921,7 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
 
         {/* Right Rail (Bento Grid Sidebar) */}
         {!isMapFullscreen ? (
-          <aside className="hidden lg:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
+          <aside data-component="ProposalRightRail2Shell" className="hidden lg:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
             <ProposalRightRail2
               channel={channel}
               onBecomePatron={() => setShowCheckoutModal(true)}
@@ -1218,7 +1219,7 @@ function ProposalSidebar2({
   ];
 
   return (
-    <aside className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
+    <aside data-component="ProposalSidebar2" className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
       
       {/* Brand Logo Header */}
       <div className="mb-4 flex items-center justify-between lg:block">
@@ -1399,12 +1400,12 @@ function ProposalTopbar2({
   const isViewer = activeMapMode === "viewer";
 
   return (
-    <header className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
+    <header data-component="ProposalTopbar2" className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
       {/* Broadened Sleek Search Bar */}
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] 2xl:hidden"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden"
           onClick={onOpenMenu}
           aria-label="Abrir menú lateral"
         >
@@ -1436,7 +1437,7 @@ function ProposalTopbar2({
           <>
             <span className="hidden h-10 items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 text-[12px] font-bold text-emerald-200 sm:flex">
               <Eye size={15} />
-              Visualizacion
+              Seguidor
             </span>
             {canReturnToCreator ? (
               <button
@@ -1445,7 +1446,7 @@ function ProposalTopbar2({
                 onClick={onReturnToCreator}
               >
                 <GearSix size={15} />
-                Creator
+                Creador
               </button>
             ) : null}
           </>
@@ -1457,7 +1458,7 @@ function ProposalTopbar2({
               onClick={onPreviewViewer}
             >
               <Eye size={15} />
-              Vista del Viewer
+              Vista del Seguidor
             </button>
             <button
               type="button"
@@ -1517,7 +1518,7 @@ function MapVotePanel2({
   const [isMinimized, setIsMinimized] = useState(false);
 
   return (
-    <div className="pointer-events-none absolute left-4 top-4 z-[70] w-[min(190px,calc(100%-2rem))]">
+    <div data-component="MapVotePanel2" className="pointer-events-none absolute left-4 top-4 z-[70] w-[min(190px,calc(100%-2rem))]">
       <section className="pointer-events-auto rounded-xl border border-white/[0.08] bg-[#050b10]/82 p-3 text-white shadow-2xl backdrop-blur-xl">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -1621,7 +1622,7 @@ function VideoExitPrompt2({
   onWatchLater: () => void;
 }) {
   return (
-    <div className="pointer-events-auto fixed inset-0 z-[1200] flex items-center justify-center bg-black/72 px-4 backdrop-blur-md">
+    <div data-component="VideoExitPrompt2" className="pointer-events-auto fixed inset-0 z-[1200] flex items-center justify-center bg-black/72 px-4 backdrop-blur-md">
       <div className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#05070b] p-5 text-center text-white shadow-[0_30px_120px_-42px_rgba(0,0,0,0.96)]">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ff5a4f]">Video en progreso</p>
         <h2 className="mt-3 text-xl font-semibold leading-tight text-[#f7f8fb]">¿Terminaste de ver el video completo?</h2>
@@ -1686,7 +1687,7 @@ function VideoInspirationRail2({
   const railVideos = videos.slice(0, 14);
 
   return (
-    <section className="bg-[#03060a]/50 p-4 border border-white/[0.06] rounded-xl shrink-0 h-[190px]">
+    <section data-component="VideoInspirationRail2" className="bg-[#03060a]/50 p-4 border border-white/[0.06] rounded-xl shrink-0 h-[190px]">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-[14px] font-black uppercase tracking-wider text-white">
           {selectedCountryCode ? (
@@ -1833,7 +1834,7 @@ function ProposalRightRail2({
           : "Mapa publico";
 
   return (
-    <div className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
+    <div data-component="ProposalRightRail2" className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm">
         <div className="flex items-center justify-center gap-3 text-center">
           <span className="relative h-12 w-12 overflow-hidden rounded-full border border-white/15 bg-white/[0.06]">
@@ -2073,7 +2074,7 @@ function MobileDrawer2({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm 2xl:hidden" onClick={onClose}>
+    <div data-component="MobileDrawer2" className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm xl:hidden" onClick={onClose}>
       <aside className="h-full w-[265px] border-r border-white/10 bg-[#04080d] p-5 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">

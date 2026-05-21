@@ -1,0 +1,1373 @@
+{
+  "generatedAt": "2026-05-21T17:29:21.152Z",
+  "baseUrl": "http://localhost:3000",
+  "version": "2026-05-21-current",
+  "pages": [
+    {
+      "name": "HomePage",
+      "route": "/",
+      "file": "src/app/page.tsx"
+    },
+    {
+      "name": "AdminPage",
+      "route": "/admin",
+      "file": "src/app/admin/page.tsx"
+    },
+    {
+      "name": "AuthPage",
+      "route": "/auth",
+      "file": "src/app/auth/page.tsx"
+    },
+    {
+      "name": "ProposalsPage",
+      "route": "/country-card-proposals",
+      "file": "src/app/country-card-proposals/page.tsx"
+    },
+    {
+      "name": "CreatorPanelPage",
+      "route": "/creator-panel",
+      "file": "src/app/creator-panel/page.tsx"
+    },
+    {
+      "name": "DashboardPage",
+      "route": "/dashboard",
+      "file": "src/app/dashboard/page.tsx"
+    },
+    {
+      "name": "DemoDisenoPage",
+      "route": "/demo-diseno",
+      "file": "src/app/demo-diseno/page.tsx"
+    },
+    {
+      "name": "ExplorePage",
+      "route": "/explore",
+      "file": "src/app/explore/page.tsx"
+    },
+    {
+      "name": "MapPage",
+      "route": "/map",
+      "file": "src/app/map/page.tsx"
+    },
+    {
+      "name": "MapAdminProposalPage",
+      "route": "/map-admin-proposal",
+      "file": "src/app/map-admin-proposal/page.tsx"
+    },
+    {
+      "name": "MapProposalPage",
+      "route": "/map-proposal",
+      "file": "src/app/map-proposal/page.tsx"
+    },
+    {
+      "name": "MapProposalPage2",
+      "route": "/map-proposal-2",
+      "file": "src/app/map-proposal-2/page.tsx"
+    },
+    {
+      "name": "MapProposalV1Page",
+      "route": "/map-proposal-v1",
+      "file": "src/app/map-proposal-v1/page.tsx"
+    },
+    {
+      "name": "OnboardingPage",
+      "route": "/onboarding",
+      "file": "src/app/onboarding/page.tsx"
+    },
+    {
+      "name": "OnboardingProcessingPage",
+      "route": "/onboarding/processing",
+      "file": "src/app/onboarding/processing/page.tsx"
+    },
+    {
+      "name": "PricingPage",
+      "route": "/pricing",
+      "file": "src/app/pricing/page.tsx"
+    },
+    {
+      "name": "PrivacyPage",
+      "route": "/privacy",
+      "file": "src/app/privacy/page.tsx"
+    },
+    {
+      "name": "TermsPage",
+      "route": "/terms",
+      "file": "src/app/terms/page.tsx"
+    },
+    {
+      "name": "PublicMapPage",
+      "route": "/u/[username]",
+      "file": "src/app/u/[username]/page.tsx"
+    }
+  ],
+  "components": [
+    {
+      "name": "AdminPage",
+      "file": "src/app/admin/page.tsx"
+    },
+    {
+      "name": "SummaryCard",
+      "file": "src/app/admin/page.tsx"
+    },
+    {
+      "name": "AuthPage",
+      "file": "src/app/auth/page.tsx"
+    },
+    {
+      "name": "ModelFive",
+      "file": "src/app/country-card-proposals/page.tsx"
+    },
+    {
+      "name": "ModelFour",
+      "file": "src/app/country-card-proposals/page.tsx"
+    },
+    {
+      "name": "ModelOne",
+      "file": "src/app/country-card-proposals/page.tsx"
+    },
+    {
+      "name": "ModelSix",
+      "file": "src/app/country-card-proposals/page.tsx"
+    },
+    {
+      "name": "ModelThree",
+      "file": "src/app/country-card-proposals/page.tsx"
+    },
+    {
+      "name": "ModelTwo",
+      "file": "src/app/country-card-proposals/page.tsx"
+    },
+    {
+      "name": "ProposalsPage",
+      "file": "src/app/country-card-proposals/page.tsx"
+    },
+    {
+      "name": "CreatorPanelPage",
+      "file": "src/app/creator-panel/page.tsx"
+    },
+    {
+      "name": "DashboardPage",
+      "file": "src/app/dashboard/page.tsx"
+    },
+    {
+      "name": "DemoDisenoClient",
+      "file": "src/app/demo-diseno/demo-client.tsx"
+    },
+    {
+      "name": "DemoDisenoPage",
+      "file": "src/app/demo-diseno/page.tsx"
+    },
+    {
+      "name": "ExplorePage",
+      "file": "src/app/explore/page.tsx"
+    },
+    {
+      "name": "GlobalError",
+      "file": "src/app/global-error.tsx"
+    },
+    {
+      "name": "RootLayout",
+      "file": "src/app/layout.tsx"
+    },
+    {
+      "name": "MapAdminProposalPage",
+      "file": "src/app/map-admin-proposal/page.tsx"
+    },
+    {
+      "name": "MapProposalPage2",
+      "file": "src/app/map-proposal-2/page.tsx"
+    },
+    {
+      "name": "MapProposalV1Client",
+      "file": "src/app/map-proposal-v1/map-proposal-v1-client.tsx"
+    },
+    {
+      "name": "MapProposalV1Page",
+      "file": "src/app/map-proposal-v1/page.tsx"
+    },
+    {
+      "name": "MapProposalPage",
+      "file": "src/app/map-proposal/page.tsx"
+    },
+    {
+      "name": "MapPage",
+      "file": "src/app/map/page.tsx"
+    },
+    {
+      "name": "NotFoundPage",
+      "file": "src/app/not-found.tsx"
+    },
+    {
+      "name": "OnboardingPage",
+      "file": "src/app/onboarding/page.tsx"
+    },
+    {
+      "name": "OnboardingProcessingPage",
+      "file": "src/app/onboarding/processing/page.tsx"
+    },
+    {
+      "name": "HomePage",
+      "file": "src/app/page.tsx"
+    },
+    {
+      "name": "PricingPage",
+      "file": "src/app/pricing/page.tsx"
+    },
+    {
+      "name": "PrivacyPage",
+      "file": "src/app/privacy/page.tsx"
+    },
+    {
+      "name": "TermsPage",
+      "file": "src/app/terms/page.tsx"
+    },
+    {
+      "name": "PublicMapPage",
+      "file": "src/app/u/[username]/page.tsx"
+    },
+    {
+      "name": "AdminUsersPanel",
+      "file": "src/components/admin/admin-users-panel.tsx"
+    },
+    {
+      "name": "PageLink",
+      "file": "src/components/admin/admin-users-panel.tsx"
+    },
+    {
+      "name": "RoleAuditPanel",
+      "file": "src/components/admin/role-audit-panel.tsx"
+    },
+    {
+      "name": "RoleManagementCard",
+      "file": "src/components/admin/role-management-card.tsx"
+    },
+    {
+      "name": "AnalyticsDashboard",
+      "file": "src/components/analytics-dashboard.tsx"
+    },
+    {
+      "name": "KpiCard",
+      "file": "src/components/analytics-dashboard.tsx"
+    },
+    {
+      "name": "CreatorAdminPanel",
+      "file": "src/components/creator/creator-admin-panel.tsx"
+    },
+    {
+      "name": "FloatingTopBar",
+      "file": "src/components/design-system/chrome.tsx"
+    },
+    {
+      "name": "MetricPill",
+      "file": "src/components/design-system/chrome.tsx"
+    },
+    {
+      "name": "SignalPill",
+      "file": "src/components/design-system/chrome.tsx"
+    },
+    {
+      "name": "Agentation",
+      "file": "src/components/dev/agentation-toolbar.tsx"
+    },
+    {
+      "name": "AgentationToolbar",
+      "file": "src/components/dev/agentation-toolbar.tsx"
+    },
+    {
+      "name": "ExplorePageClient",
+      "file": "src/components/explore/explore-page-client.tsx"
+    },
+    {
+      "name": "BrandStrip",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "CinematicLanding",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "ComparisonPanel",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "CreatorGlobe",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "CreatorNav",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "DestinationCard",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "FaqSection",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "FeatureCard",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "FeatureGrid",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "FinalCta",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "HeroSection",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "HowItWorks",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "MetricCard",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "PlanCard",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "PricingSection",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "PublicPagePreview",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "SponsorComparison",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "StepCard",
+      "file": "src/components/landing/cinematic-landing.tsx"
+    },
+    {
+      "name": "MiniMapModel",
+      "file": "src/components/landing/mini-map-model.tsx"
+    },
+    {
+      "name": "DesktopVideoMapCard",
+      "file": "src/components/map/desktop-video-map-card.tsx"
+    },
+    {
+      "name": "FanVoteCard",
+      "file": "src/components/map/fan-vote-card.tsx"
+    },
+    {
+      "name": "LocationSelect",
+      "file": "src/components/map/location-select.tsx"
+    },
+    {
+      "name": "ActivityWorldHotspots",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "AudienceChart",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "BookingLogo",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "CreatorBioHero",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "DonateWidget",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "GoProLogo",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "IatiLogo",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "MapAdminProposalPrototype",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "NorthFaceLogo",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "PerformanceGeneralChart",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "ProposalHeader",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "ProposalSidebar",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "PrototypeNotice",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "RecentActivities",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "RecentVideosSection",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "SponsorsWidget",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "UpcomingExpeditions",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "WiseLogo",
+      "file": "src/components/map/map-admin-proposal-prototype.tsx"
+    },
+    {
+      "name": "BookingLogo",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "GoProLogo",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "IatiLogo",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "MapExperienceCore",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "MapVotePanel2",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "MobileDrawer2",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "NorthFaceLogo",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "ProposalRightRail2",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "ProposalSidebar2",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "ProposalTopbar2",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "VideoExitPrompt2",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "VideoInspirationRail2",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "WiseLogo",
+      "file": "src/components/map/map-experience-core.tsx"
+    },
+    {
+      "name": "MapExperienceV2",
+      "file": "src/components/map/map-experience-v2.tsx"
+    },
+    {
+      "name": "BrandInquiryCta",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "ChannelAvatar",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "CountryCodeMark",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "DestinationCard",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "EmptyPanel",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "FanVoteSummary",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MapAppShell",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MapCenterStage",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MapExperience",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MapOverviewRail",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MapRightRail",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MapSidebar",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MapTopBar",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MiniSummary",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileActionBar",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileBottomNav",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileBrandHeader",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileCommunityView",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileMapMenu",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileMapShell",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileMapView",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileMenuButton",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileMoreView",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileOverviewView",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileSectionHeader",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileStatsGrid",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileSuggestedDestinations",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "MobileVideosView",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "OperationsCard",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "OverviewMetric",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "ProgressRing",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "SidebarItem",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "SponsorInboxDialog",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "SponsorManagerDialog",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "SponsorsRail",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "SuggestedDestinations",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "VideoExitPrompt",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "VideoThumb",
+      "file": "src/components/map/map-experience.tsx"
+    },
+    {
+      "name": "BookingLogo",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "GoProLogo",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "IatiLogo",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "MapProposalPrototype2",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "MapVotePanel2",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "MobileDrawer2",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "NorthFaceLogo",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "ProposalRightRail2",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "ProposalSidebar2",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "ProposalTopbar2",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "VideoExitPrompt2",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "VideoInspirationRail2",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "WiseLogo",
+      "file": "src/components/map/map-proposal-prototype-2-v1.tsx"
+    },
+    {
+      "name": "BookingLogo",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "GoProLogo",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "IatiLogo",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "MapProposalPrototype2",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "MapVotePanel2",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "MobileDrawer2",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "NorthFaceLogo",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "ProposalRightRail2",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "ProposalSidebar2",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "ProposalTopbar2",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "VideoExitPrompt2",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "VideoInspirationRail2",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "WiseLogo",
+      "file": "src/components/map/map-proposal-prototype-2.tsx"
+    },
+    {
+      "name": "FeaturedVideoCard",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "MapControl",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "MapProposalPrototype",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "Metric",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "MiniStat",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "MobileDrawer",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "ProposalRightRail",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "ProposalSidebar",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "ProposalTopbar",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "PrototypeNotice",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "SidebarButton",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "TravelListSwitch",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "VideoInspirationRail",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "WorldMapCanvas",
+      "file": "src/components/map/map-proposal-prototype.tsx"
+    },
+    {
+      "name": "ActivityStatButton",
+      "file": "src/components/map/map-video-activity-panel.tsx"
+    },
+    {
+      "name": "MapVideoActivityPanel",
+      "file": "src/components/map/map-video-activity-panel.tsx"
+    },
+    {
+      "name": "TopVideoCard",
+      "file": "src/components/map/map-video-activity-panel.tsx"
+    },
+    {
+      "name": "EmptyState",
+      "file": "src/components/map/missing-videos-dialog.tsx"
+    },
+    {
+      "name": "MiniStat",
+      "file": "src/components/map/missing-videos-dialog.tsx"
+    },
+    {
+      "name": "MissingVideosDialog",
+      "file": "src/components/map/missing-videos-dialog.tsx"
+    },
+    {
+      "name": "VideoThumbnail",
+      "file": "src/components/map/missing-videos-dialog.tsx"
+    },
+    {
+      "name": "MetricPill",
+      "file": "src/components/map/video-selection-sheet.tsx"
+    },
+    {
+      "name": "VideoRow",
+      "file": "src/components/map/video-selection-sheet.tsx"
+    },
+    {
+      "name": "VideoSelectionSheet",
+      "file": "src/components/map/video-selection-sheet.tsx"
+    },
+    {
+      "name": "YouTubeEmbedPlayer",
+      "file": "src/components/map/youtube-embed-player.tsx"
+    },
+    {
+      "name": "OnboardingFlow",
+      "file": "src/components/onboarding/onboarding-flow.tsx"
+    },
+    {
+      "name": "StudioMetric",
+      "file": "src/components/onboarding/onboarding-flow.tsx"
+    },
+    {
+      "name": "ImportPlanet",
+      "file": "src/components/onboarding/onboarding-processing.tsx"
+    },
+    {
+      "name": "MiniMetric",
+      "file": "src/components/onboarding/onboarding-processing.tsx"
+    },
+    {
+      "name": "OnboardingProcessing",
+      "file": "src/components/onboarding/onboarding-processing.tsx"
+    },
+    {
+      "name": "YoutubeImportStep",
+      "file": "src/components/onboarding/youtube-import-step.tsx"
+    },
+    {
+      "name": "SponsorBanner",
+      "file": "src/components/sponsors/sponsor-banner.tsx"
+    },
+    {
+      "name": "Field",
+      "file": "src/components/sponsors/sponsor-form.tsx"
+    },
+    {
+      "name": "SponsorForm",
+      "file": "src/components/sponsors/sponsor-form.tsx"
+    },
+    {
+      "name": "COUNTRY_NAME_ALIASES_TO_CANONICAL",
+      "file": "src/components/travel-globe.tsx"
+    },
+    {
+      "name": "StatCard",
+      "file": "src/components/travel-globe.tsx"
+    },
+    {
+      "name": "TravelGlobe",
+      "file": "src/components/travel-globe.tsx"
+    },
+    {
+      "name": "Badge",
+      "file": "src/components/ui/badge.tsx"
+    },
+    {
+      "name": "Button",
+      "file": "src/components/ui/button.tsx"
+    },
+    {
+      "name": "Card",
+      "file": "src/components/ui/card.tsx"
+    },
+    {
+      "name": "CardAction",
+      "file": "src/components/ui/card.tsx"
+    },
+    {
+      "name": "CardContent",
+      "file": "src/components/ui/card.tsx"
+    },
+    {
+      "name": "CardDescription",
+      "file": "src/components/ui/card.tsx"
+    },
+    {
+      "name": "CardFooter",
+      "file": "src/components/ui/card.tsx"
+    },
+    {
+      "name": "CardHeader",
+      "file": "src/components/ui/card.tsx"
+    },
+    {
+      "name": "CardTitle",
+      "file": "src/components/ui/card.tsx"
+    },
+    {
+      "name": "Dialog",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogClose",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogContent",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogDescription",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogFooter",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogHeader",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogOverlay",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogPortal",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogTitle",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "DialogTrigger",
+      "file": "src/components/ui/dialog.tsx"
+    },
+    {
+      "name": "Input",
+      "file": "src/components/ui/input.tsx"
+    },
+    {
+      "name": "Popover",
+      "file": "src/components/ui/popover.tsx"
+    },
+    {
+      "name": "PopoverAnchor",
+      "file": "src/components/ui/popover.tsx"
+    },
+    {
+      "name": "PopoverContent",
+      "file": "src/components/ui/popover.tsx"
+    },
+    {
+      "name": "PopoverDescription",
+      "file": "src/components/ui/popover.tsx"
+    },
+    {
+      "name": "PopoverHeader",
+      "file": "src/components/ui/popover.tsx"
+    },
+    {
+      "name": "PopoverTitle",
+      "file": "src/components/ui/popover.tsx"
+    },
+    {
+      "name": "PopoverTrigger",
+      "file": "src/components/ui/popover.tsx"
+    },
+    {
+      "name": "ScrollArea",
+      "file": "src/components/ui/scroll-area.tsx"
+    },
+    {
+      "name": "ScrollBar",
+      "file": "src/components/ui/scroll-area.tsx"
+    },
+    {
+      "name": "Separator",
+      "file": "src/components/ui/separator.tsx"
+    },
+    {
+      "name": "Sheet",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetClose",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetContent",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetDescription",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetFooter",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetHeader",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetOverlay",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetPortal",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetTitle",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "SheetTrigger",
+      "file": "src/components/ui/sheet.tsx"
+    },
+    {
+      "name": "Skeleton",
+      "file": "src/components/ui/skeleton.tsx"
+    },
+    {
+      "name": "Tabs",
+      "file": "src/components/ui/tabs.tsx"
+    },
+    {
+      "name": "TabsContent",
+      "file": "src/components/ui/tabs.tsx"
+    },
+    {
+      "name": "TabsList",
+      "file": "src/components/ui/tabs.tsx"
+    },
+    {
+      "name": "TabsTrigger",
+      "file": "src/components/ui/tabs.tsx"
+    },
+    {
+      "name": "Tooltip",
+      "file": "src/components/ui/tooltip.tsx"
+    },
+    {
+      "name": "TooltipContent",
+      "file": "src/components/ui/tooltip.tsx"
+    },
+    {
+      "name": "TooltipProvider",
+      "file": "src/components/ui/tooltip.tsx"
+    },
+    {
+      "name": "TooltipTrigger",
+      "file": "src/components/ui/tooltip.tsx"
+    }
+  ],
+  "capturedRoutes": [
+    {
+      "name": "HomePage",
+      "path": "/",
+      "url": "http://localhost:3000/",
+      "finalUrl": "http://localhost:3000/",
+      "status": "captured",
+      "screenshot": "pages/HomePage-root.png",
+      "components": []
+    },
+    {
+      "name": "CountryCardProposalsPage",
+      "path": "/country-card-proposals",
+      "url": "http://localhost:3000/country-card-proposals",
+      "finalUrl": "http://localhost:3000/country-card-proposals",
+      "status": "captured",
+      "screenshot": "pages/CountryCardProposalsPage--country-card-proposals.png",
+      "components": []
+    },
+    {
+      "name": "DemoDisenoPage",
+      "path": "/demo-diseno",
+      "url": "http://localhost:3000/demo-diseno",
+      "finalUrl": "http://localhost:3000/demo-diseno",
+      "status": "captured",
+      "screenshot": "pages/DemoDisenoPage--demo-diseno.png",
+      "components": []
+    },
+    {
+      "name": "OnboardingPageDemo",
+      "path": "/onboarding?demo=1",
+      "url": "http://localhost:3000/onboarding?demo=1",
+      "finalUrl": "http://localhost:3000/onboarding?demo=1",
+      "status": "captured",
+      "screenshot": "pages/OnboardingPageDemo--onboarding-demo-1.png",
+      "components": [
+        {
+          "name": "MapExperienceCore",
+          "route": "/onboarding?demo=1",
+          "screenshot": "components/MapExperienceCore__OnboardingPageDemo--onboarding-demo-1.png",
+          "width": 1440,
+          "height": 1000
+        },
+        {
+          "name": "ProposalSidebar2",
+          "route": "/onboarding?demo=1",
+          "screenshot": "components/ProposalSidebar2__OnboardingPageDemo--onboarding-demo-1.png",
+          "width": 240,
+          "height": 1016
+        },
+        {
+          "name": "ProposalTopbar2",
+          "route": "/onboarding?demo=1",
+          "screenshot": "components/ProposalTopbar2__OnboardingPageDemo--onboarding-demo-1.png",
+          "width": 848,
+          "height": 44
+        },
+        {
+          "name": "MapGlobeStage",
+          "route": "/onboarding?demo=1",
+          "screenshot": "components/MapGlobeStage__OnboardingPageDemo--onboarding-demo-1.png",
+          "width": 848,
+          "height": 734
+        },
+        {
+          "name": "MapVotePanel2",
+          "route": "/onboarding?demo=1",
+          "screenshot": "components/MapVotePanel2__OnboardingPageDemo--onboarding-demo-1.png",
+          "width": 190,
+          "height": 219
+        },
+        {
+          "name": "VideoInspirationRail2",
+          "route": "/onboarding?demo=1",
+          "screenshot": "components/VideoInspirationRail2__OnboardingPageDemo--onboarding-demo-1.png",
+          "width": 848,
+          "height": 190
+        },
+        {
+          "name": "ProposalRightRail2Shell",
+          "route": "/onboarding?demo=1",
+          "screenshot": "components/ProposalRightRail2Shell__OnboardingPageDemo--onboarding-demo-1.png",
+          "width": 320,
+          "height": 1016
+        },
+        {
+          "name": "ProposalRightRail2",
+          "route": "/onboarding?demo=1",
+          "screenshot": "components/ProposalRightRail2__OnboardingPageDemo--onboarding-demo-1.png",
+          "width": 287,
+          "height": 992
+        }
+      ]
+    },
+    {
+      "name": "AuthPage",
+      "path": "/auth",
+      "url": "http://localhost:3000/auth",
+      "finalUrl": "http://localhost:3000/auth",
+      "status": "captured",
+      "screenshot": "pages/AuthPage--auth.png",
+      "components": []
+    },
+    {
+      "name": "ExplorePage",
+      "path": "/explore",
+      "url": "http://localhost:3000/explore",
+      "finalUrl": "http://localhost:3000/explore",
+      "status": "captured",
+      "screenshot": "pages/ExplorePage--explore.png",
+      "components": []
+    },
+    {
+      "name": "TermsPage",
+      "path": "/terms",
+      "url": "http://localhost:3000/terms",
+      "finalUrl": "http://localhost:3000/terms",
+      "status": "captured",
+      "screenshot": "pages/TermsPage--terms.png",
+      "components": []
+    },
+    {
+      "name": "PrivacyPage",
+      "path": "/privacy",
+      "url": "http://localhost:3000/privacy",
+      "finalUrl": "http://localhost:3000/privacy",
+      "status": "captured",
+      "screenshot": "pages/PrivacyPage--privacy.png",
+      "components": []
+    },
+    {
+      "name": "MapPageDemo",
+      "path": "/map?channelId=demo",
+      "url": "http://localhost:3000/map?channelId=demo",
+      "finalUrl": "http://localhost:3000/map?channelId=demo",
+      "status": "captured",
+      "screenshot": "pages/MapPageDemo--map-channelId-demo.png",
+      "components": [
+        {
+          "name": "MapExperienceCore",
+          "route": "/map?channelId=demo",
+          "screenshot": "components/MapExperienceCore__MapPageDemo--map-channelId-demo.png",
+          "width": 1440,
+          "height": 1000
+        },
+        {
+          "name": "ProposalSidebar2",
+          "route": "/map?channelId=demo",
+          "screenshot": "components/ProposalSidebar2__MapPageDemo--map-channelId-demo.png",
+          "width": 240,
+          "height": 1016
+        },
+        {
+          "name": "ProposalTopbar2",
+          "route": "/map?channelId=demo",
+          "screenshot": "components/ProposalTopbar2__MapPageDemo--map-channelId-demo.png",
+          "width": 848,
+          "height": 44
+        },
+        {
+          "name": "MapGlobeStage",
+          "route": "/map?channelId=demo",
+          "screenshot": "components/MapGlobeStage__MapPageDemo--map-channelId-demo.png",
+          "width": 848,
+          "height": 734
+        },
+        {
+          "name": "VideoInspirationRail2",
+          "route": "/map?channelId=demo",
+          "screenshot": "components/VideoInspirationRail2__MapPageDemo--map-channelId-demo.png",
+          "width": 848,
+          "height": 190
+        },
+        {
+          "name": "ProposalRightRail2Shell",
+          "route": "/map?channelId=demo",
+          "screenshot": "components/ProposalRightRail2Shell__MapPageDemo--map-channelId-demo.png",
+          "width": 320,
+          "height": 1016
+        },
+        {
+          "name": "ProposalRightRail2",
+          "route": "/map?channelId=demo",
+          "screenshot": "components/ProposalRightRail2__MapPageDemo--map-channelId-demo.png",
+          "width": 287,
+          "height": 992
+        }
+      ]
+    },
+    {
+      "name": "MapProposalPage2",
+      "path": "/map-proposal-2",
+      "url": "http://localhost:3000/map-proposal-2",
+      "finalUrl": "http://localhost:3000/map-proposal-2",
+      "status": "captured",
+      "screenshot": "pages/MapProposalPage2--map-proposal-2.png",
+      "components": [
+        {
+          "name": "MapExperienceCore",
+          "route": "/map-proposal-2",
+          "screenshot": "components/MapExperienceCore__MapProposalPage2--map-proposal-2.png",
+          "width": 1440,
+          "height": 1000
+        },
+        {
+          "name": "ProposalSidebar2",
+          "route": "/map-proposal-2",
+          "screenshot": "components/ProposalSidebar2__MapProposalPage2--map-proposal-2.png",
+          "width": 240,
+          "height": 6008
+        },
+        {
+          "name": "ProposalTopbar2",
+          "route": "/map-proposal-2",
+          "screenshot": "components/ProposalTopbar2__MapProposalPage2--map-proposal-2.png",
+          "width": 848,
+          "height": 44
+        },
+        {
+          "name": "MapGlobeStage",
+          "route": "/map-proposal-2",
+          "screenshot": "components/MapGlobeStage__MapProposalPage2--map-proposal-2.png",
+          "width": 848,
+          "height": 5726
+        },
+        {
+          "name": "VideoInspirationRail2",
+          "route": "/map-proposal-2",
+          "screenshot": "components/VideoInspirationRail2__MapProposalPage2--map-proposal-2.png",
+          "width": 848,
+          "height": 190
+        },
+        {
+          "name": "ProposalRightRail2Shell",
+          "route": "/map-proposal-2",
+          "screenshot": "components/ProposalRightRail2Shell__MapProposalPage2--map-proposal-2.png",
+          "width": 320,
+          "height": 6008
+        },
+        {
+          "name": "ProposalRightRail2",
+          "route": "/map-proposal-2",
+          "screenshot": "components/ProposalRightRail2__MapProposalPage2--map-proposal-2.png",
+          "width": 287,
+          "height": 5984
+        }
+      ]
+    },
+    {
+      "name": "MapProposalPage",
+      "path": "/map-proposal",
+      "url": "http://localhost:3000/map-proposal",
+      "finalUrl": "http://localhost:3000/map-proposal",
+      "status": "captured",
+      "screenshot": "pages/MapProposalPage--map-proposal.png",
+      "components": []
+    },
+    {
+      "name": "MapProposalV1Page",
+      "path": "/map-proposal-v1",
+      "url": "http://localhost:3000/map-proposal-v1",
+      "finalUrl": "http://localhost:3000/map-proposal-v1",
+      "status": "captured",
+      "screenshot": "pages/MapProposalV1Page--map-proposal-v1.png",
+      "components": []
+    }
+  ],
+  "responsiveCaptures": [
+    {
+      "name": "MapPageDemoMobileMenu",
+      "path": "/map?channelId=demo",
+      "url": "http://localhost:3000/map?channelId=demo",
+      "finalUrl": "http://localhost:3000/map?channelId=demo",
+      "status": "captured",
+      "screenshot": "responsive/MapPageDemo-mobile-menu-open.png"
+    }
+  ]
+}

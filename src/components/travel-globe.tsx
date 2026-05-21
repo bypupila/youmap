@@ -594,6 +594,7 @@ export function TravelGlobe({
           ref={globeRef}
           width={containerSize.width || undefined}
           height={containerSize.height || undefined}
+          rendererConfig={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
           globeImageUrl="https://unpkg.com/three-globe/example/img/earth-night.jpg"
           backgroundImageUrl="https://unpkg.com/three-globe/example/img/night-sky.png"
           polygonsData={polygonsData}

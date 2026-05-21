@@ -656,12 +656,12 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       
       <div className={cn(
         "relative grid h-screen overflow-hidden grid-cols-1",
-        !isMapFullscreen && "lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[250px_minmax(0,1fr)_340px] 3xl:grid-cols-[260px_minmax(0,1fr)_360px]"
+        !isMapFullscreen && "lg:grid-cols-[220px_minmax(0,1fr)_270px] xl:grid-cols-[230px_minmax(0,1fr)_280px] 2xl:grid-cols-[240px_minmax(0,1fr)_300px] 3xl:grid-cols-[250px_minmax(0,1fr)_320px]"
       )}>
         
         {/* Left Sidebar */}
         {!isMapFullscreen ? (
-          <aside className="hidden 2xl:block">
+          <aside className="hidden lg:block">
             <ProposalSidebar2
               countries={hasMounted ? sortedSidebarCountries : []}
               activeItem={activeSidebarItem}
