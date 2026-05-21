@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   ChartBar,
@@ -190,8 +191,8 @@ function HeroSection({
         <div className="mt-10 flex items-center gap-4">
           <div className="flex -space-x-3">
             {creatorsList.map((creator) => (
-              <div key={creator.name} className="h-11 w-11 rounded-full border-2 border-[#080b0e] bg-[#101419] overflow-hidden shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
-                <img src={creator.src} alt={creator.name} className="h-full w-full object-cover" />
+              <div key={creator.name} className="relative h-11 w-11 rounded-full border-2 border-[#080b0e] bg-[#101419] overflow-hidden shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
+                <Image src={creator.src} alt={creator.name} fill sizes="44px" className="object-cover" />
               </div>
             ))}
           </div>
@@ -248,10 +249,13 @@ function DestinationCard({ destination }: { destination: JapanDestination }) {
     <div className="w-full rounded-[24px] border border-white/13 bg-[#101419]/90 p-4 shadow-[0_32px_90px_-44px_rgba(0,0,0,0.95)] backdrop-blur-xl">
       <div className="relative h-[170px] overflow-hidden rounded-[16px] bg-[linear-gradient(165deg,rgba(255,209,165,0.82),rgba(42,65,89,0.72)_45%,rgba(12,17,21,0.98))]">
         {destination.thumbnailUrl ? (
-          <img
+          <Image
             src={destination.thumbnailUrl}
             alt="Video de Luisito Comunica en Japón"
-            className="h-full w-full object-cover"
+            fill
+            sizes="(max-width: 768px) 100vw, 410px"
+            className="object-cover"
+            unoptimized
           />
         ) : null}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(7,10,13,0.18))]" />
@@ -374,8 +378,8 @@ function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] })
         <div className="mb-4 flex gap-2"><span className="h-2 w-2 rounded-full bg-white/20" /><span className="h-2 w-2 rounded-full bg-white/20" /><span className="h-2 w-2 rounded-full bg-white/20" /></div>
         <div className="grid min-h-[470px] gap-5 rounded-[16px] bg-[radial-gradient(circle_at_65%_48%,rgba(56,143,205,0.34),transparent_28%),radial-gradient(circle_at_62%_50%,#19314a,#071018_58%,#05070a)] p-7 md:grid-cols-[190px_1fr]">
           <aside className="relative z-10">
-            <div className="h-24 w-24 rounded-full border-4 border-white overflow-hidden bg-[#101419] shadow-lg">
-              <img src="/creators/luisito-comunica.png" alt="Luisito Comunica" className="h-full w-full object-cover" />
+            <div className="relative h-24 w-24 rounded-full border-4 border-white overflow-hidden bg-[#101419] shadow-lg">
+              <Image src="/creators/luisito-comunica.png" alt="Luisito Comunica" fill sizes="96px" className="object-cover" />
             </div>
             <h3 className="mt-5 text-[20px] font-extrabold">Luisito Comunica</h3>
             <p className="text-[12px] text-white/62">@luisitocomunica</p>
@@ -392,7 +396,7 @@ function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] })
                   key={`${video.country}-${video.thumbnailUrl}`}
                   className={index === 0 ? "relative col-span-2 overflow-hidden rounded-[14px]" : "relative overflow-hidden rounded-[14px]"}
                 >
-                  <img src={video.thumbnailUrl} alt={video.title} className="h-full min-h-[140px] w-full object-cover" />
+                  <Image src={video.thumbnailUrl} alt={video.title} fill sizes="(max-width: 768px) 50vw, 320px" className="object-cover" unoptimized />
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(5,8,13,0.82))]" />
                   <div className="absolute bottom-3 left-3 right-3">
                     <p className="text-[11px] font-extrabold uppercase text-[#ff473b]">{video.country}</p>
@@ -490,9 +494,11 @@ function FinalCta() {
       <div className="absolute left-[8%] top-[18%] h-[220px] w-[340px] rounded-[48%] bg-[radial-gradient(circle,#f3b46f,transparent_68%)] opacity-18 blur-3xl" />
       <div className="mx-auto grid max-w-[1500px] gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_1fr] lg:px-14">
         <div className="relative min-h-[260px] overflow-hidden rounded-[40px] border border-white/10 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.8)] lg:min-h-[320px]">
-          <img
+          <Image
             src="/creators/final-cta-map-mockup.png"
             alt="TravelYourMap interactive 3D map interface"
+            fill
+            sizes="(max-width: 1024px) 100vw, 50vw"
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#070a0d] via-transparent to-transparent opacity-40" />

@@ -5,26 +5,20 @@ import {
   ArrowUpRight,
   Bell,
   BookmarkSimple,
-  Calendar,
   CaretDown,
   Chat,
   CheckCircle,
   Clock,
   Compass,
-  Eye,
   Flag,
-  FunnelSimple,
   GlobeHemisphereWest,
   Heart,
   List,
-  MagnifyingGlass,
   MapPin,
   Plus,
   SquaresFour,
   Trophy,
-  UploadSimple,
   Users,
-  UsersThree,
   Video,
   X,
 } from "@phosphor-icons/react";
@@ -214,14 +208,14 @@ const ACTIVITY_LOGS = [
 export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminProposalPrototypeProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("resumen");
   const [activeSidebarItem, setActiveSidebarItem] = useState("Resumen");
-  const [searchQuery, setSearchQuery] = useState("");
   
   // Simulated stats state
   const [notice, setNotice] = useState("Panel de administración premium: Prototipo aislado sin persistencia.");
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showSponsorModal, setShowSponsorModal] = useState(false);
   const [showPatronModal, setShowPatronModal] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  void channel;
+  void videoLocations;
 
   function flash(message: string) {
     setNotice(message);
@@ -250,7 +244,7 @@ export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminP
             }
             flash(`Sección activa: ${item}`);
           }}
-          onOpenMenu={() => setMenuOpen(true)}
+          onOpenMenu={() => flash("Menú móvil en construcción.")}
           onAddPlaylist={() => setShowPlaylistModal(true)}
           onSelectPlaylist={(name) => flash(`Mostrando detalles de la playlist: ${name}`)}
         />
@@ -260,8 +254,6 @@ export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminP
           
           {/* Header Row */}
           <ProposalHeader
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
             onViewChannel={() => flash("Redirigiendo a la vista pública de tu canal (simulado)...")}
             onNotification={() => flash("Buzón de notificaciones de creador vacío.")}
             onProfileClick={() => flash("Ajustes del perfil del creador.")}
@@ -320,7 +312,7 @@ export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminP
               <RecentVideosSection onSelectVideo={(v) => flash(`Cargando analíticas para: ${v}`)} />
 
               {/* Timeline Horizontal activity */}
-              <RecentActivities logs={ACTIVITY_LOGS} onAction={flash} />
+              <RecentActivities logs={ACTIVITY_LOGS} />
             </div>
 
             {/* Bento Right Column Widgets */}
@@ -549,14 +541,10 @@ function ProposalSidebar({
 
 // Topbar Header Row
 function ProposalHeader({
-  searchQuery,
-  setSearchQuery,
   onViewChannel,
   onNotification,
   onProfileClick
 }: {
-  searchQuery: string;
-  setSearchQuery: (value: string) => void;
   onViewChannel: () => void;
   onNotification: () => void;
   onProfileClick: () => void;
@@ -864,11 +852,9 @@ function RecentVideosSection({ onSelectVideo }: { onSelectVideo: (title: string)
 
 // Recent Activities horizontal timeline rail
 function RecentActivities({ 
-  logs, 
-  onAction 
+  logs
 }: { 
-  logs: typeof ACTIVITY_LOGS; 
-  onAction: (msg: string) => void;
+  logs: typeof ACTIVITY_LOGS;
 }) {
   return (
     <section className="flex flex-col gap-3">
