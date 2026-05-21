@@ -12,6 +12,12 @@ const filesToCopy = [
   { src: "final_cta_map_mockup_1779058158629.png", dest: "final-cta-map-mockup.png" }
 ];
 
+function getMissingDestinationFiles() {
+  return filesToCopy
+    .map((file) => path.join(destCreatorsDir, file.dest))
+    .filter((destPath) => !fs.existsSync(destPath));
+}
+
 console.log("--------------------------------------------------");
 console.log("TravelYourMap: Copying premium generated assets...");
 console.log(`Source directory: ${srcDir}`);
@@ -19,7 +25,22 @@ console.log(`Destination: ${destCreatorsDir}`);
 console.log("--------------------------------------------------");
 
 if (!fs.existsSync(srcDir)) {
+  const missingDestinations = getMissingDestinationFiles();
+
+  if (missingDestinations.length === 0) {
+    console.warn(`! Source directory does not exist: ${srcDir}`);
+    console.warn("! Using existing committed assets in destination directory.");
+    console.log("--------------------------------------------------");
+    console.log(`Copy assets process skipped. Found ${filesToCopy.length}/${filesToCopy.length} destination files.`);
+    console.log("--------------------------------------------------");
+    process.exit(0);
+  }
+
   console.error(`⨯ Source directory does not exist: ${srcDir}`);
+  console.error("⨯ Missing destination assets:");
+  for (const missingDestination of missingDestinations) {
+    console.error(`  - ${missingDestination}`);
+  }
   process.exit(1);
 }
 
