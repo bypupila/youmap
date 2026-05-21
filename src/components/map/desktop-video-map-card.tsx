@@ -102,7 +102,7 @@ export function DesktopVideoMapCard({
         country_name: selectedVideo.country_name,
       });
     }
-    activity.markVideoOpened(selectedVideo.youtube_video_id);
+    activity.markVideoStarted(selectedVideo.youtube_video_id);
     onOpenInYouTube?.(selectedVideo);
     window.open(youtubeHref, "_blank", "noopener");
   }

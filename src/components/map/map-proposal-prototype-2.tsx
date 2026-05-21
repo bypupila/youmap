@@ -53,6 +53,11 @@ type PlaybackTrackerState = {
   startedAtMs: number | null;
   elapsedMsById: Record<string, number>;
 };
+type ExternalYoutubeOpenState = {
+  videoId: string;
+  title: string;
+  openedAtMs: number;
+};
 
 interface MapProposalPrototype2Props {
   channel: TravelChannel;
@@ -225,6 +230,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
     startedAtMs: null,
     elapsedMsById: {},
   });
+  const externalYoutubeOpenRef = useRef<ExternalYoutubeOpenState | null>(null);
   const videoActivity = useLocalVideoActivity();
 
   // States for interactive simulations
@@ -595,6 +601,52 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
     setSelectedCountryCode(String(video.country_code || "").toUpperCase() || null);
   }
 
+  const handleOpenInYouTube = useCallback((video: TravelVideoLocation) => {
+    const videoId = String(video.youtube_video_id || "").trim();
+    if (!videoId) return;
+    videoActivity.markVideoStarted(videoId);
+    externalYoutubeOpenRef.current = {
+      videoId,
+      title: video.title,
+      openedAtMs: Date.now(),
+    };
+  }, [videoActivity]);
+
+  const maybePromptExternalReturn = useCallback(() => {
+    const externalOpen = externalYoutubeOpenRef.current;
+    if (!externalOpen) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (typeof window !== "undefined" && !window.document.hasFocus()) return;
+
+    externalYoutubeOpenRef.current = null;
+    const elapsedMs = Math.max(0, Date.now() - externalOpen.openedAtMs);
+    if (elapsedMs < VIDEO_EXIT_PROMPT_THRESHOLD_MS) return;
+    if (videoActivity.watchStatusById[externalOpen.videoId] === "watched") return;
+
+    setVideoPlaybackCommand({ id: Date.now(), action: "pause" });
+    setVideoExitPrompt({
+      videoId: externalOpen.videoId,
+      title: externalOpen.title,
+      action: () => {},
+    });
+  }, [videoActivity.watchStatusById]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") maybePromptExternalReturn();
+    };
+    const onFocus = () => {
+      maybePromptExternalReturn();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [maybePromptExternalReturn]);
+
   const isVideoFocusMode = Boolean(pinnedVideo) && isDesktopVideoCard && !isMapFullscreen;
 
   return (
@@ -704,6 +756,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                       activity={videoActivity}
                       onClose={() => requestVideoExit(() => setPinnedVideo(null))}
                       onChangeVideo={(video) => requestVideoExit(() => changeMapVideo(video))}
+                      onOpenInYouTube={handleOpenInYouTube}
                       variant="youtube-theater"
                       openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
                       playbackCommand={videoPlaybackCommand}
@@ -852,6 +905,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
         {!isMapFullscreen ? (
           <aside className="hidden xl:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
             <ProposalRightRail2
+              channel={channel}
               onBecomePatron={() => setShowCheckoutModal(true)}
               onManageSponsors={() => setShowSponsorModal(true)}
               onAction={flash}
@@ -863,6 +917,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
 
       {/* Drawers / Modals Simulation */}
       <MobileDrawer2
+        channel={channel}
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onNavigate={(label) => {
@@ -885,6 +940,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
         activity={videoActivity}
         onClose={() => requestVideoExit(() => setPinnedVideo(null))}
         onChangeVideo={(video) => requestVideoExit(() => changeMapVideo(video))}
+        onOpenInYouTube={handleOpenInYouTube}
         openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
         playbackCommand={videoPlaybackCommand}
         onPlaybackStateChange={(state) => {
@@ -1624,26 +1680,31 @@ function VideoInspirationRail2({
 
 // Right Sidebar (Metrics, Sponsors and Patrons CTA)
 function ProposalRightRail2({
+  channel,
   onBecomePatron,
   onManageSponsors,
   onAction,
   analytics
 }: {
+  channel: TravelChannel;
   onBecomePatron: () => void;
   onManageSponsors: () => void;
   onAction: (m: string) => void;
   analytics: ProposalAnalytics;
 }) {
+  const channelAvatarSrc = channel.thumbnail_url || "/creators/luisito-comunica.png";
+  const channelName = channel.channel_name || "Canal";
+
   return (
     <div className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm">
         <div className="flex items-center justify-center gap-3 text-center">
           <span className="relative h-12 w-12 overflow-hidden rounded-full border border-white/15 bg-white/[0.06]">
-            <Image src="/creators/luisito-comunica.png" alt="BY PUPILA" fill sizes="48px" className="object-cover" />
+            <Image src={channelAvatarSrc} alt={channelName} fill sizes="48px" className="object-cover" />
           </span>
           <div className="min-w-0">
             <div className="flex items-center justify-center gap-1.5">
-              <p className="truncate text-[14px] font-black leading-tight text-white">BY PUPILA</p>
+              <p className="truncate text-[14px] font-black leading-tight text-white">{channelName}</p>
               <CheckCircle size={15} weight="fill" className="shrink-0 text-[#ff5a3d]" />
             </div>
             <p className="mt-0.5 text-[10px] font-medium leading-none text-[#818a93]">Creador de Contenido</p>
@@ -1819,14 +1880,20 @@ function ProposalRightRail2({
 
 // Sidebar Drawer layout on mobile views
 function MobileDrawer2({
+  channel,
   open,
   onClose,
   onNavigate
 }: {
+  channel: TravelChannel;
   open: boolean;
   onClose: () => void;
   onNavigate: (label: string) => void;
 }) {
+  const channelAvatarSrc = channel.thumbnail_url || "/creators/luisito-comunica.png";
+  const channelName = channel.channel_name || "Canal";
+  const channelHandle = channel.channel_handle ? `@${channel.channel_handle.replace(/^@/, "")}` : "@canal";
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm lg:hidden" onClick={onClose}>
@@ -1834,11 +1901,11 @@ function MobileDrawer2({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span className="relative h-9 w-9 overflow-hidden rounded-full border border-white/10 block h-9 w-9">
-              <Image src="/creators/luisito-comunica.png" alt="BY PUPILA" fill sizes="34px" className="object-cover" />
+              <Image src={channelAvatarSrc} alt={channelName} fill sizes="34px" className="object-cover" />
             </span>
             <div>
-              <p className="text-[12px] font-black text-white">BY PUPILA</p>
-              <p className="text-[9px] text-slate-400 font-semibold leading-none">@bypupila</p>
+              <p className="text-[12px] font-black text-white">{channelName}</p>
+              <p className="text-[9px] text-slate-400 font-semibold leading-none">{channelHandle}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar menu" className="text-slate-400 hover:text-white p-1 hover:bg-white/5 rounded">

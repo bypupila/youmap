@@ -77,7 +77,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
         country_name: currentVideo.country_name,
       });
     }
-    activity.markVideoOpened(currentVideo.youtube_video_id);
+    activity.markVideoStarted(currentVideo.youtube_video_id);
     onOpenInYouTube?.(currentVideo);
     window.open(youtubeHref, "_blank", "noopener");
   }
