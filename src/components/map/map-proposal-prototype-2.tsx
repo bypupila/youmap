@@ -656,28 +656,30 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       
       <div className={cn(
         "relative grid h-screen overflow-hidden grid-cols-1",
-        !isMapFullscreen && "lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_340px] 3xl:grid-cols-[260px_minmax(0,1fr)_360px]"
+        !isMapFullscreen && "lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[250px_minmax(0,1fr)_340px] 3xl:grid-cols-[260px_minmax(0,1fr)_360px]"
       )}>
         
         {/* Left Sidebar */}
         {!isMapFullscreen ? (
-          <ProposalSidebar2
-            countries={hasMounted ? sortedSidebarCountries : []}
-            activeItem={activeSidebarItem}
-            selectedCountryCode={selectedCountryCode}
-            countrySortMode={countrySortMode}
-            onChangeCountrySortMode={setCountrySortMode}
-            setActiveItem={(item) => {
-              setActiveSidebarItem(item);
-              flash(`Sección activa: ${item}`);
-            }}
-            onOpenMenu={() => setMenuOpen(true)}
-            onSelectCountry={(countryCode, countryName) => {
-              setActiveSidebarItem("Destinos");
-              setSelectedCountryCode(countryCode);
-              flash(`País seleccionado: ${countryName}`);
-            }}
-          />
+          <aside className="hidden 2xl:block">
+            <ProposalSidebar2
+              countries={hasMounted ? sortedSidebarCountries : []}
+              activeItem={activeSidebarItem}
+              selectedCountryCode={selectedCountryCode}
+              countrySortMode={countrySortMode}
+              onChangeCountrySortMode={setCountrySortMode}
+              setActiveItem={(item) => {
+                setActiveSidebarItem(item);
+                flash(`Sección activa: ${item}`);
+              }}
+              onOpenMenu={() => setMenuOpen(true)}
+              onSelectCountry={(countryCode, countryName) => {
+                setActiveSidebarItem("Destinos");
+                setSelectedCountryCode(countryCode);
+                flash(`País seleccionado: ${countryName}`);
+              }}
+            />
+          </aside>
         ) : null}
 
         {/* Center Main Column */}
@@ -694,6 +696,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
             onToggleViewer={() => setIsMapFullscreen(true)}
             lastExtractionAt={channel.last_synced_at || null}
+            onOpenMenu={() => setMenuOpen(true)}
           />
           ) : null}
 
@@ -903,7 +906,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
 
         {/* Right Rail (Bento Grid Sidebar) */}
         {!isMapFullscreen ? (
-          <aside className="hidden xl:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
+          <aside className="hidden lg:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
             <ProposalRightRail2
               channel={channel}
               onBecomePatron={() => setShowCheckoutModal(true)}
@@ -1315,13 +1318,15 @@ function ProposalTopbar2({
   setSearchQuery,
   onCopyUrl,
   onToggleViewer,
-  lastExtractionAt
+  lastExtractionAt,
+  onOpenMenu
 }: {
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   onCopyUrl: () => void;
   onToggleViewer: () => void;
   lastExtractionAt: string | null;
+  onOpenMenu: () => void;
 }) {
   const lastExtractionLabel = formatStableDateTime(lastExtractionAt);
 
@@ -1329,6 +1334,14 @@ function ProposalTopbar2({
     <header className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
       {/* Broadened Sleek Search Bar */}
       <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] 2xl:hidden"
+          onClick={onOpenMenu}
+          aria-label="Abrir menú lateral"
+        >
+          <List size={19} />
+        </button>
         <label className="flex h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all">
           <MagnifyingGlass size={17} className="text-[#818b95]" />
           <input
@@ -1896,7 +1909,7 @@ function MobileDrawer2({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm lg:hidden" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm 2xl:hidden" onClick={onClose}>
       <aside className="h-full w-[265px] border-r border-white/10 bg-[#04080d] p-5 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
