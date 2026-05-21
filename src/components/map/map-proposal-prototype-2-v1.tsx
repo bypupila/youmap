@@ -10,7 +10,6 @@ import {
   Clock,
   Compass,
   CopySimple,
-  GearSix,
   Eye,
   FunnelSimple,
   GlobeHemisphereWest,
@@ -36,7 +35,6 @@ import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 
 type ContentFilterWindow = "all" | "365" | "90" | "30";
 type ActivityFilter = "all" | "favorites" | "saved" | "watched" | "watch_later" | "incomplete";
-type ProposalMapMode = "viewer" | "creator" | "demo";
 type LocalVotePrompt = {
   countryCode: string;
   countryName: string;
@@ -64,7 +62,6 @@ type ExternalYoutubeOpenState = {
 interface MapProposalPrototype2Props {
   channel: TravelChannel;
   videoLocations: TravelVideoLocation[];
-  viewMode?: ProposalMapMode;
 }
 
 type SidebarCountryItem = {
@@ -211,8 +208,7 @@ function BookingLogo() {
   );
 }
 
-export function MapProposalPrototype2({ channel, videoLocations, viewMode = "viewer" }: MapProposalPrototype2Props) {
-  const [activeMapMode, setActiveMapMode] = useState<ProposalMapMode>(viewMode);
+export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPrototype2Props) {
   const [filter, setFilter] = useState<ContentFilterWindow>("all");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
@@ -241,7 +237,6 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
   const [showSponsorModal, setShowSponsorModal] = useState(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
-  const [showPollModal, setShowPollModal] = useState(false);
   const [showAllVideosModal, setShowAllVideosModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [localFanVotes, setLocalFanVotes] = useState<Record<string, number>>({});
@@ -249,7 +244,6 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
   const [votedCountryCode, setVotedCountryCode] = useState<string | null>(null);
   const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("alphabetical");
   const [hasMounted, setHasMounted] = useState(false);
-  const isCreatorWorkspace = activeMapMode === "creator" || activeMapMode === "demo";
   const sidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     const bucket = new Map<string, SidebarCountryItem>();
     for (const video of videoLocations) {
@@ -697,15 +691,10 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
           {/* Topbar */}
           {!isMapFullscreen ? (
           <ProposalTopbar2
-            activeMapMode={activeMapMode}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
-            onPreviewViewer={() => setActiveMapMode("viewer")}
-            onReturnToCreator={() => setActiveMapMode(viewMode === "creator" ? "creator" : "demo")}
-            canReturnToCreator={viewMode !== "viewer"}
-            onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
-            onOpenAdmin={() => flash("Panel admin abierto (simulado).")}
+            onToggleViewer={() => setIsMapFullscreen(true)}
             lastExtractionAt={channel.last_synced_at || null}
             onOpenMenu={() => setMenuOpen(true)}
           />
@@ -750,7 +739,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
                   const normalizedCountryCode = String(countryCode || "").toUpperCase() || null;
                   setActiveSidebarItem("Destinos");
                   setSelectedCountryCode(normalizedCountryCode);
-                  if (!isCreatorWorkspace) openVotePrompt(normalizedCountryCode);
+                  openVotePrompt(normalizedCountryCode);
                   flash(`País seleccionado en el globo: ${countryCode}`);
                 }}
                 rotationEnabled={globeRotationEnabled}
@@ -860,7 +849,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
               </div>
               ) : null}
 
-              {!isVideoFocusMode && !isCreatorWorkspace ? (
+              {!isVideoFocusMode ? (
                 <MapVotePanel2
                   candidates={hasMounted ? voteCandidates : []}
                   prompt={votePrompt}
@@ -922,12 +911,8 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
               channel={channel}
               onBecomePatron={() => setShowCheckoutModal(true)}
               onManageSponsors={() => setShowSponsorModal(true)}
-              onCreatePoll={() => setShowPollModal(true)}
-              onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
-              onOpenAdmin={() => flash("Panel admin abierto (simulado).")}
               onAction={flash}
               analytics={proposalAnalytics}
-              mapMode={activeMapMode}
             />
           </aside>
         ) : null}
@@ -939,11 +924,11 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onNavigate={(label) => {
-          if (label === "Sponsors" && isCreatorWorkspace) {
+          if (label === "Sponsors") {
             setShowSponsorModal(true);
             return;
           }
-          if (label === "Patrocinadores" && !isCreatorWorkspace) {
+          if (label === "Patrocinadores") {
             setShowCheckoutModal(true);
             return;
           }
@@ -1004,44 +989,6 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
           </div>
         </div>
       )}
-
-      {showPollModal ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#081017] p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">Crear votacion</h3>
-              <button type="button" onClick={() => setShowPollModal(false)} className="text-slate-400 hover:text-white" aria-label="Cerrar votacion">
-                <X size={20} />
-              </button>
-            </div>
-            <p className="mb-4 text-xs leading-5 text-[#8e9cae]">
-              Define el proximo destino que la audiencia puede votar. En creator/demo esto es gestion; en viewer no aparece.
-            </p>
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Titulo: Proximo viaje del canal"
-                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-[#ff5a3d]"
-              />
-              <input
-                type="text"
-                placeholder="Opciones: Mexico, Japon, Italia"
-                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-[#ff5a3d]"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowPollModal(false);
-                flash("Votacion creada (simulada).");
-              }}
-              className="mt-5 h-10 w-full rounded-lg bg-[#ff5a3d] text-sm font-bold text-white transition hover:bg-[#ff6f54]"
-            >
-              Publicar votacion
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {showAllVideosModal ? (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/82 p-4 backdrop-blur-sm">
@@ -1367,32 +1314,21 @@ function ProposalSidebar2({
 
 // Topbar Header Panel
 function ProposalTopbar2({
-  activeMapMode,
   searchQuery,
   setSearchQuery,
   onCopyUrl,
-  onPreviewViewer,
-  onReturnToCreator,
-  canReturnToCreator,
-  onExtractVideos,
-  onOpenAdmin,
+  onToggleViewer,
   lastExtractionAt,
   onOpenMenu
 }: {
-  activeMapMode: ProposalMapMode;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   onCopyUrl: () => void;
-  onPreviewViewer: () => void;
-  onReturnToCreator: () => void;
-  canReturnToCreator: boolean;
-  onExtractVideos: () => void;
-  onOpenAdmin: () => void;
+  onToggleViewer: () => void;
   lastExtractionAt: string | null;
   onOpenMenu: () => void;
 }) {
   const lastExtractionLabel = formatStableDateTime(lastExtractionAt);
-  const isViewer = activeMapMode === "viewer";
 
   return (
     <header className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
@@ -1428,51 +1364,14 @@ function ProposalTopbar2({
 
       {/* Control buttons & Avatar */}
       <div className="flex items-center justify-end gap-2 shrink-0">
-        {isViewer ? (
-          <>
-            <span className="hidden h-10 items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 text-[12px] font-bold text-emerald-200 sm:flex">
-              <Eye size={15} />
-              Visualizacion
-            </span>
-            {canReturnToCreator ? (
-              <button
-                type="button"
-                className="flex h-10 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 text-[12px] font-bold text-white transition hover:bg-white/[0.08]"
-                onClick={onReturnToCreator}
-              >
-                <GearSix size={15} />
-                Creator
-              </button>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="flex h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-transparent px-4 text-[12px] font-bold text-[#ff5a3d] transition hover:bg-[#ff5a3d]/10"
-              onClick={onPreviewViewer}
-            >
-              <Eye size={15} />
-              Vista del Viewer
-            </button>
-            <button
-              type="button"
-              className="hidden h-10 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 text-[12px] font-bold text-white transition hover:bg-white/[0.08] xl:flex"
-              onClick={onOpenAdmin}
-            >
-              <GearSix size={15} />
-              Admin
-            </button>
-            <button
-              type="button"
-              className="hidden h-10 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 text-[12px] font-bold text-white transition hover:bg-white/[0.08] xl:flex"
-              onClick={onExtractVideos}
-            >
-              <Video size={15} />
-              Extraer videos
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          className="flex h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-transparent px-4 text-[12px] font-bold text-[#ff5a3d] transition hover:bg-[#ff5a3d]/10"
+          onClick={onToggleViewer}
+        >
+          <Eye size={15} />
+          Viewer
+        </button>
         <button
           type="button"
           className="flex h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] px-4 text-[12px] font-bold text-white transition hover:bg-[#ff6a50]"
@@ -1797,26 +1696,17 @@ function ProposalRightRail2({
   channel,
   onBecomePatron,
   onManageSponsors,
-  onCreatePoll,
-  onExtractVideos,
-  onOpenAdmin,
   onAction,
-  analytics,
-  mapMode
+  analytics
 }: {
   channel: TravelChannel;
   onBecomePatron: () => void;
   onManageSponsors: () => void;
-  onCreatePoll: () => void;
-  onExtractVideos: () => void;
-  onOpenAdmin: () => void;
   onAction: (m: string) => void;
   analytics: ProposalAnalytics;
-  mapMode: ProposalMapMode;
 }) {
   const channelAvatarSrc = channel.thumbnail_url || "/creators/luisito-comunica.png";
   const channelName = channel.channel_name || "Canal";
-  const isCreatorWorkspace = mapMode === "creator" || mapMode === "demo";
 
   return (
     <div className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -1830,9 +1720,7 @@ function ProposalRightRail2({
               <p className="truncate text-[14px] font-black leading-tight text-white">{channelName}</p>
               <CheckCircle size={15} weight="fill" className="shrink-0 text-[#ff5a3d]" />
             </div>
-            <p className="mt-0.5 text-[10px] font-medium leading-none text-[#818a93]">
-              {isCreatorWorkspace ? "Workspace creator" : "Mapa publico"}
-            </p>
+            <p className="mt-0.5 text-[10px] font-medium leading-none text-[#818a93]">Creador de Contenido</p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3 py-3">
@@ -1854,7 +1742,7 @@ function ProposalRightRail2({
       {/* 1. Trip metrics box */}
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm flex flex-col">
         <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#818a93] mb-4">
-          {isCreatorWorkspace ? "Analytics del mapa" : "Tu viaje en números"}
+          Tu viaje en números
         </h2>
         
         {/* Metric widgets grouped horizontally */}
@@ -1875,9 +1763,7 @@ function ProposalRightRail2({
             </span>
             <div>
               <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.watchedHours)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">
-                {isCreatorWorkspace ? "Horas consumidas" : "Horas vistas del canal"}
-              </p>
+              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Horas vistas del canal</p>
             </div>
           </div>
 
@@ -1903,53 +1789,19 @@ function ProposalRightRail2({
         </div>
       </section>
 
-      {isCreatorWorkspace ? (
-        <section className="rounded-xl border border-[#ff5a3d]/18 bg-[radial-gradient(ellipse_at_top_left,rgba(255,90,61,0.12),transparent_58%)] bg-[#050b10]/70 p-4 shadow-sm">
-          <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ff937d]">Acciones creator</h2>
-          <div className="mt-3 grid gap-2">
-            <button
-              type="button"
-              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-[#ff5a3d]/35 bg-[#ff5a3d]/14 px-3 text-[11px] font-black text-[#ffb4a4] transition hover:bg-[#ff5a3d]/22"
-              onClick={onExtractVideos}
-            >
-              <Video size={15} />
-              Extraer videos
-            </button>
-            <button
-              type="button"
-              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[11px] font-black text-white transition hover:bg-white/[0.08]"
-              onClick={onCreatePoll}
-            >
-              <Users size={15} />
-              Crear votacion
-            </button>
-            <button
-              type="button"
-              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[11px] font-black text-white transition hover:bg-white/[0.08]"
-              onClick={onOpenAdmin}
-            >
-              <GearSix size={15} />
-              Panel admin
-            </button>
-          </div>
-        </section>
-      ) : null}
-
       {/* 2. Sponsors Box */}
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3.5">
           <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#818a93]">
-            {isCreatorWorkspace ? "Mis sponsors" : "Sponsors del mapa"}
+            Mis sponsors
           </h2>
-          {isCreatorWorkspace ? (
-            <button
-              type="button"
-              className="text-[10px] font-bold text-[#b9c1cb] hover:text-white transition"
-              onClick={onManageSponsors}
-            >
-              Gestionar
-            </button>
-          ) : null}
+          <button 
+            type="button" 
+            className="text-[10px] font-bold text-[#b9c1cb] hover:text-white transition"
+            onClick={onManageSponsors}
+          >
+            Gestionar
+          </button>
         </div>
 
         {/* Sponsor lists */}
@@ -1993,7 +1845,6 @@ function ProposalRightRail2({
       </section>
 
       {/* 3. Support Patronage banner */}
-      {!isCreatorWorkspace ? (
       <section className="rounded-xl border border-[#ff5a3d]/15 bg-[radial-gradient(ellipse_at_top_right,rgba(255,90,61,0.06),transparent_60%)] bg-[#050b10]/60 p-4 shadow-sm">
         <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ff937d]">
           Apoya mi contenido
@@ -2036,7 +1887,6 @@ function ProposalRightRail2({
           Hazte patrocinador
         </button>
       </section>
-      ) : null}
     </div>
   );
 }

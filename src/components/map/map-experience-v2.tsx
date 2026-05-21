@@ -40,6 +40,6 @@ interface MapExperienceV2Props {
   layoutVariant?: "full";
 }
 
-export function MapExperienceV2({ channel, videoLocations }: MapExperienceV2Props) {
-  return <MapProposalPrototype2 channel={channel} videoLocations={videoLocations} />;
+export function MapExperienceV2({ channel, videoLocations, viewMode = "viewer" }: MapExperienceV2Props) {
+  return <MapProposalPrototype2 channel={channel} videoLocations={videoLocations} viewMode={viewMode} />;
 }
