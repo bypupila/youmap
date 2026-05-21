@@ -62,7 +62,7 @@ type ExternalYoutubeOpenState = {
   openedAtMs: number;
 };
 
-interface MapProposalPrototype2Props {
+interface MapExperienceCoreProps {
   channel: TravelChannel;
   videoLocations: TravelVideoLocation[];
   viewMode?: ProposalMapMode;
@@ -213,7 +213,7 @@ function BookingLogo() {
   );
 }
 
-export function MapProposalPrototype2({ channel, videoLocations, viewMode = "viewer", isDemoMode = false }: MapProposalPrototype2Props) {
+export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer", isDemoMode = false }: MapExperienceCoreProps) {
   const [activeMapMode, setActiveMapMode] = useState<ProposalMapMode>(viewMode);
   const [filter, setFilter] = useState<ContentFilterWindow>("all");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");

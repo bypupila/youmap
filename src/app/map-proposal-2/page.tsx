@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { MapExperienceV2 } from "@/components/map/map-experience-v2";
 import { loadLuisitoMapData } from "@/lib/luisito-map-data";
 
@@ -15,11 +16,15 @@ export const metadata: Metadata = {
 };
 
 export default async function MapProposalPage2() {
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   const { channel, videoLocations } = await loadLuisitoMapData();
 
   return (
     <main className="h-screen overflow-hidden bg-[#03080d] text-white">
-      <MapExperienceV2 channel={channel} videoLocations={videoLocations} viewMode="demo" />
+      <MapExperienceV2 channel={channel} videoLocations={videoLocations} viewMode="creator" isDemoMode />
     </main>
   );
 }

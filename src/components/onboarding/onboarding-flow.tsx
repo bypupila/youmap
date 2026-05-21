@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FloatingTopBar } from "@/components/design-system/chrome";
-import { MapExperience } from "@/components/map/map-experience";
+import { MapExperienceV2 } from "@/components/map/map-experience-v2";
 import { YoutubeImportStep, type ChannelDraft } from "@/components/onboarding/youtube-import-step";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -788,8 +788,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-[#f1f1f1]">
       <div className="pointer-events-none absolute inset-0 [&_*]:pointer-events-none">
-        <MapExperience
-          channel={previewChannel}
+        <MapExperienceV2 channel={previewChannel}
           videoLocations={previewLocations}
           interactive={false}
           allowRefresh={false}

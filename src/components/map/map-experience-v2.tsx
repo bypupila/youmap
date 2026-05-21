@@ -1,6 +1,6 @@
 "use client";
 
-import { MapProposalPrototype2 } from "@/components/map/map-proposal-prototype-2";
+import { MapExperienceCore } from "@/components/map/map-experience-core";
 import type { FanVoteOptionInput } from "@/lib/fan-vote-options";
 import type { MapFanVoteSummary } from "@/lib/map-fan-votes";
 import type { ManualVerificationItem, MapSummary } from "@/lib/map-data";
@@ -8,7 +8,7 @@ import type { MapPollRecord } from "@/lib/map-polls";
 import type { MapRailSponsor, MapViewerContext } from "@/lib/map-public";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
-type MapViewMode = "viewer" | "creator" | "demo";
+type MapViewMode = "viewer" | "creator";
 
 interface PollOptionInput {
   country_code: string;
@@ -37,9 +37,34 @@ interface MapExperienceV2Props {
   fanVoteOptions?: FanVoteOptionInput[];
   headerEyebrow?: string;
   viewMode?: MapViewMode;
+  isDemoMode?: boolean;
   layoutVariant?: "full";
 }
 
-export function MapExperienceV2({ channel, videoLocations, viewMode = "viewer" }: MapExperienceV2Props) {
-  return <MapProposalPrototype2 channel={channel} videoLocations={videoLocations} viewMode={viewMode} />;
+function resolveViewMode({
+  viewer,
+  viewMode,
+  isDemoMode,
+}: Pick<MapExperienceV2Props, "viewer" | "viewMode" | "isDemoMode">): MapViewMode {
+  if (isDemoMode) return "viewer";
+  if (viewer?.isOwner || viewer?.role === "creator" || viewer?.role === "superadmin") return "creator";
+  return viewMode || "viewer";
+}
+
+export function MapExperienceV2({
+  channel,
+  videoLocations,
+  viewer,
+  viewMode,
+  isDemoMode = false,
+}: MapExperienceV2Props) {
+  const resolvedViewMode = resolveViewMode({ viewer, viewMode, isDemoMode });
+  return (
+    <MapExperienceCore
+      channel={channel}
+      videoLocations={videoLocations}
+      viewMode={resolvedViewMode}
+      isDemoMode={isDemoMode}
+    />
+  );
 }

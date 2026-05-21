@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { MapProposalPrototype } from "@/components/map/map-proposal-prototype";
 import { loadLuisitoMapData } from "@/lib/luisito-map-data";
 
@@ -15,6 +16,10 @@ export const metadata: Metadata = {
 };
 
 export default async function MapProposalPage() {
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   const { channel, videoLocations } = await loadLuisitoMapData();
 
   return (

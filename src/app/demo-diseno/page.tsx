@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { loadLuisitoMapData } from "@/lib/luisito-map-data";
 import { DemoDisenoClient } from "./demo-client";
 
@@ -15,6 +16,10 @@ export const metadata: Metadata = {
 };
 
 export default async function DemoDisenoPage() {
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   const { videoLocations } = await loadLuisitoMapData();
 
   return (
