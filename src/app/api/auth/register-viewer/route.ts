@@ -65,9 +65,12 @@ export async function POST(request: Request) {
       limit 1
     `;
     const existing = existingRows[0] || null;
+    if (existing?.id) {
+      return NextResponse.json({ error: "Ya existe una cuenta con ese email. Inicia sesión." }, { status: 409 });
+    }
 
-    const userId = existing?.id || randomUUID();
-    const username = existing?.username || (await buildUniqueViewerUsername(email));
+    const userId = randomUUID();
+    const username = await buildUniqueViewerUsername(email);
     const now = new Date().toISOString();
 
     await sql`

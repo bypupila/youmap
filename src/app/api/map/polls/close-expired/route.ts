@@ -11,14 +11,16 @@ function isAuthorized(request: Request) {
   const bearerToken = String(request.headers.get("authorization") || "")
     .replace(/^Bearer\s+/i, "")
     .trim();
-  const userAgent = String(request.headers.get("user-agent") || "").toLowerCase();
-  const fromVercelCron = userAgent.includes("vercel-cron");
+  const hasMatchingToken =
+    (queryToken.length > 0 && queryToken === configuredToken) ||
+    (providedToken.length > 0 && providedToken === configuredToken) ||
+    (bearerToken.length > 0 && bearerToken === configuredToken);
 
   if (configuredToken) {
-    return fromVercelCron || queryToken === configuredToken || providedToken === configuredToken || bearerToken === configuredToken;
+    return hasMatchingToken;
   }
 
-  return fromVercelCron || process.env.NODE_ENV !== "production";
+  return process.env.NODE_ENV !== "production";
 }
 
 async function handle(request: Request) {

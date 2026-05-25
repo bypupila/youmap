@@ -153,11 +153,14 @@ export async function POST(request: Request) {
     const existingByUsername = existingByUsernameRows[0] || null;
     const existingByEmail = existingByEmailRows[0] || null;
 
-    if (existingByUsername && existingByUsername.email !== email) {
+    if (existingByUsername) {
       return NextResponse.json({ error: "Ese nombre de usuario ya está en uso." }, { status: 409 });
     }
+    if (existingByEmail) {
+      return NextResponse.json({ error: "Ya existe una cuenta con ese email. Inicia sesión." }, { status: 409 });
+    }
 
-    const userId = existingByEmail?.id || existingByUsername?.id || randomUUID();
+    const userId = randomUUID();
     const nowIso = new Date().toISOString();
     const passwordHash = hashPassword(payload.password);
 

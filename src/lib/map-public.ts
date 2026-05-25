@@ -390,9 +390,17 @@ async function loadPublicMapPayloadByChannelRef(
     }),
   });
   const sponsors = await loadSponsorsForUser(channelRef.user_id, canonicalHandle || normalizeUsername(channelRef.username));
+  const publicSummary = isOwner
+    ? mapPayload.summary
+    : {
+        ...mapPayload.summary,
+        total_videos: mapPayload.videoLocations.length,
+        needs_manual: 0,
+      };
 
   return {
     ...mapPayload,
+    summary: publicSummary,
     manualQueue: isOwner ? mapPayload.manualQueue : [],
     channel: {
       ...mapPayload.channel,

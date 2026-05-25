@@ -14,11 +14,23 @@ const payloadSchema = z.object({
 
 export async function GET(request: Request) {
   try {
+    const sessionUser = await getValidSessionUserFromRequest(request);
+    if (!sessionUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const channelId = String(new URL(request.url).searchParams.get("channelId") || "").trim();
-    if (!channelId) {
+    const parsed = z.object({ channelId: z.string().uuid() }).safeParse({ channelId });
+    if (!parsed.success) {
       return NextResponse.json({ error: "channelId is required" }, { status: 400 });
     }
-    const payload = await loadMapDataByChannelId(channelId);
+
+    const access = await getChannelAccessForUser(parsed.data.channelId, sessionUser.id);
+    if (!access.canManage) {
+      return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });
+    }
+
+    const payload = await loadMapDataByChannelId(parsed.data.channelId);
     if (!payload) {
       return NextResponse.json({ error: "Channel not found" }, { status: 404 });
     }

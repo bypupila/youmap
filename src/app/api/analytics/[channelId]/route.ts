@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getValidSessionUserFromRequest, userIsSuperAdmin } from "@/lib/current-user";
 import { DEMO_ANALYTICS, isDemoChannelId } from "@/lib/demo-data";
 import { sql } from "@/lib/neon";
 
@@ -15,6 +17,31 @@ export async function GET(
     if (isDemoChannelId(channelId)) {
       return NextResponse.json(DEMO_ANALYTICS);
     }
+    const parsed = z.string().uuid().safeParse(channelId);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid channel id" }, { status: 400 });
+    }
+
+    const sessionUser = await getValidSessionUserFromRequest(request);
+    if (!sessionUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const channelRows = await sql<Array<{ user_id: string }>>`
+      select user_id
+      from public.channels
+      where id = ${parsed.data}
+      limit 1
+    `;
+    const channelOwnerId = channelRows[0]?.user_id || null;
+    if (!channelOwnerId) {
+      return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+    }
+
+    const canViewChannelAnalytics = channelOwnerId === sessionUser.id || userIsSuperAdmin(sessionUser.role);
+    if (!canViewChannelAnalytics) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const [topCountries, videosByMonth, unlocatedVideos, totalStats] = await Promise.all([
       sql<Array<{ country_name: string; video_count: number }>>`
@@ -22,7 +49,7 @@ export async function GET(
           coalesce(vl.country_name, vl.country_code) as country_name,
           count(*)::bigint as video_count
         from public.video_locations vl
-        where vl.channel_id = ${channelId}
+        where vl.channel_id = ${parsed.data}
           and vl.is_primary = true
         group by 1
         order by video_count desc, country_name asc
@@ -32,7 +59,7 @@ export async function GET(
           to_char(date_trunc('month', v.published_at), 'YYYY-MM') as month,
           count(*)::bigint as count
         from public.videos v
-        where v.channel_id = ${channelId}
+        where v.channel_id = ${parsed.data}
           and v.published_at is not null
         group by 1
         order by 1 asc
@@ -48,7 +75,7 @@ export async function GET(
       >`
         select id, title, thumbnail_url, published_at, view_count
         from public.videos
-        where channel_id = ${channelId}
+        where channel_id = ${parsed.data}
           and location_status in ('no_location', 'failed', 'needs_manual')
         order by view_count desc
         limit 20
@@ -64,7 +91,7 @@ export async function GET(
         with latest_metrics as (
           select *
           from public.channel_monthly_metrics
-          where channel_id = ${channelId}
+          where channel_id = ${parsed.data}
           order by metric_month desc
           limit 1
         ),
@@ -75,7 +102,7 @@ export async function GET(
             coalesce(sum(v.view_count), 0)::bigint as total_views
           from public.videos v
           left join public.video_locations vl on vl.video_id = v.id and vl.is_primary = true
-          where v.channel_id = ${channelId}
+          where v.channel_id = ${parsed.data}
         )
         select
           coalesce(lm.total_countries, fb.total_countries) as total_countries,
@@ -120,13 +147,13 @@ export async function GET(
             0
           )::int as watch_seconds
         from public.map_events
-        where channel_id = ${channelId}
+        where channel_id = ${parsed.data}
           and created_at >= now() - make_interval(days => ${windowDays})
       `,
       sql<Array<{ country_code: string; interactions: number }>>`
         select country_code, count(*)::int as interactions
         from public.map_events
-        where channel_id = ${channelId}
+        where channel_id = ${parsed.data}
           and country_code is not null
           and event_type in (
             'map_view',

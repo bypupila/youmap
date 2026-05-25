@@ -12,23 +12,20 @@ function isAuthorized(request: Request) {
     .replace(/^Bearer\s+/i, "")
     .trim();
   const queryToken = String(new URL(request.url).searchParams.get("token") || "").trim();
-  const userAgent = String(request.headers.get("user-agent") || "").toLowerCase();
-  const fromVercelCron = userAgent.includes("vercel-cron");
 
   if (configuredToken) {
     return (
       requestToken === configuredToken ||
       cronHeaderToken === configuredToken ||
       bearerToken === configuredToken ||
-      queryToken === configuredToken ||
-      fromVercelCron
+      queryToken === configuredToken
     );
   }
 
   const workerToken = String(process.env.YOUTUBE_IMPORT_WORKER_TOKEN || "").trim();
   if (workerToken && requestToken === workerToken) return true;
 
-  return fromVercelCron || process.env.NODE_ENV !== "production";
+  return process.env.NODE_ENV !== "production";
 }
 
 export async function POST(request: Request) {
