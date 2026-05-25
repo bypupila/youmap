@@ -36,8 +36,16 @@ async function handle(request: Request) {
   return NextResponse.json({ ok: true, closed_count: closedPolls.length, poll_ids: closedPolls.map((poll) => poll.id) });
 }
 
-export async function GET(request: Request) {
-  return handle(request);
+export async function GET() {
+  return NextResponse.json(
+    { error: "Method Not Allowed. Use POST." },
+    {
+      status: 405,
+      headers: {
+        Allow: "POST",
+      },
+    }
+  );
 }
 
 export async function POST(request: Request) {

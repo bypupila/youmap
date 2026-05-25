@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
-import { buildAnalyticsFromVideoLocations } from "@/lib/analytics";
-import { createPreviewSession } from "@/lib/preview-session";
-import { importYoutubeChannelPreview } from "@/lib/youtube-import";
 import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
-import { hasGeminiApiKey } from "@/lib/gemini";
 import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
@@ -25,31 +21,6 @@ function assertImportProvidersConfigured() {
   if (missing.length > 0) {
     throw new Error(`Configura ${missing.join(" y ")} en .env.local para probar el import real con YouTube.`);
   }
-}
-
-async function createPreviewImportResponse(channelUrl: string) {
-  assertImportProvidersConfigured();
-  if (!hasGeminiApiKey()) {
-    console.warn("[api/youtube/import] Gemini API key missing. Using heuristic fallback for location extraction.");
-  }
-
-  const previewImport = await importYoutubeChannelPreview(channelUrl);
-  const previewSession = await createPreviewSession({
-    channel: previewImport.channel,
-    videoLocations: previewImport.videoLocations,
-    analytics: buildAnalyticsFromVideoLocations(previewImport.videoLocations, {
-      importedVideos: previewImport.importedVideos,
-    }),
-    importedVideos: previewImport.importedVideos,
-    mappedVideos: previewImport.mappedVideos,
-    skippedVideos: previewImport.skippedVideos,
-  });
-
-  return {
-    ...previewImport,
-    preview_session_id: previewSession.id,
-    preview_mode: true,
-  };
 }
 
 export async function POST(request: Request) {
@@ -78,7 +49,10 @@ export async function POST(request: Request) {
 
     const userId = await getValidSessionUserIdFromRequest(request);
     if (!userId) {
-      return NextResponse.json(await createPreviewImportResponse(payload.channelUrl));
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     assertImportProvidersConfigured();

@@ -26,11 +26,7 @@ function getSessionSecret() {
   const explicit = sanitizeEnvValue(process.env.AUTH_SESSION_SECRET || process.env.SESSION_SECRET || "");
   if (explicit) return explicit;
 
-  const fallback = sanitizeEnvValue(process.env.DATABASE_URL || "");
-  if (!fallback) {
-    throw new Error("AUTH_SESSION_SECRET or SESSION_SECRET is required.");
-  }
-  return fallback;
+  throw new Error("AUTH_SESSION_SECRET or SESSION_SECRET is required.");
 }
 
 function signPayload(payloadB64: string) {
