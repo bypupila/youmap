@@ -10,6 +10,7 @@ import {
   requestUserOwnsChannel,
   resolvePathFromRequest,
 } from "@/lib/map-events";
+import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,16 @@ const payloadSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = await enforceRequestRateLimit({
+      request,
+      scope: "api:map-events",
+      windowMinutes: 1,
+      maxAttempts: 180,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ ok: true, skipped: "rate_limited" });
+    }
+
     const payload = payloadSchema.parse(await request.json());
     const path = resolvePathFromRequest(request, payload.path);
 

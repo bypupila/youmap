@@ -9,6 +9,7 @@ import {
   resolveReferrerFromRequest,
 } from "@/lib/map-events";
 import { sql } from "@/lib/neon";
+import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 
 const payloadSchema = z.object({
   channelId: z.string().uuid(),
@@ -28,6 +29,22 @@ const payloadSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = await enforceRequestRateLimit({
+      request,
+      scope: "api:sponsors-inquiry",
+      windowMinutes: 30,
+      maxAttempts: 5,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes. Reintenta en unos minutos." },
+        {
+          status: 429,
+          headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+        }
+      );
+    }
+
     const payload = payloadSchema.parse(await request.json());
 
     const channelRows = await sql<Array<{ id: string; user_id: string }>>`

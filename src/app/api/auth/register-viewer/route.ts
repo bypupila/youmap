@@ -5,6 +5,7 @@ import { hashPassword } from "@/lib/auth-password";
 import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
 import { setSessionCookie } from "@/lib/auth-session";
 import { sql } from "@/lib/neon";
+import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -49,6 +50,22 @@ async function buildUniqueViewerUsername(email: string) {
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = await enforceRequestRateLimit({
+      request,
+      scope: "api:auth-register-viewer",
+      windowMinutes: 15,
+      maxAttempts: 8,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Demasiados intentos de registro. Reintenta en unos minutos." },
+        {
+          status: 429,
+          headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+        }
+      );
+    }
+
     const payload = payloadSchema.parse(await request.json());
     if (!payload.acceptTerms) {
       return NextResponse.json({ error: "Debes aceptar términos para crear tu cuenta." }, { status: 400 });
@@ -159,6 +176,6 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Datos inválidos para registro viewer.", details: error.issues }, { status: 400 });
     }
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo registrar el viewer." }, { status: 400 });
+    return NextResponse.json({ error: "No se pudo registrar el viewer." }, { status: 400 });
   }
 }

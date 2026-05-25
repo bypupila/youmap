@@ -203,8 +203,9 @@ export async function POST(request: Request) {
     setSessionCookie(response, user.id);
     return response;
   } catch (error) {
+    console.error("[api/auth/login]", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo iniciar sesión." },
+      { error: "No se pudo iniciar sesión." },
       { status: 400 }
     );
   }

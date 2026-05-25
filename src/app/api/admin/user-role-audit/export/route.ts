@@ -89,7 +89,8 @@ function buildCsv(rows: Array<UserRoleAuditRow>) {
 }
 
 function csvCell(value: unknown) {
-  const text = String(value ?? "");
+  const raw = String(value ?? "");
+  const text = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
   if (/[",\n\r]/.test(text)) {
     return `"${text.replaceAll('"', '""')}"`;
   }

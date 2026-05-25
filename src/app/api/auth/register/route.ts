@@ -7,6 +7,7 @@ import { setSessionCookie } from "@/lib/auth-session";
 import { isValidUsername, normalizeEmail, normalizeUsername, toPublicMapPath } from "@/lib/auth-identifiers";
 import { sql } from "@/lib/neon";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -105,6 +106,22 @@ async function upsertTrialSubscription(args: { userId: string; selectedPlan: str
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = await enforceRequestRateLimit({
+      request,
+      scope: "api:auth-register-creator",
+      windowMinutes: 15,
+      maxAttempts: 6,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Demasiados intentos de registro. Reintenta en unos minutos." },
+        {
+          status: 429,
+          headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+        }
+      );
+    }
+
     const payload = payloadSchema.parse(await request.json());
     const username = normalizeUsername(payload.username);
     const email = normalizeEmail(payload.email);
@@ -305,7 +322,7 @@ export async function POST(request: Request) {
 
     console.error("[api/auth/register]", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo crear la cuenta" },
+      { error: "No se pudo crear la cuenta" },
       { status: 400 }
     );
   }

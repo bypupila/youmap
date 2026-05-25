@@ -40,8 +40,9 @@ Use the demo route to inspect the product without external credentials:
 4. Set `YOUTUBE_API_KEY`, one Gemini key (`GOOGLE_GENAI_API_KEY` or `GEMINI_API_KEY` or `GOOGLE_API_KEY`), `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET`.
 5. (Optional but recommended for cron worker) set `YOUTUBE_IMPORT_WORKER_TOKEN`.
 6. (Optional tuning) set `YOUTUBE_IMPORT_CONCURRENCY` and `YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN`.
-7. (Optional for poll auto-close hardening) set `MAP_POLLS_CRON_TOKEN`.
-8. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
+7. (Required in production for Vercel cron GET auth) set `CRON_SECRET`.
+8. (Optional for manual/external poll close calls) set `MAP_POLLS_CRON_TOKEN`.
+9. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
 
 No external CLI or linked project is required for local bootstrap anymore.
 
@@ -94,11 +95,13 @@ For stable deploys, configure this in Vercel Project Settings:
    - `YOUTUBE_IMPORT_CONCURRENCY`
    - `YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN`
 6. Optional poll worker env:
-   - `MAP_POLLS_CRON_TOKEN`
+   - `CRON_SECRET` (required in production if Vercel cron is enabled)
+   - `MAP_POLLS_CRON_TOKEN` (optional for manual external invocations)
 
 ## Poll close cron
 
 - Cron route: `GET /api/map/polls/close-expired`.
-- `vercel.json` already schedules this every 5 minutes.
-- Route accepts Vercel Cron user-agent in production (cron interno).
-- If `MAP_POLLS_CRON_TOKEN` is set, manual/externals can auth via query `?token=...`, `x-cron-token`, or `Authorization: Bearer ...`.
+- `vercel.json` currently schedules this daily at `0 6 * * *` (06:00 UTC).
+- In production, cron GET requires `Authorization: Bearer <CRON_SECRET>`.
+- No authorization by `user-agent`.
+- If `MAP_POLLS_CRON_TOKEN` is set, manual/externals can auth via query `?token=...`, `x-cron-token`, or `Authorization: Bearer <MAP_POLLS_CRON_TOKEN>`.

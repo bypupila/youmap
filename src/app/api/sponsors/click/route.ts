@@ -11,6 +11,7 @@ import {
   resolveReferrerFromRequest,
 } from "@/lib/map-events";
 import { sql } from "@/lib/neon";
+import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 
 const payloadSchema = z.object({
   sponsorId: z.string().uuid(),
@@ -22,6 +23,16 @@ const payloadSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = await enforceRequestRateLimit({
+      request,
+      scope: "api:sponsors-click",
+      windowMinutes: 1,
+      maxAttempts: 60,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ ok: true, skipped: "rate_limited" });
+    }
+
     const payload = payloadSchema.parse(await request.json());
     const channelId = isUuid(payload.channelId) ? payload.channelId : null;
     const path = resolvePathFromRequest(request, payload.path);

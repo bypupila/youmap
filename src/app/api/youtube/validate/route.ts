@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 import { getChannelImportReadiness, resolveYouTubeChannel } from "@/lib/youtube";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,25 @@ const payloadSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = await enforceRequestRateLimit({
+      request,
+      scope: "api:youtube-validate",
+      windowMinutes: 10,
+      maxAttempts: 30,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Demasiadas validaciones en poco tiempo. Reintenta en unos minutos.",
+        },
+        {
+          status: 429,
+          headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+        }
+      );
+    }
+
     const payload = payloadSchema.parse(await request.json());
     const channel = await resolveYouTubeChannel(payload.channelUrl);
     const readiness = await getChannelImportReadiness(channel);
@@ -39,11 +59,11 @@ export async function POST(request: Request) {
       total_videos: channel.total_video_count,
       total_views: channel.total_view_count,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "No pudimos validar ese canal.",
+        error: "No pudimos validar ese canal.",
       },
       { status: 400 }
     );
