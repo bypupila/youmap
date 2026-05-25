@@ -1,4 +1,5 @@
 import { DEMO_CHANNEL, DEMO_CHANNEL_SLUG, DEMO_VIDEO_LOCATIONS, isDemoChannelId } from "@/lib/demo-data";
+import { columnExists } from "@/lib/db-schema";
 import { loadLuisitoMapData } from "@/lib/luisito-map-data";
 import { loadDrewMapData } from "@/lib/drew-map-data";
 import { sql } from "@/lib/neon";
@@ -77,6 +78,11 @@ interface RawLocationRow {
   video_geo_hints: Array<Record<string, unknown>> | null;
   video_needs_manual_reason: string | null;
   video_location_precision: string | null;
+  sponsor_detection_status: string | null;
+  sponsor_detectado_texto: string | null;
+  sponsor_detectado_confianza: number | string | null;
+  sponsor_detectado_fuente: string | null;
+  video_updated_at: string | null;
 }
 
 function computeSummary(videoLocations: TravelVideoLocation[], manualQueue: ManualVerificationItem[]): MapSummary {
@@ -248,65 +254,76 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
   const channelRow = channelRows[0];
   if (!channelRow) return null;
 
+  const hasVisibleOnMap = await columnExists("public", "videos", "visible_on_map");
+  const visibleFilter = hasVisibleOnMap ? "and coalesce(v.visible_on_map, true) = true" : "";
+
   const [locationRows, manualRows] = await Promise.all([
-    sql<RawLocationRow[]>`
-      select
-        vl.country_code,
-        vl.country_name,
-        vl.location_label,
-        vl.city,
-        vl.region,
-        vl.lat,
-        vl.lng,
-        vl.confidence_score,
-        vl.location_score,
-        vl.verification_source,
-        vl.location_evidence,
-        vl.needs_manual_reason,
-        null::jsonb as playlist_signals,
-        null::jsonb as geo_hints,
-        vl.source,
-        v.id as video_id,
-        v.youtube_video_id,
-        v.title,
-        v.description,
-        v.thumbnail_url,
-        v.view_count,
-        v.like_count,
-        v.comment_count,
-        v.duration_seconds,
-        v.is_short,
-        v.made_for_kids,
-        v.is_travel,
-        v.travel_score,
-        v.travel_signals,
-        v.inclusion_reason,
-        v.exclusion_reason,
-        v.recording_lat,
-        v.recording_lng,
-        v.recording_location_description,
-        v.youtube_data_refreshed_at,
-        v.youtube_data_expires_at,
-        v.published_at,
-        v.travel_type,
-        v.location_status,
-        v.verification_source as video_verification_source,
-        v.location_score as video_location_score,
-        v.location_evidence as video_location_evidence,
-        v.playlist_signals as video_playlist_signals,
-        v.geo_hints as video_geo_hints,
-        v.needs_manual_reason as video_needs_manual_reason
-        ,
-        v.location_precision as video_location_precision
-      from public.video_locations vl
-      inner join public.videos v on v.id = vl.video_id
-      where vl.channel_id = ${channelRow.id}
-        and vl.is_primary = true
-        and v.location_status in ('mapped', 'verified_auto', 'verified_manual')
-        and coalesce(v.is_travel, true) = true
-        and coalesce(v.is_short, false) = false
-      limit 4000
-    `,
+    sql.query<RawLocationRow[]>(
+      `
+        select
+          vl.country_code,
+          vl.country_name,
+          vl.location_label,
+          vl.city,
+          vl.region,
+          vl.lat,
+          vl.lng,
+          vl.confidence_score,
+          vl.location_score,
+          vl.verification_source,
+          vl.location_evidence,
+          vl.needs_manual_reason,
+          null::jsonb as playlist_signals,
+          null::jsonb as geo_hints,
+          vl.source,
+          v.id as video_id,
+          v.youtube_video_id,
+          v.title,
+          v.description,
+          v.thumbnail_url,
+          v.view_count,
+          v.like_count,
+          v.comment_count,
+          v.duration_seconds,
+          v.is_short,
+          v.made_for_kids,
+          v.is_travel,
+          v.travel_score,
+          v.travel_signals,
+          v.inclusion_reason,
+          v.exclusion_reason,
+          v.recording_lat,
+          v.recording_lng,
+          v.recording_location_description,
+          v.youtube_data_refreshed_at,
+          v.youtube_data_expires_at,
+          v.published_at,
+          v.travel_type,
+          v.location_status,
+          v.verification_source as video_verification_source,
+          v.location_score as video_location_score,
+          v.location_evidence as video_location_evidence,
+          v.playlist_signals as video_playlist_signals,
+          v.geo_hints as video_geo_hints,
+          v.needs_manual_reason as video_needs_manual_reason,
+          v.location_precision as video_location_precision,
+          v.sponsor_detection_status::text as sponsor_detection_status,
+          v.sponsor_detectado_texto,
+          v.sponsor_detectado_confianza,
+          v.sponsor_detectado_fuente,
+          v.updated_at as video_updated_at
+        from public.video_locations vl
+        inner join public.videos v on v.id = vl.video_id
+        where vl.channel_id = $1
+          and vl.is_primary = true
+          and v.location_status in ('mapped', 'verified_auto', 'verified_manual')
+          ${visibleFilter}
+          and coalesce(v.is_travel, true) = true
+          and coalesce(v.is_short, false) = false
+        limit 4000
+      `,
+      [channelRow.id]
+    ),
     sql<
       Array<{
         id: string;
@@ -350,6 +367,7 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         null;
 
       return {
+        id: row.video_id,
         youtube_video_id: row.youtube_video_id,
         video_url: `https://youtube.com/watch?v=${row.youtube_video_id}`,
         title: row.title,
@@ -376,8 +394,8 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         country_code: row.country_code,
         country_name: row.country_name || row.country_code,
         location_label: row.location_label,
-        city: row.city,
-        region: row.region,
+        city: null,
+        region: null,
         lat: Number(row.lat),
         lng: Number(row.lng),
         confidence_score: Number(row.confidence_score || 0) || null,
@@ -391,6 +409,12 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         location_precision:
           (row.video_location_precision as TravelVideoLocation["location_precision"]) || "unresolved",
         needs_manual_reason: row.video_needs_manual_reason || row.needs_manual_reason || null,
+        sponsor_detection_status:
+          (row.sponsor_detection_status as TravelVideoLocation["sponsor_detection_status"]) || "no_disponible",
+        sponsor_detectado_texto: row.sponsor_detectado_texto || null,
+        sponsor_detectado_confianza: row.sponsor_detectado_confianza === null ? null : Number(row.sponsor_detectado_confianza),
+        sponsor_detectado_fuente: row.sponsor_detectado_fuente || null,
+        updated_at: row.video_updated_at || null,
       } satisfies TravelVideoLocation;
     })
     .filter(Boolean) as TravelVideoLocation[];

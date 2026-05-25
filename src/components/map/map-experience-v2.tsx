@@ -38,6 +38,7 @@ interface MapExperienceV2Props {
   headerEyebrow?: string;
   viewMode?: MapViewMode;
   isDemoMode?: boolean;
+  forceViewerMode?: boolean;
   layoutVariant?: "full";
 }
 
@@ -45,7 +46,9 @@ function resolveViewMode({
   viewer,
   viewMode,
   isDemoMode,
-}: Pick<MapExperienceV2Props, "viewer" | "viewMode" | "isDemoMode">): MapViewMode {
+  forceViewerMode,
+}: Pick<MapExperienceV2Props, "viewer" | "viewMode" | "isDemoMode" | "forceViewerMode">): MapViewMode {
+  if (forceViewerMode) return "viewer";
   if (isDemoMode) return "creator";
   if (viewer?.isOwner || viewer?.role === "creator" || viewer?.role === "superadmin") return "creator";
   return viewMode || "viewer";
@@ -54,15 +57,18 @@ function resolveViewMode({
 export function MapExperienceV2({
   channel,
   videoLocations,
+  sponsors = [],
   viewer,
   viewMode,
   isDemoMode = false,
+  forceViewerMode = false,
 }: MapExperienceV2Props) {
-  const resolvedViewMode = resolveViewMode({ viewer, viewMode, isDemoMode });
+  const resolvedViewMode = resolveViewMode({ viewer, viewMode, isDemoMode, forceViewerMode });
   return (
     <MapExperienceCore
       channel={channel}
       videoLocations={videoLocations}
+      sponsors={sponsors}
       viewMode={resolvedViewMode}
       isDemoMode={isDemoMode}
     />

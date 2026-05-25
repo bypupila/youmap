@@ -131,7 +131,17 @@ export default function AuthPage() {
               .
             </p>
           ) : (
-            <p className="mt-5 text-sm text-muted-foreground">Este acceso es para viewers del mapa público. El alta de creator se gestiona por onboarding y checkout.</p>
+            <p className="mt-5 text-sm text-muted-foreground">
+              Este acceso es para viewers del mapa público.{" "}
+              <Link href="/auth/viewer-register" className="text-foreground underline underline-offset-4">
+                Crear cuenta viewer gratuita
+              </Link>
+              . El alta de creator se gestiona por onboarding y checkout. Puedes gestionar consentimientos en{" "}
+              <Link href="/auth/consents" className="text-foreground underline underline-offset-4">
+                privacidad
+              </Link>
+              .
+            </p>
           )}
           <p className="mt-4 text-xs text-muted-foreground">
             Al usar este producto aceptas nuestros <Link href="/terms" className="underline underline-offset-2">Términos</Link> y{" "}

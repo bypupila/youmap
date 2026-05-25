@@ -27,6 +27,7 @@ interface VideoSelectionSheetProps {
   open: boolean;
   videos: TravelVideoLocation[];
   currentVideo: TravelVideoLocation | null;
+  resolveSponsorNames?: (video: TravelVideoLocation | null | undefined) => string[];
   activity: VideoActivityController;
   onClose: () => void;
   onChangeVideo: (video: TravelVideoLocation) => void;
@@ -36,7 +37,7 @@ interface VideoSelectionSheetProps {
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
 }
 
-export function VideoSelectionSheet({ open, videos, currentVideo, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, playbackCommand, onPlaybackStateChange }: VideoSelectionSheetProps) {
+export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsorNames, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, playbackCommand, onPlaybackStateChange }: VideoSelectionSheetProps) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
   const sections = useMemo(() => buildCountryVideoSections(videos, currentVideo), [currentVideo, videos]);
 
@@ -57,6 +58,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
     openedInYoutube: currentOpenedInYoutube,
     watchStatus: currentWatchStatus,
   });
+  const currentSponsorNames = resolveSponsorNames?.(currentVideo) || [];
   const youtubeHref = getYouTubeHref(currentVideo);
 
   function go(direction: -1 | 1) {
@@ -102,6 +104,11 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
               <h2 className="mt-1 truncate text-[15px] font-semibold text-[#f4f7fb]">
                 {currentVideo?.title || "Selecciona un video"}
               </h2>
+              {currentSponsorNames.length > 0 ? (
+                <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#ffb49f]">
+                  Sponsor: {currentSponsorNames.join(", ")}
+                </p>
+              ) : null}
             </div>
             <Button
               type="button"
@@ -226,6 +233,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
                           <VideoRow
                             key={`${section.country_code}-${video.youtube_video_id}`}
                             video={video}
+                            sponsorNames={resolveSponsorNames?.(video) || []}
                             active={video.youtube_video_id === currentVideo?.youtube_video_id}
                             seen={activity.seenIds.has(video.youtube_video_id)}
                             onSelect={() => onChangeVideo(video)}
@@ -250,11 +258,13 @@ export function VideoSelectionSheet({ open, videos, currentVideo, activity, onCl
 
 function VideoRow({
   video,
+  sponsorNames,
   active,
   seen,
   onSelect,
 }: {
   video: TravelVideoLocation;
+  sponsorNames: string[];
   active: boolean;
   seen: boolean;
   onSelect: () => void;
@@ -288,6 +298,11 @@ function VideoRow({
 
       <span className="min-w-0 flex-1">
         <span className="line-clamp-2 text-[12px] font-semibold leading-4 text-[#f4f7fb]">{video.title}</span>
+        {sponsorNames.length > 0 ? (
+          <span className="mt-0.5 block truncate text-[10px] font-bold uppercase tracking-[0.06em] text-[#ffb49f]">
+            Sponsor: {sponsorNames.join(", ")}
+          </span>
+        ) : null}
         <span className="mt-1 block truncate text-[11px] text-[#9da5ae]">{formatVideoPlace(video)}</span>
         <span className="mt-1 flex items-center gap-2 text-[10px] text-[#7f8994]">
           <span>{formatVideoDuration(video.duration_seconds)}</span>

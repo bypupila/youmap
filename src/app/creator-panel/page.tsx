@@ -114,6 +114,7 @@ export default async function CreatorPanelPage({ searchParams }: CreatorPanelPag
             initialPoll={payload.activePoll}
             initialFanVotes={payload.fanVotes}
             availablePollOptions={payload.availablePollOptions}
+            videos={payload.videoLocations}
             initialSponsors={payload.sponsors}
           />
         </div>

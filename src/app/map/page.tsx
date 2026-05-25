@@ -7,6 +7,7 @@ import { getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
 import { getMapVoterFingerprintFromCookieStore } from "@/lib/map-polls";
 import { loadPublicMapPayloadByChannelId } from "@/lib/map-public";
+import { isPublicReadOnlyHandle } from "@/lib/public-readonly";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -50,6 +51,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           voterFingerprint: getMapVoterFingerprintFromCookieStore(cookieStore),
         }));
   const isDemoMap = requestedChannelId === DEMO_CHANNEL_SLUG || payload?.channel.id === DEMO_CHANNEL_ID;
+  const forceViewerMode = isPublicReadOnlyHandle(payload?.channel.canonicalHandle || null);
   const headerEyebrow = requestedChannelId === payload?.channel.id ? "Mapa público" : isDemoMap ? "Mapa demo" : "Demo de respaldo";
   if (!payload) {
     return (
@@ -90,6 +92,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           availablePollOptions={payload.availablePollOptions}
           fanVoteOptions={payload.fanVoteOptions}
           headerEyebrow={headerEyebrow}
+          forceViewerMode={forceViewerMode}
           viewMode={isDemoMap ? "viewer" : payload.viewer.isOwner ? "creator" : "viewer"}
           isDemoMode={isDemoMap}
         />

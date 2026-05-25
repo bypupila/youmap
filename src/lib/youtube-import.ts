@@ -56,6 +56,60 @@ function getMaxVideosPerRun() {
   return parsePositiveInt(process.env.YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN, DEFAULT_MAX_VIDEOS_PER_RUN);
 }
 
+type SponsorDetection = {
+  status: "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible";
+  text: string | null;
+  confidence: number | null;
+  source: string | null;
+};
+
+const STRONG_SPONSOR_PATTERNS = [
+  /(?:sponsored by|patrocinado por|en colaboraci[oó]n con|in partnership with|paid promotion|promoci[oó]n pagada)/i,
+  /(?:\b#ad\b|\bpubli\b|\bpublicidad\b)/i,
+];
+
+const WEAK_SPONSOR_PATTERNS = [/\bsponsor(?:ed)?\b/i, /\bpatrocin(?:ado|ada|io)\b/i];
+
+function detectSponsorFromMetadata(input: { title: string | null | undefined; description: string | null | undefined }): SponsorDetection {
+  const title = String(input.title || "");
+  const description = String(input.description || "");
+  const combined = `${title}\n${description}`.trim();
+  if (!combined) {
+    return { status: "no_disponible", text: null, confidence: null, source: "youtube_metadata" };
+  }
+
+  for (const pattern of STRONG_SPONSOR_PATTERNS) {
+    const match = combined.match(pattern);
+    if (match) {
+      return {
+        status: "detectado_automaticamente",
+        text: match[0].slice(0, 140),
+        confidence: 0.86,
+        source: "youtube_metadata",
+      };
+    }
+  }
+
+  for (const pattern of WEAK_SPONSOR_PATTERNS) {
+    const match = combined.match(pattern);
+    if (match) {
+      return {
+        status: "pendiente_revision",
+        text: match[0].slice(0, 140),
+        confidence: 0.58,
+        source: "youtube_metadata",
+      };
+    }
+  }
+
+  return {
+    status: "no_disponible",
+    text: null,
+    confidence: null,
+    source: "youtube_metadata",
+  };
+}
+
 function classifyProviderError(error: unknown): ProviderName {
   const text = String(error instanceof Error ? error.message : error || "").toLowerCase();
   if (text.includes("youtube")) return "youtube";
@@ -321,6 +375,11 @@ async function loadPrimaryLocations(channelId: string) {
       playlist_signals: Array<Record<string, unknown>> | null;
       geo_hints: Array<Record<string, unknown>> | null;
       needs_manual_reason: string | null;
+      sponsor_detection_status: string | null;
+      sponsor_detectado_texto: string | null;
+      sponsor_detectado_confianza: number | string | null;
+      sponsor_detectado_fuente: string | null;
+      updated_at: string | null;
     }>
   >`
     select
@@ -361,7 +420,12 @@ async function loadPrimaryLocations(channelId: string) {
       v.location_status,
       v.playlist_signals,
       v.geo_hints,
-      v.needs_manual_reason
+      v.needs_manual_reason,
+      v.sponsor_detection_status::text as sponsor_detection_status,
+      v.sponsor_detectado_texto,
+      v.sponsor_detectado_confianza,
+      v.sponsor_detectado_fuente,
+      v.updated_at
     from public.video_locations vl
     inner join public.videos v on v.id = vl.video_id
     where vl.channel_id = ${channelId}
@@ -398,8 +462,8 @@ async function loadPrimaryLocations(channelId: string) {
     country_code: row.country_code,
     country_name: row.country_name || row.country_code,
     location_label: row.location_label,
-    city: row.city,
-    region: row.region,
+    city: null,
+    region: null,
     lat: Number(row.lat),
     lng: Number(row.lng),
     confidence_score: Number(row.confidence_score || 0) || null,
@@ -412,6 +476,11 @@ async function loadPrimaryLocations(channelId: string) {
     geo_hints: Array.isArray(row.geo_hints) ? row.geo_hints : [],
     location_precision: (row.location_precision as TravelVideoLocation["location_precision"]) || "unresolved",
     needs_manual_reason: row.needs_manual_reason || null,
+    sponsor_detection_status: (row.sponsor_detection_status as TravelVideoLocation["sponsor_detection_status"]) || "no_disponible",
+    sponsor_detectado_texto: row.sponsor_detectado_texto || null,
+    sponsor_detectado_confianza: row.sponsor_detectado_confianza === null ? null : Number(row.sponsor_detectado_confianza),
+    sponsor_detectado_fuente: row.sponsor_detectado_fuente || null,
+    updated_at: row.updated_at || null,
   } satisfies TravelVideoLocation));
 }
 
@@ -664,6 +733,11 @@ export async function importYoutubeChannel({
 
       let videoRecordId: string | null = null;
       try {
+        const sponsorDetection = detectSponsorFromMetadata({
+          title: details.title,
+          description: details.description,
+        });
+
         videoRecordId = await withRetry(
           () =>
             upsertVideoSkeleton({
@@ -713,6 +787,7 @@ export async function importYoutubeChannel({
               recordingLng: details.recording_lng,
               recordingLocationDescription: details.recording_location_description,
               analysis,
+              sponsorDetection,
             }),
           2
         );

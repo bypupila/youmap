@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "crypto";
+import { City, Country } from "country-state-city";
 import { cookies, headers } from "next/headers";
 import type { NextResponse } from "next/server";
+import { recordCreatorActivity } from "@/lib/creator-admin-actions";
 import type { TravelVideoLocation } from "@/lib/types";
 import { sql } from "@/lib/neon";
 import { getPostHogClient } from "@/lib/posthog-server";
@@ -10,6 +12,8 @@ export const LEGACY_MAP_VOTER_COOKIE = "travelmap_voter";
 export const MAP_VOTER_COOKIE_NAMES = [MAP_VOTER_COOKIE, LEGACY_MAP_VOTER_COOKIE] as const;
 export const MAP_POLL_COUNTRY_VOTE_CITY = "__country__";
 export const MAP_POLL_DEFAULT_MODE: MapPollMode = "country_city";
+const AUTO_CITY_DRAFT_MARKER = "AUTO_CITY_DRAFT";
+const MAX_AUTO_CITY_OPTIONS = 40;
 
 export type MapPollStatus = "draft" | "live" | "closed";
 export type MapPollMode = "country" | "country_city";
@@ -357,6 +361,9 @@ export async function closeExpiredMapPolls(channelId?: string | null) {
       `;
 
   await recordPollClosure(rows, "cron");
+  for (const row of rows) {
+    await ensureCityDraftAfterCountryPollClose(row.id, row.channel_id, row.created_by_user_id);
+  }
   return rows;
 }
 
@@ -638,7 +645,144 @@ export async function closeMapPoll(channelId: string, pollId: string) {
     where id = ${pollId}
       and channel_id = ${channelId}
   `;
+  const ownerRows = await sql<Array<{ created_by_user_id: string }>>`
+    select created_by_user_id
+    from public.map_polls
+    where id = ${pollId}
+      and channel_id = ${channelId}
+    limit 1
+  `;
+  await ensureCityDraftAfterCountryPollClose(pollId, channelId, ownerRows[0]?.created_by_user_id || null);
   return loadMapPollById(pollId);
+}
+
+async function ensureCityDraftAfterCountryPollClose(pollId: string, channelId: string, createdByUserId: string | null) {
+  const pollRows = await sql<Array<{ id: string; poll_mode: string | null; status: string; winner_country_code: string | null }>>`
+    select id, poll_mode, status::text as status, winner_country_code
+    from public.map_polls
+    where id = ${pollId}
+      and channel_id = ${channelId}
+    limit 1
+  `;
+  const poll = pollRows[0] || null;
+  if (!poll || poll.status !== "closed") return;
+  if (resolvePollMode(poll.poll_mode) !== "country") return;
+
+  const winnerRows = await sql<Array<{ country_code: string; votes: number }>>`
+    select country_code, count(*)::int as votes
+    from public.map_poll_votes
+    where poll_id = ${pollId}
+    group by country_code
+    order by count(*) desc, country_code asc
+    limit 1
+  `;
+  const winnerCountryCode = normalizeCountryCode(winnerRows[0]?.country_code || poll.winner_country_code || "");
+  if (!winnerCountryCode) return;
+
+  await sql`
+    update public.map_polls
+    set winner_country_code = ${winnerCountryCode}, winner_city = null, converted_to_destination = false, updated_at = ${new Date().toISOString()}
+    where id = ${pollId}
+  `;
+
+  const marker = `${AUTO_CITY_DRAFT_MARKER}:${pollId}`;
+  const existingDraftRows = await sql<Array<{ id: string }>>`
+    select id
+    from public.map_polls
+    where channel_id = ${channelId}
+      and status = 'draft'
+      and poll_mode = 'country_city'
+      and prompt like ${`%${marker}%`}
+    limit 1
+  `;
+  if (existingDraftRows[0]?.id) {
+    await recordCreatorActivity({
+      channelId,
+      actorUserId: createdByUserId,
+      eventType: "poll_city_draft_exists",
+      entityType: "votacion",
+      entityId: existingDraftRows[0].id,
+      description: `Ya existia borrador automatico de ciudades para ${winnerCountryCode}.`,
+      metadata: {
+        sourcePollId: pollId,
+        winnerCountryCode,
+        autoMarker: marker,
+      },
+    });
+    return;
+  }
+
+  const candidateCities = (City.getCitiesOfCountry(winnerCountryCode) || [])
+    .map((city) => normalizeCity(city.name))
+    .filter(Boolean);
+  const uniqueCities = Array.from(new Set(candidateCities.map((city) => city.trim().toLowerCase()))).map((normalized) =>
+    candidateCities.find((city) => city.trim().toLowerCase() === normalized)
+  );
+  const cities = uniqueCities.filter((city): city is string => Boolean(city)).slice(0, MAX_AUTO_CITY_OPTIONS);
+  if (!cities.length) return;
+
+  const countryName = Country.getCountryByCode(winnerCountryCode)?.name || winnerCountryCode;
+  const now = new Date().toISOString();
+  if (!createdByUserId) return;
+
+  const draftRows = await sql<Array<{ id: string }>>`
+    insert into public.map_polls (
+      channel_id,
+      title,
+      prompt,
+      poll_mode,
+      status,
+      show_popup,
+      published_at,
+      closes_at,
+      created_by_user_id,
+      created_at,
+      updated_at
+    )
+    values (
+      ${channelId},
+      ${`Votacion de ciudades · ${countryName}`},
+      ${`${marker}\nElige la siguiente ciudad para ${countryName}.`},
+      'country_city',
+      'draft',
+      false,
+      null,
+      null,
+      ${createdByUserId},
+      ${now},
+      ${now}
+    )
+    returning id
+  `;
+  const draftId = draftRows[0]?.id;
+  if (!draftId) return;
+
+  await sql`
+    insert into public.map_poll_country_options (poll_id, country_code, sort_order, created_at, updated_at)
+    values (${draftId}, ${winnerCountryCode}, 0, ${now}, ${now})
+  `;
+
+  for (let index = 0; index < cities.length; index += 1) {
+    await sql`
+      insert into public.map_poll_city_options (poll_id, country_code, city, sort_order, created_at, updated_at)
+      values (${draftId}, ${winnerCountryCode}, ${cities[index]}, ${index}, ${now}, ${now})
+    `;
+  }
+
+  await recordCreatorActivity({
+    channelId,
+    actorUserId: createdByUserId,
+    eventType: "poll_city_draft_created",
+    entityType: "votacion",
+    entityId: draftId,
+    description: `Se creo borrador automatico de ciudades para ${countryName}.`,
+    metadata: {
+      sourcePollId: pollId,
+      winnerCountryCode,
+      citiesCount: cities.length,
+      autoMarker: marker,
+    },
+  });
 }
 
 export async function recordMapPollVote({

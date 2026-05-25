@@ -217,6 +217,77 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 
 ## Registro de memoria
 
+### 2026-05-23
+
+- Se consolida el cierre de alcance del MVP en tres documentos operativos nuevos:
+  - `docs/MVP_DECISIONES_CERRADAS_176.md`
+  - `docs/MVP_PLAN_EJECUCION_PRIORIZADO.md`
+  - `docs/BACKLOG_POST_MVP_ETAPAS_FUTURAS.md`
+- Se agrega tracker operativo de avance:
+  - `docs/MVP_TRACKER_DESARROLLO.md`
+- Se fija separacion estricta entre alcance MVP y backlog post MVP para evitar mezcla de prioridades durante desarrollo.
+- Se define orden de ejecucion por impacto:
+  - base de datos y contrato de datos
+  - extraccion YouTube sin ciudad en videos
+  - sponsors con estados auditables y asignacion masiva
+  - votaciones pais-ciudad
+  - registro obligatorio de viewers con cumplimiento
+  - analitica minima por producto, creador, sponsor y pais
+  - demo no persistente y salida operativa con monitoreo.
+
+### 2026-05-25
+
+- Se implementa la fase critica inicial del plan MVP en codigo:
+  - migracion `0011_mvp_sponsor_detection_and_viewers.sql` con:
+    - `sponsor_detection_status` y metadatos de deteccion en `videos`
+    - `is_primary` en `sponsor_video_rules`
+    - `viewer_profiles` y `user_consents`
+    - default de rol de `users` a `viewer`
+- Se ajusta extraccion/importacion:
+  - deteccion de sponsor desde metadata YouTube ya disponible (sin llamadas extra de cuota)
+  - persistencia de videos con foco pais (ciudad operativa removida en flujo de video)
+- Se agrega bulk edit de sponsors en panel actual:
+  - endpoint `POST /api/map-admin/sponsors/bulk-assign` con preview y motivo de auditoria
+  - UI de tabla masiva en `creator-admin-panel` con filtros y seleccion multipagina
+- Se endurece API de edicion de video admin:
+  - `PATCH /api/map-admin/videos/[videoId]` usa schema estricto y rechaza campos no permitidos como `city/cities`
+- Se agrega endpoint separado de registro viewer:
+  - `POST /api/auth/register-viewer` con pais/ciudad obligatorios y consentimientos separados/versionados
+- Se completa capa base de cumplimiento para viewers:
+  - `GET/PATCH /api/auth/consents` para consulta y revocacion de promociones
+  - UI ` /auth/viewer-register` para alta viewer
+  - UI `/auth/consents` para gestionar consentimientos promocionales
+- Se implementa auto-creacion de borrador de votacion de ciudades al cerrar votacion de pais (idempotente por marcador de poll padre).
+- Se extiende analitica minima:
+  - `GET /api/analytics/[channelId]` ahora incluye metricas internas de Travel Your Map y top paises por interaccion interna.
+  - `AnalyticsDashboard` muestra origen de cada metrica (YouTube vs Travel Your Map) y bloque de interacciones internas.
+- Se completa analitica minima de superadmin:
+  - nueva capa `src/lib/admin-analytics.ts` para consolidar producto/creadores/sponsors/geografia.
+  - nuevo endpoint `GET /api/admin/analytics/overview` protegido por rol `superadmin`.
+  - nuevo modulo `AdminAnalyticsOverview` integrado en `/admin`.
+- Se agrega salida operativa publica inicial:
+  - nuevo endpoint `GET /api/status` para estado consolidado con indicadores de 24 horas.
+  - nueva pagina publica `/status` para visibilidad de estado de plataforma.
+- Se endurece el modo demo para no persistencia real:
+  - bloqueos backend de escritura para `demo-channel` en endpoints de admin y votaciones (`map-admin/*`, `map/polls`, `map/fan-votes`).
+  - el topbar del mapa muestra badge `Modo demo · sin persistencia` y CTA `Crear cuenta gratis` para pasar a flujo real.
+- Se fuerza lectura publica en canal autorizado:
+  - `by.pupila` queda en modo viewer en rutas publicas de mapa (`/u/[username]` y `/map`) mediante helper `isPublicReadOnlyHandle`.
+- Se agrega gate operativo ejecutable para release:
+  - `src/lib/release-readiness.ts` consolida checks tecnicos de base de datos, operacion, estado publico y documentacion minima.
+  - `GET /api/admin/release/go-no-go` expone resultado para `superadmin`.
+  - `ReleaseReadinessPanel` se integra en `/admin` para decision GO/NO-GO con blockers/warnings/manuales.
+- Se completa trazabilidad de votaciones pais -> ciudad:
+  - la creacion idempotente de borrador automatico de ciudades ahora registra auditoria en `creator_activity_log` (`poll_city_draft_created` / `poll_city_draft_exists`).
+- Se endurece obligatoriedad de registro viewer para votar:
+  - `POST /api/map/fan-votes/vote` y `POST /api/map/polls/[pollId]/vote` devuelven `401` con `requires_viewer_registration` sin sesion valida.
+  - `fan-vote-card` redirige al flujo `/auth/viewer-register` cuando corresponde.
+- Se completa monitoreo operativo en admin:
+  - nuevo endpoint `GET /api/admin/ops/alerts`.
+  - nuevo panel `OpsAlertsPanel` integrado en `/admin` para alertas criticas y altas.
+- Se ajusta el puente demo -> registro real:
+  - CTA `Crear cuenta gratis` desde demo pasa `channelId` y parametros `utm_*` para atribucion.
+
 ### 2026-05-06
 
 - Se endurece el contrato de embed oficial de YouTube: `YouTubeEmbedPlayer` usa helpers compartidos, deriva todo desde `youtube_video_id`, mantiene `origin`, no activa autoplay y elimina `modestbranding`.

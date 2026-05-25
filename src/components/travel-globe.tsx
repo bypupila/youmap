@@ -34,6 +34,7 @@ type HoverCountryPreview = {
   countryName: string;
   totalVideos: number;
   watchedVideos: number;
+  startedVideos?: number;
   ratio: number;
 };
 
@@ -131,6 +132,7 @@ export function TravelGlobe({
   const suppressGlobeClickUntilRef = useRef(0);
   const rotationPointOfViewRef = useRef({ lat: 20, lng: -10, altitude: 2.3 });
   const rotationEnabled = controlledRotationEnabled ?? internalRotationEnabled;
+  const isMobileViewport = containerSize.width > 0 && containerSize.width < 768;
   void votedCountryCode;
 
   const updateRotationEnabled = useCallback(
@@ -263,11 +265,32 @@ export function TravelGlobe({
       countryName,
       totalVideos: stats.total,
       watchedVideos: stats.watched,
+      startedVideos: stats.started,
       ratio: stats.ratio,
     };
   }, [pointsData, selectedCountryCode, videoLocations, watchedCountryProgress]);
+  const worldSummary = useMemo(() => {
+    const totals = Array.from(watchedCountryProgress.values()).reduce(
+      (acc, stats) => {
+        acc.total += stats.total;
+        acc.watched += stats.watched;
+        acc.started += stats.started;
+        return acc;
+      },
+      { total: 0, watched: 0, started: 0 }
+    );
+
+    return {
+      countryCode: "__WORLD__",
+      countryName: "Mundo",
+      totalVideos: totals.total,
+      watchedVideos: totals.watched,
+      startedVideos: totals.started,
+      ratio: totals.total > 0 ? totals.watched / totals.total : 0,
+    };
+  }, [watchedCountryProgress]);
   const activePointCountryProgress = activePoint
-    ? watchedCountryProgress.get(activePoint.country_code.toUpperCase()) || { total: activePoint.video_count, watched: 0, ratio: 0 }
+    ? watchedCountryProgress.get(activePoint.country_code.toUpperCase()) || { total: activePoint.video_count, watched: 0, started: 0, ratio: 0 }
     : null;
   const summaryCountry = hoveredCountryPreview || (activePoint
     ? {
@@ -275,19 +298,22 @@ export function TravelGlobe({
         countryName: activePoint.country_name,
         totalVideos: activePointCountryProgress?.total || activePoint.video_count,
         watchedVideos: activePointCountryProgress?.watched || 0,
+        startedVideos: activePointCountryProgress?.started || 0,
         ratio: activePointCountryProgress?.ratio || 0,
       }
-    : selectedCountrySummary);
+    : selectedCountrySummary || (minimalOverlay ? worldSummary : null));
   const panelCountryCode = summaryCountry?.countryCode || activePoint?.country_code || "";
   const panelCountryName = summaryCountry?.countryName || activePoint?.country_name || "";
   const panelWatchedVideos = summaryCountry?.watchedVideos ?? activePointCountryProgress?.watched ?? 0;
+  const panelStartedVideos = summaryCountry?.startedVideos ?? activePointCountryProgress?.started ?? 0;
   const panelTotalVideos = summaryCountry?.totalVideos ?? activePointCountryProgress?.total ?? activePoint?.video_count ?? 0;
   const panelRatio = summaryCountry?.ratio ?? activePointCountryProgress?.ratio ?? 0;
   const panelPointId = activePoint?.point_id || panelCountryCode || "country";
   const panelPercent = Math.max(0, Math.min(100, Math.round(panelRatio * 100)));
   const panelProgressComplete = panelPercent >= 100 && panelTotalVideos > 0;
-  const panelProgressZero = panelWatchedVideos <= 0;
+  const panelProgressZero = panelWatchedVideos <= 0 && panelStartedVideos <= 0;
   const panelProgressTone = panelProgressZero ? "gray" : panelProgressComplete ? "green" : "yellow";
+  const panelFlag = panelCountryCode === "__WORLD__" ? "🌍" : countryCodeToFlag(panelCountryCode);
 
   const showHoverPoint = useCallback((point: GlobePoint) => {
     if (hoverClearTimeoutRef.current) {
@@ -794,25 +820,42 @@ export function TravelGlobe({
           }`}
         >
           {minimalOverlay ? (
-            <div className="flex items-center justify-between gap-4 overflow-hidden rounded-full border border-white/[0.08] bg-[#05090f]/75 py-2 pl-3 pr-3.5">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="shrink-0 text-lg leading-none">{countryCodeToFlag(panelCountryCode)}</span>
-                <h2 className="truncate text-xs font-semibold tracking-[0.02em] text-[#d5dde6]">{panelCountryName}</h2>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className={panelProgressTone === "green" ? "text-[10px] font-mono text-emerald-300" : panelProgressTone === "yellow" ? "text-[10px] font-mono text-yellow-300" : "text-[10px] font-mono text-slate-400"}>
-                  {panelWatchedVideos}/{panelTotalVideos}
-                </span>
-                <span className={panelProgressTone === "green" ? "h-0.5 w-10 overflow-hidden rounded-full bg-emerald-500/25" : panelProgressTone === "yellow" ? "h-0.5 w-10 overflow-hidden rounded-full bg-yellow-500/25" : "h-0.5 w-10 overflow-hidden rounded-full bg-slate-500/25"}>
-                  <span
-                    className={panelProgressTone === "green" ? "block h-full rounded-full bg-emerald-400/90" : panelProgressTone === "yellow" ? "block h-full rounded-full bg-yellow-300/90" : "block h-full rounded-full bg-slate-400/90"}
-                    style={{ width: `${panelPercent}%` }}
-                  />
-                </span>
-                <span className={panelProgressTone === "green" ? "w-8 text-right font-mono text-[11px] font-bold text-emerald-300" : panelProgressTone === "yellow" ? "w-8 text-right font-mono text-[11px] font-bold text-yellow-300" : "w-8 text-right font-mono text-[11px] font-bold text-slate-400"}>
-                  {panelPercent}%
-                </span>
-              </div>
+            <div
+              className={
+                isMobileViewport
+                  ? "overflow-hidden rounded-full border border-white/[0.08] bg-[#05090f]/75 px-3 py-2"
+                  : "flex items-center justify-between gap-4 overflow-hidden rounded-full border border-white/[0.08] bg-[#05090f]/75 py-2 pl-3 pr-3.5"
+              }
+            >
+              {isMobileViewport ? (
+                <div className="flex min-w-0 items-center justify-center gap-2 text-center">
+                  <span className="shrink-0 text-lg leading-none">{panelFlag}</span>
+                  <h2 className="min-w-0 break-words text-[12px] font-semibold leading-tight tracking-[0.02em] text-[#d5dde6]">
+                    {panelCountryName}
+                  </h2>
+                </div>
+              ) : (
+                <>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 text-lg leading-none">{panelFlag}</span>
+                    <h2 className="truncate text-xs font-semibold tracking-[0.02em] text-[#d5dde6]">{panelCountryName}</h2>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={panelProgressTone === "green" ? "text-[10px] font-mono text-emerald-300" : panelProgressTone === "yellow" ? "text-[10px] font-mono text-yellow-300" : "text-[10px] font-mono text-slate-400"}>
+                      {panelWatchedVideos}/{panelTotalVideos}
+                    </span>
+                    <span className={panelProgressTone === "green" ? "h-0.5 w-10 overflow-hidden rounded-full bg-emerald-500/25" : panelProgressTone === "yellow" ? "h-0.5 w-10 overflow-hidden rounded-full bg-yellow-500/25" : "h-0.5 w-10 overflow-hidden rounded-full bg-slate-500/25"}>
+                      <span
+                        className={panelProgressTone === "green" ? "block h-full rounded-full bg-emerald-400/90" : panelProgressTone === "yellow" ? "block h-full rounded-full bg-yellow-300/90" : "block h-full rounded-full bg-slate-400/90"}
+                        style={{ width: `${panelPercent}%` }}
+                      />
+                    </span>
+                    <span className={panelProgressTone === "green" ? "w-8 text-right font-mono text-[11px] font-bold text-emerald-300" : panelProgressTone === "yellow" ? "w-8 text-right font-mono text-[11px] font-bold text-yellow-300" : "w-8 text-right font-mono text-[11px] font-bold text-slate-400"}>
+                      {panelPercent}%
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -886,7 +929,7 @@ export function TravelGlobe({
         </aside>
       ) : null}
 
-      {minimalOverlay && hoveredPoint?.kind === "video" && hoveredPoint.videos?.[0] ? (
+      {minimalOverlay && !isMobileViewport && hoveredPoint?.kind === "video" && hoveredPoint.videos?.[0] ? (
         <button
           type="button"
           className="pointer-events-auto absolute left-1/2 top-[68px] z-[24] w-[280px] -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#050910]/92 text-left shadow-2xl backdrop-blur-md"

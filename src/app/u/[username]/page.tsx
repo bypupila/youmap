@@ -6,6 +6,7 @@ import { getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { getMapVoterFingerprintFromCookieStore } from "@/lib/map-polls";
 import { loadPublicMapPayload } from "@/lib/map-public";
 import { DEMO_CHANNEL_ID, isDemoUsername } from "@/lib/demo-data";
+import { isPublicReadOnlyHandle } from "@/lib/public-readonly";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -73,6 +74,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
   }
 
   const isDemoMap = isDemoUsername(resolvedParams.username) || payload.channel.id === DEMO_CHANNEL_ID;
+  const forceViewerMode = isPublicReadOnlyHandle(payload.channel.canonicalHandle) || isPublicReadOnlyHandle(resolvedParams.username);
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
@@ -90,6 +92,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
           fanVotes={payload.fanVotes}
           availablePollOptions={payload.availablePollOptions}
           fanVoteOptions={payload.fanVoteOptions}
+          forceViewerMode={forceViewerMode}
           viewMode={isDemoMap ? "viewer" : payload.viewer.isOwner ? "creator" : "viewer"}
           isDemoMode={isDemoMap}
         />

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getChannelAccessForUser, getValidSessionUserFromRequest } from "@/lib/current-user";
+import { isDemoChannelId } from "@/lib/demo-data";
 import { loadMapDataByChannelId } from "@/lib/map-data";
 import {
   buildPollOptionsFromVideos,
@@ -72,6 +73,9 @@ export async function POST(request: Request) {
     }
 
     const payload = payloadSchema.parse(await request.json());
+    if (isDemoChannelId(payload.channelId)) {
+      return NextResponse.json({ error: "Modo demo: esta operación no persiste cambios." }, { status: 400 });
+    }
     const access = await getChannelAccessForUser(payload.channelId, sessionUser.id);
     if (!access.canManage) {
       return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });

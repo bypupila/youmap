@@ -34,6 +34,11 @@ export interface TravelVideo {
   geo_hints?: Array<Record<string, unknown>> | null;
   location_precision?: "city" | "region" | "country" | "unresolved" | null;
   needs_manual_reason?: string | null;
+  sponsor_detection_status?: "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible" | null;
+  sponsor_detectado_texto?: string | null;
+  sponsor_detectado_confianza?: number | null;
+  sponsor_detectado_fuente?: string | null;
+  updated_at?: string | null;
 }
 
 export interface TravelVideoLocation extends TravelVideo {

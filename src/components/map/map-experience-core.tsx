@@ -18,6 +18,7 @@ import {
   List,
   MagnifyingGlass,
   MapPin,
+  ShareNetwork,
   SquaresFour,
   Star,
   Users,
@@ -27,6 +28,7 @@ import {
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
+import type { MapRailSponsor } from "@/lib/map-public";
 import { cn } from "@/lib/utils";
 import { TravelGlobe } from "@/components/travel-globe";
 import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
@@ -37,7 +39,6 @@ import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 type ContentFilterWindow = "all" | "365" | "90" | "30";
 type ActivityFilter = "all" | "favorites" | "saved" | "watched" | "watch_later" | "incomplete";
 type ProposalMapMode = "viewer" | "creator";
-type ProposalExperienceMode = ProposalMapMode | "demo-viewer" | "demo-creator";
 type LocalVotePrompt = {
   countryCode: string;
   countryName: string;
@@ -65,6 +66,7 @@ type ExternalYoutubeOpenState = {
 interface MapExperienceCoreProps {
   channel: TravelChannel;
   videoLocations: TravelVideoLocation[];
+  sponsors?: MapRailSponsor[];
   viewMode?: ProposalMapMode;
   isDemoMode?: boolean;
 }
@@ -80,12 +82,10 @@ type SidebarCountryItem = {
 
 type ProposalAnalytics = {
   countries: number;
-  cities: number;
   videos: number;
-  exploredPlaces: number;
   watchedHours: number;
   visitedCountries: number;
-  reactions: number;
+  viewedVideosFromPlatform: number;
 };
 
 type ProposalVideoWatchState = "watched" | "incomplete" | "none";
@@ -121,6 +121,13 @@ function stableTextCompare(a: string, b: string) {
   if (aa < bb) return -1;
   if (aa > bb) return 1;
   return 0;
+}
+
+function getSponsorScope(sponsor: MapRailSponsor): "global" | "country" | "video" {
+  if (sponsor.scope) return sponsor.scope;
+  if ((sponsor.video_ids || []).length > 0) return "video";
+  if ((sponsor.country_codes || []).length > 0) return "country";
+  return "global";
 }
 
 function formatStableDateTime(value: string | null) {
@@ -161,60 +168,7 @@ const ACTIVITY_FILTER_OPTIONS: Array<{ id: ActivityFilter; label: string; Icon: 
   { id: "incomplete", label: "Incompletos", Icon: Clock },
 ];
 
-// Custom Premium Inline SVG Sponsor Logos for offline reliability & visual excellence
-function GoProLogo() {
-  return (
-    <svg viewBox="0 0 100 100" className="h-full w-full p-2 bg-[#001c27] text-white rounded-full">
-      <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" className="opacity-30" />
-      <rect x="25" y="32" width="50" height="36" rx="4" fill="#00AEEF" />
-      <circle cx="42" cy="50" r="10" fill="white" />
-      <circle cx="42" cy="50" r="5" fill="#001c27" />
-      <circle cx="62" cy="42" r="3" fill="#FF5A3D" />
-      <circle cx="62" cy="52" r="2" fill="white" />
-    </svg>
-  );
-}
-
-function IatiLogo() {
-  return (
-    <svg viewBox="0 0 100 100" className="h-full w-full p-2 bg-[#ff5a3d]/10 text-[#ff5a3d] rounded-full">
-      <circle cx="50" cy="50" r="42" fill="currentColor" className="opacity-20" />
-      <path d="M50 20 L75 35 L75 65 L50 80 L25 65 L25 35 Z" fill="currentColor" />
-      <text x="50" y="56" fill="white" fontSize="18" fontWeight="bold" textAnchor="middle">IATI</text>
-    </svg>
-  );
-}
-
-function WiseLogo() {
-  return (
-    <svg viewBox="0 0 100 100" className="h-full w-full p-2 bg-[#25c974]/10 text-[#25c974] rounded-full">
-      <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="1" className="opacity-40" />
-      <path d="M35 62 L55 35 L68 35 L48 62 Z" fill="currentColor" />
-      <path d="M48 35 L60 62 L48 62 L38 48 Z" fill="currentColor" className="opacity-80" />
-    </svg>
-  );
-}
-
-function NorthFaceLogo() {
-  return (
-    <svg viewBox="0 0 100 100" className="h-full w-full p-2 bg-[#e03d1a]/10 text-[#e03d1a] rounded-full">
-      <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-20" />
-      <path d="M25 72 L32 72 A28 28 0 0 1 60 44 L60 37 A35 35 0 0 0 25 72 Z" fill="currentColor" />
-      <path d="M38 72 L45 72 A18 18 0 0 1 63 54 L63 47 A25 25 0 0 0 38 72 Z" fill="currentColor" />
-      <path d="M50 72 L57 72 A8 8 0 0 1 65 64 L65 57 A15 15 0 0 0 50 72 Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function BookingLogo() {
-  return (
-    <svg viewBox="0 0 100 100" className="h-full w-full p-2 bg-[#003580] text-white rounded-full">
-      <path d="M25 25 H55 C65 25 70 30 70 37 C70 43 65 47 58 48 C66 49 72 54 72 61 C72 69 66 75 54 75 H25 Z M42 43 H52 C56 43 58 41 58 37 C58 33 56 31 52 31 H42 Z M42 67 H54 C58 67 60 65 60 61 C60 57 58 55 54 55 H42 Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer", isDemoMode = false }: MapExperienceCoreProps) {
+export function MapExperienceCore({ channel, videoLocations, sponsors = [], viewMode = "viewer", isDemoMode = false }: MapExperienceCoreProps) {
   const [activeMapMode, setActiveMapMode] = useState<ProposalMapMode>(viewMode);
   const [filter, setFilter] = useState<ContentFilterWindow>("all");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
@@ -253,7 +207,22 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
   const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("alphabetical");
   const [hasMounted, setHasMounted] = useState(false);
   const isCreatorWorkspace = activeMapMode === "creator";
-  const activeExperienceMode: ProposalExperienceMode = isDemoMode ? `demo-${activeMapMode}` : activeMapMode;
+  const adminPanelHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (channel.id) params.set("channelId", channel.id);
+    if (isDemoMode) params.set("demo", "1");
+    const query = params.toString();
+    return `/creator-panel${query ? `?${query}` : ""}`;
+  }, [channel.id, isDemoMode]);
+  const viewerRegisterHref = useMemo(() => {
+    if (!isDemoMode) return "/auth/viewer-register";
+    const params = new URLSearchParams();
+    if (channel.id) params.set("channelId", channel.id);
+    params.set("utm_source", "demo_map");
+    params.set("utm_medium", "product");
+    params.set("utm_campaign", "mvp_demo");
+    return `/auth/viewer-register?${params.toString()}`;
+  }, [channel.id, isDemoMode]);
   const sidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     const bucket = new Map<string, SidebarCountryItem>();
     for (const video of videoLocations) {
@@ -286,7 +255,7 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
       item.progress = item.count > 0 ? Math.min(1, item.activeCount / item.count) : 0;
     }
     return Array.from(bucket.values());
-  }, [videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
+  }, [videoActivity, videoLocations]);
   const sortedSidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     if (countrySortMode === "alphabetical") {
       return [...sidebarCountries].sort((a, b) => stableTextCompare(a.name, b.name));
@@ -403,35 +372,20 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
   }, [filteredVideoLocations.length, railSourceVideos.length, selectedCountryCode, sidebarCountries, videoLocations.length]);
   const proposalAnalytics = useMemo<ProposalAnalytics>(() => {
     const countryCodes = new Set<string>();
-    const cityKeys = new Set<string>();
-    const placeKeys = new Set<string>();
-    let reactions = 0;
     let watchedSeconds = 0;
+    let viewedVideosFromPlatform = 0;
 
     for (const video of videoLocations) {
       const countryCode = String(video.country_code || "").toUpperCase().trim();
       if (countryCode) countryCodes.add(countryCode);
 
-      const city = String(video.city || video.location_label || video.region || "").trim();
-      if (city) cityKeys.add(`${countryCode}:${city.toLowerCase()}`);
-
-      const lat = Number(video.lat);
-      const lng = Number(video.lng);
-      if (city) {
-        placeKeys.add(`${countryCode}:${city.toLowerCase()}`);
-      } else if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        placeKeys.add(`${countryCode}:${lat.toFixed(2)}:${lng.toFixed(2)}`);
-      } else if (countryCode) {
-        placeKeys.add(countryCode);
-      }
-
-      reactions += Number(video.like_count || 0) + Number(video.comment_count || 0);
-
       const id = String(video.youtube_video_id || "");
-      const wasWatched = getProposalVideoWatchState(id, {
+      const watchState = getProposalVideoWatchState(id, {
         seenIds: videoActivity.seenIds,
         watchStatusById: videoActivity.watchStatusById,
-      }) === "watched";
+      });
+      if (watchState !== "none") viewedVideosFromPlatform += 1;
+      const wasWatched = watchState === "watched";
       if (wasWatched) watchedSeconds += Number(video.duration_seconds || 0);
     }
 
@@ -450,14 +404,50 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
 
     return {
       countries: countryCodes.size,
-      cities: cityKeys.size,
       videos: videoLocations.length,
-      exploredPlaces: placeKeys.size,
       watchedHours: Math.round(watchedSeconds / 3600),
       visitedCountries: watchedCountryCodes.size,
-      reactions,
+      viewedVideosFromPlatform,
     };
-  }, [videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
+  }, [videoActivity, videoLocations]);
+  const sponsorNamesByYoutubeVideoId = useMemo(() => {
+    const byVideoId = new Map<string, string[]>();
+    for (const video of videoLocations) {
+      const youtubeVideoId = String(video.youtube_video_id || "").trim();
+      if (!youtubeVideoId) continue;
+      const videoRecordId = String(video.id || "").trim();
+      const countryCode = String(video.country_code || "").toUpperCase().trim();
+      const names = new Set<string>();
+      for (const sponsor of sponsors) {
+        if (!sponsor.brand_name) continue;
+        const scope = getSponsorScope(sponsor);
+        if (scope === "video") {
+          if (!videoRecordId) continue;
+          if ((sponsor.video_ids || []).includes(videoRecordId)) {
+            names.add(sponsor.brand_name);
+          }
+          continue;
+        }
+        if (scope === "country") {
+          if (countryCode && (sponsor.country_codes || []).map((code) => String(code || "").toUpperCase().trim()).includes(countryCode)) {
+            names.add(sponsor.brand_name);
+          }
+          continue;
+        }
+        names.add(sponsor.brand_name);
+      }
+      byVideoId.set(youtubeVideoId, Array.from(names));
+    }
+    return byVideoId;
+  }, [sponsors, videoLocations]);
+  const resolveVideoSponsorNames = useCallback(
+    (video: TravelVideoLocation | null | undefined) => {
+      const key = String(video?.youtube_video_id || "").trim();
+      if (!key) return [] as string[];
+      return sponsorNamesByYoutubeVideoId.get(key) || [];
+    },
+    [sponsorNamesByYoutubeVideoId]
+  );
 
   useEffect(() => {
     setHasMounted(true);
@@ -472,6 +462,11 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
     void message;
     // Intentionally quiet: this prototype no longer renders transient toast copy over the map.
   }
+
+  const openAdminPanel = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.location.assign(adminPanelHref);
+  }, [adminPanelHref]);
 
   const commitPlaybackElapsed = useCallback((videoId: string | null | undefined) => {
     const normalized = String(videoId || "").trim();
@@ -704,12 +699,15 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
             activeMapMode={activeMapMode}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            isDemoMode={isDemoMode}
+            viewerRegisterHref={viewerRegisterHref}
+            isMenuOpen={menuOpen}
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
             onPreviewViewer={() => setActiveMapMode("viewer")}
             onReturnToCreator={() => setActiveMapMode("creator")}
             canReturnToCreator={viewMode === "creator"}
             onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
-            onOpenAdmin={() => flash("Panel admin abierto (simulado).")}
+            onOpenAdmin={openAdminPanel}
             lastExtractionAt={channel.last_synced_at || null}
             onOpenMenu={() => setMenuOpen(true)}
           />
@@ -737,7 +735,7 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
                 pointMode="video"
                 showSummaryCard={false}
                 showPointPanel
-                pointPanelClassName="left-1/2 top-4 w-[340px] -translate-x-1/2"
+                pointPanelClassName="left-1/2 top-4 w-[clamp(180px,38vw,320px)] -translate-x-1/2"
                 openVideoOnCountrySelect={false}
                 selectedCountryCode={selectedCountryCode}
                 watchedVideoIds={videoActivity.seenIds}
@@ -771,6 +769,7 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
                     <DesktopVideoMapCard
                       videos={activeLocationVideos}
                       currentVideo={pinnedVideo}
+                      sponsorNames={resolveVideoSponsorNames(pinnedVideo)}
                       activity={videoActivity}
                       onClose={() => requestVideoExit(() => setPinnedVideo(null))}
                       onChangeVideo={(video) => requestVideoExit(() => changeMapVideo(video))}
@@ -788,7 +787,8 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
               </div>
 
               {!isVideoFocusMode ? (
-              <div className="pointer-events-none absolute right-4 top-4 z-[90] flex items-start gap-2">
+              <>
+              <div className="pointer-events-none absolute left-4 top-4 z-[90]">
                 <div className="relative pointer-events-auto">
                   <button
                     type="button"
@@ -827,7 +827,9 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
                     </div>
                   ) : null}
                 </div>
+              </div>
 
+              <div className="pointer-events-none absolute right-4 top-4 z-[90]">
                 <div className="relative pointer-events-auto">
                   <button
                     type="button"
@@ -862,6 +864,7 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
                   ) : null}
                 </div>
               </div>
+              </>
               ) : null}
 
               {!isVideoFocusMode && !isCreatorWorkspace ? (
@@ -907,6 +910,7 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
               <VideoInspirationRail2
                 videos={railSourceVideos}
                 selectedCountryCode={selectedCountryCode}
+                resolveSponsorNames={resolveVideoSponsorNames}
                 activity={videoActivity}
                 totalVideos={railVideoTotal}
                 highlightedVideoId={String(pinnedVideo?.youtube_video_id || "").trim() || null}
@@ -924,15 +928,15 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
           <aside data-component="ProposalRightRail2Shell" className="hidden lg:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
             <ProposalRightRail2
               channel={channel}
+              sponsors={sponsors}
               onBecomePatron={() => setShowCheckoutModal(true)}
               onManageSponsors={() => setShowSponsorModal(true)}
               onCreatePoll={() => setShowPollModal(true)}
               onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
-              onOpenAdmin={() => flash("Panel admin abierto (simulado).")}
+              onOpenAdmin={openAdminPanel}
               onAction={flash}
               analytics={proposalAnalytics}
               mapMode={activeMapMode}
-              experienceMode={activeExperienceMode}
             />
           </aside>
         ) : null}
@@ -960,6 +964,7 @@ export function MapExperienceCore({ channel, videoLocations, viewMode = "viewer"
         open={Boolean(pinnedVideo) && !isDesktopVideoCard}
         videos={activeLocationVideos}
         currentVideo={pinnedVideo}
+        resolveSponsorNames={resolveVideoSponsorNames}
         activity={videoActivity}
         onClose={() => requestVideoExit(() => setPinnedVideo(null))}
         onChangeVideo={(video) => requestVideoExit(() => changeMapVideo(video))}
@@ -1375,6 +1380,9 @@ function ProposalTopbar2({
   activeMapMode,
   searchQuery,
   setSearchQuery,
+  isDemoMode,
+  viewerRegisterHref,
+  isMenuOpen,
   onCopyUrl,
   onPreviewViewer,
   onReturnToCreator,
@@ -1387,6 +1395,9 @@ function ProposalTopbar2({
   activeMapMode: ProposalMapMode;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
+  isDemoMode: boolean;
+  viewerRegisterHref: string;
+  isMenuOpen: boolean;
   onCopyUrl: () => void;
   onPreviewViewer: () => void;
   onReturnToCreator: () => void;
@@ -1398,28 +1409,114 @@ function ProposalTopbar2({
 }) {
   const lastExtractionLabel = formatStableDateTime(lastExtractionAt);
   const isViewer = activeMapMode === "viewer";
+  const [isSearchExpandedOnCompact, setIsSearchExpandedOnCompact] = useState(false);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const compactSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isSearchExpandedOnCompact) return;
+    compactSearchInputRef.current?.focus();
+    const onResize = () => {
+      if (window.innerWidth >= 1280) setIsSearchExpandedOnCompact(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [isSearchExpandedOnCompact]);
+
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!shareMenuRef.current?.contains(event.target as Node)) setShareMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShareMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [shareMenuOpen]);
+
+  const shareUrl = typeof window === "undefined" ? "" : window.location.href;
+  const shareTitle = typeof document === "undefined" ? "TravelYourMap" : document.title || "TravelYourMap";
+  const encodedUrl = encodeURIComponent(shareUrl);
+  const encodedText = encodeURIComponent(shareTitle);
+
+  const shareTargets = [
+    {
+      id: "whatsapp",
+      label: "WhatsApp",
+      href: `https://wa.me/?text=${encodeURIComponent(`${shareTitle} ${shareUrl}`.trim())}`,
+    },
+    {
+      id: "x",
+      label: "X",
+      href: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
+    },
+    {
+      id: "facebook",
+      label: "Facebook",
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    },
+    {
+      id: "telegram",
+      label: "Telegram",
+      href: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`,
+    },
+  ];
 
   return (
-    <header data-component="ProposalTopbar2" className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
+    <header data-component="ProposalTopbar2" className="relative z-[120] grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
       {/* Broadened Sleek Search Bar */}
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="relative flex min-w-0 items-center gap-3">
+        {!isMenuOpen ? (
+          <button
+            type="button"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden"
+            onClick={onOpenMenu}
+            aria-label="Abrir menú lateral"
+          >
+            <List size={19} />
+          </button>
+        ) : null}
         <button
           type="button"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden"
-          onClick={onOpenMenu}
-          aria-label="Abrir menú lateral"
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden",
+            isSearchExpandedOnCompact && "pointer-events-none opacity-0"
+          )}
+          onClick={() => setIsSearchExpandedOnCompact(true)}
+          aria-label="Abrir busqueda"
         >
-          <List size={19} />
+          <MagnifyingGlass size={17} />
         </button>
-        <label className="flex h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all">
+        <label
+          className={cn(
+            "h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all",
+            isSearchExpandedOnCompact ? "absolute inset-x-0 top-0 z-30 flex" : "hidden xl:flex"
+          )}
+        >
           <MagnifyingGlass size={17} className="text-[#818b95]" />
           <input
+            ref={compactSearchInputRef}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-[#818b95]"
             placeholder="Buscar destinos, creadores o videos..."
           />
-          {searchQuery ? (
+          {isSearchExpandedOnCompact ? (
+            <button
+              type="button"
+              onClick={() => setIsSearchExpandedOnCompact(false)}
+              aria-label="Cerrar busqueda"
+              className="text-slate-400 hover:text-white"
+            >
+              <X size={15} />
+            </button>
+          ) : searchQuery ? (
             <button type="button" onClick={() => setSearchQuery("")} aria-label="Limpiar busqueda" className="text-slate-400 hover:text-white">
               <X size={15} />
             </button>
@@ -1433,6 +1530,19 @@ function ProposalTopbar2({
 
       {/* Control buttons & Avatar */}
       <div className="flex items-center justify-end gap-2 shrink-0">
+        {isDemoMode ? (
+          <>
+            <span className="hidden h-10 items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-4 text-[12px] font-bold text-amber-200 sm:flex">
+              Modo demo · sin persistencia
+            </span>
+            <Link
+              href={viewerRegisterHref}
+              className="hidden h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] px-4 text-[12px] font-bold text-white transition hover:bg-[#ff6a50] sm:inline-flex"
+            >
+              Crear cuenta gratis
+            </Link>
+          </>
+        ) : null}
         {isViewer ? (
           <>
             <span className="hidden h-10 items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 text-[12px] font-bold text-emerald-200 sm:flex">
@@ -1458,7 +1568,7 @@ function ProposalTopbar2({
               onClick={onPreviewViewer}
             >
               <Eye size={15} />
-              Vista del Seguidor
+              Seguidor
             </button>
             <button
               type="button"
@@ -1478,21 +1588,48 @@ function ProposalTopbar2({
             </button>
           </>
         )}
-        <button
-          type="button"
-          className="flex h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] px-4 text-[12px] font-bold text-white transition hover:bg-[#ff6a50]"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(window.location.href);
-              onCopyUrl();
-            } catch {
-              onCopyUrl();
-            }
-          }}
-        >
-          <CopySimple size={15} />
-          Copiar URL
-        </button>
+        <div className="relative" ref={shareMenuRef}>
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] text-white transition hover:bg-[#ff6a50]"
+            onClick={() => setShareMenuOpen((current) => !current)}
+            aria-label="Compartir"
+          >
+            <ShareNetwork size={16} weight="bold" />
+          </button>
+          {shareMenuOpen ? (
+            <div className="absolute right-0 top-[calc(100%+8px)] z-[160] min-w-[176px] overflow-hidden rounded-xl border border-white/10 bg-[#050b10]/95 p-1.5 shadow-2xl backdrop-blur-xl">
+              {shareTargets.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="flex h-9 w-full items-center rounded-lg px-3 text-left text-[11px] font-bold text-[#dbe2ea] transition hover:bg-white/[0.06] hover:text-white"
+                  onClick={() => {
+                    window.open(item.href, "_blank", "noopener,noreferrer");
+                    setShareMenuOpen(false);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="mt-1 flex h-9 w-full items-center gap-2 rounded-lg border border-[#ff5a3d] bg-[#ff5a3d] px-3 text-left text-[11px] font-bold text-black transition hover:bg-[#ff6b4f] hover:text-black"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    onCopyUrl();
+                  } finally {
+                    setShareMenuOpen(false);
+                  }
+                }}
+              >
+                <CopySimple size={13} />
+                Copiar URL
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   );
@@ -1663,6 +1800,7 @@ function VideoExitPrompt2({
 function VideoInspirationRail2({
   videos,
   selectedCountryCode,
+  resolveSponsorNames,
   activity,
   totalVideos,
   highlightedVideoId,
@@ -1671,6 +1809,7 @@ function VideoInspirationRail2({
 }: {
   videos: TravelVideoLocation[];
   selectedCountryCode: string | null;
+  resolveSponsorNames: (video: TravelVideoLocation | null | undefined) => string[];
   activity: Pick<VideoActivityController, "seenIds" | "watchStatusById">;
   totalVideos: number;
   highlightedVideoId: string | null;
@@ -1721,6 +1860,7 @@ function VideoInspirationRail2({
           const isIncomplete = watchState === "incomplete";
           const videoId = String(video.youtube_video_id || "").trim();
           const isHighlighted = Boolean(videoId) && videoId === String(highlightedVideoId || "").trim();
+          const sponsorNames = resolveSponsorNames(video);
 
           return (
             <div 
@@ -1755,6 +1895,13 @@ function VideoInspirationRail2({
                   <Eye size={10} /> {formatCompactMetric(videoViews)}
                 </span>
               </div>
+              {sponsorNames.length > 0 ? (
+                <div className="absolute left-2 top-7 right-2">
+                  <span className="inline-flex max-w-full truncate rounded bg-[#ff5a3d]/80 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.06em] text-white">
+                    Sponsor: {sponsorNames.join(", ")}
+                  </span>
+                </div>
+              ) : null}
 
               {/* Bottom text block with creator avatar */}
               <button 
@@ -1800,6 +1947,7 @@ function VideoInspirationRail2({
 // Right Sidebar (Metrics, Sponsors and Patrons CTA)
 function ProposalRightRail2({
   channel,
+  sponsors,
   onBecomePatron,
   onManageSponsors,
   onCreatePoll,
@@ -1807,10 +1955,10 @@ function ProposalRightRail2({
   onOpenAdmin,
   onAction,
   analytics,
-  mapMode,
-  experienceMode
+  mapMode
 }: {
   channel: TravelChannel;
+  sponsors: MapRailSponsor[];
   onBecomePatron: () => void;
   onManageSponsors: () => void;
   onCreatePoll: () => void;
@@ -1819,19 +1967,11 @@ function ProposalRightRail2({
   onAction: (m: string) => void;
   analytics: ProposalAnalytics;
   mapMode: ProposalMapMode;
-  experienceMode: ProposalExperienceMode;
 }) {
   const channelAvatarSrc = channel.thumbnail_url || "/creators/luisito-comunica.png";
   const channelName = channel.channel_name || "Canal";
   const isCreatorWorkspace = mapMode === "creator";
-  const workspaceLabel =
-    experienceMode === "demo-creator"
-      ? "Demo creator"
-      : experienceMode === "demo-viewer"
-        ? "Demo publica"
-        : isCreatorWorkspace
-          ? "Workspace creator"
-          : "Mapa publico";
+  const visibleSponsors = sponsors.slice(0, 8);
 
   return (
     <div data-component="ProposalRightRail2" className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -1845,19 +1985,12 @@ function ProposalRightRail2({
               <p className="truncate text-[14px] font-black leading-tight text-white">{channelName}</p>
               <CheckCircle size={15} weight="fill" className="shrink-0 text-[#ff5a3d]" />
             </div>
-            <p className="mt-0.5 text-[10px] font-medium leading-none text-[#818a93]">
-              {workspaceLabel}
-            </p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3 py-3">
+        <div className="mt-4 grid grid-cols-2 py-3">
           <div className="border-r border-white/[0.06] text-center">
             <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.countries)}</p>
             <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Paises</p>
-          </div>
-          <div className="border-r border-white/[0.06] text-center">
-            <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.cities)}</p>
-            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Ciudades</p>
           </div>
           <div className="text-center">
             <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.videos)}</p>
@@ -1868,52 +2001,50 @@ function ProposalRightRail2({
       
       {/* 1. Trip metrics box */}
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm flex flex-col">
-        <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#818a93] mb-4">
-          {isCreatorWorkspace ? "Analytics del mapa" : "Tu viaje en números"}
-        </h2>
+        <div className="mb-3.5 flex items-center justify-between">
+          <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#818a93]">
+            {isCreatorWorkspace ? "Analiticas" : "Tu viaje en números"}
+          </h2>
+          {isCreatorWorkspace ? (
+            <button
+              type="button"
+              className="text-[10px] font-bold text-[#b9c1cb] transition hover:text-white"
+              onClick={() => onAction("Abrir analiticas detalladas.")}
+            >
+              Ver Mas
+            </button>
+          ) : null}
+        </div>
         
         {/* Metric widgets grouped horizontally */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
-              <MapPin size={17} weight="fill" />
-            </span>
-            <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.exploredPlaces)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Lugares explorados</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="flex flex-col items-center text-center">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
               <Clock size={17} weight="fill" />
             </span>
-            <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.watchedHours)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">
-                {isCreatorWorkspace ? "Horas consumidas" : "Horas vistas del canal"}
-              </p>
-            </div>
+            <p className="mt-2 font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.watchedHours)}</p>
+            <p className="mt-1 text-[7px] font-bold uppercase tracking-wider text-[#818a93] leading-tight">
+              {isCreatorWorkspace ? "Horas consumidas" : "Horas vistas"}
+            </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+          <div className="flex flex-col items-center text-center">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
               <GlobeHemisphereWest size={17} weight="fill" />
             </span>
-            <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.visitedCountries)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Países visitados</p>
-            </div>
+            <p className="mt-2 font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.visitedCountries)}</p>
+            <p className="mt-1 text-[7px] font-bold uppercase tracking-wider text-[#818a93] leading-tight">Países visitados</p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
-              <Heart size={17} weight="fill" />
+          <div className="flex flex-col items-center text-center">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+              <Video size={17} weight="fill" />
             </span>
-            <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.reactions)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Reacciones recibidas</p>
-            </div>
+            <p className="mt-2 font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.viewedVideosFromPlatform)}</p>
+            <p className="mt-1 text-[7px] font-bold uppercase tracking-wider text-[#818a93] leading-tight">
+              <span className="block">Videos</span>
+              <span className="block">vistos</span>
+            </p>
           </div>
         </div>
       </section>
@@ -1969,40 +2100,53 @@ function ProposalRightRail2({
 
         {/* Sponsor lists */}
         <div className="space-y-2 max-h-[260px] overflow-y-auto pr-0.5">
-          {[
-            { name: "GoPro", desc: "Cámaras y accesorios", url: "gopro.com", logo: GoProLogo },
-            { name: "IATI Seguros", desc: "Seguros de viaje", url: "iatiseguros.com", logo: IatiLogo },
-            { name: "Wise", desc: "Envía dinero al mundo", url: "wise.com", logo: WiseLogo },
-            { name: "The North Face", desc: "Ropa y equipamiento", url: "thenorthface.com", logo: NorthFaceLogo },
-            { name: "Booking.com", desc: "Alojamientos de viaje", url: "booking.com", logo: BookingLogo }
-          ].map((sponsor) => {
-            const BrandLogo = sponsor.logo;
+          {visibleSponsors.map((sponsor) => {
+            const sponsorHref = sponsor.affiliate_url || "#";
+            let sponsorHost = "";
+            try {
+              sponsorHost = sponsor.affiliate_url ? new URL(sponsor.affiliate_url).host : "";
+            } catch {
+              sponsorHost = sponsor.affiliate_url || "";
+            }
             return (
-              <div 
-                key={sponsor.name} 
-                className="flex items-center gap-3 p-2 rounded-xl border border-white/[0.03] bg-white/[0.01] hover:border-white/[0.07] transition group"
+              <div
+                key={sponsor.id}
+                className="flex items-center gap-3 rounded-xl border border-white/[0.03] bg-white/[0.01] p-2 transition group hover:border-white/[0.07]"
               >
-                <span className="relative h-10 w-10 shrink-0 overflow-hidden block">
-                  <BrandLogo />
+                <span className="relative block h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-white/[0.04]">
+                  {sponsor.logo_url ? (
+                    <Image src={sponsor.logo_url} alt={sponsor.brand_name} fill sizes="40px" className="object-contain p-1.5" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-[11px] font-black text-white">
+                      {sponsor.brand_name.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-black text-white group-hover:text-[#ff7d63] transition leading-tight">{sponsor.name}</p>
-                  <p className="truncate text-[10px] text-[#818a93] font-semibold leading-normal mt-0.5">{sponsor.desc}</p>
-                  <p className="truncate text-[9px] text-slate-500 font-semibold leading-none">{sponsor.url}</p>
+                  <p className="truncate text-[12px] font-black leading-tight text-white transition group-hover:text-[#ff7d63]">{sponsor.brand_name}</p>
+                  <p className="mt-0.5 truncate text-[10px] font-semibold leading-normal text-[#818a93]">{sponsor.description || "Sponsor activo en el mapa"}</p>
+                  {sponsorHost ? <p className="truncate text-[9px] font-semibold leading-none text-slate-500">{sponsorHost}</p> : null}
                 </div>
-                <button 
-                  type="button" 
-                  className="h-8 shrink-0 rounded-full border border-white/10 bg-white/[0.02] px-3.5 text-[9px] font-black text-white hover:bg-white/[0.07] hover:border-white/20 transition-all flex items-center" 
-                  onClick={() => {
-                    onAction(`Redirigiendo a sponsor: ${sponsor.name}`);
-                    window.open(`https://${sponsor.url}`, "_blank", "noopener");
-                  }}
-                >
-                  Ir al sitio
-                </button>
+                {sponsor.affiliate_url ? (
+                  <button
+                    type="button"
+                    className="flex h-8 shrink-0 items-center rounded-full border border-white/10 bg-white/[0.02] px-3.5 text-[9px] font-black text-white transition-all hover:border-white/20 hover:bg-white/[0.07]"
+                    onClick={() => {
+                      onAction(`Redirigiendo a sponsor: ${sponsor.brand_name}`);
+                      window.open(sponsorHref, "_blank", "noopener");
+                    }}
+                  >
+                    Ir al sitio
+                  </button>
+                ) : null}
               </div>
             );
           })}
+          {visibleSponsors.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-3 text-[11px] text-[#8f98a3]">
+              No hay sponsors activos para este canal.
+            </p>
+          ) : null}
         </div>
 
       </section>

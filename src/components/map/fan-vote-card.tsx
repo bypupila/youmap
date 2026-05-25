@@ -89,6 +89,7 @@ export function FanVoteCard({
   const simulateViewerInteraction = !viewer.isOwner && viewerInteraction === "simulated";
   const useSimulatedState = isDemoMode || simulateViewerInteraction;
   const isAnonymousViewer = !viewer.isOwner && !viewer.isAuthenticated;
+  const requiresViewerRegistrationForVote = isAnonymousViewer && !useSimulatedState;
   const canSeeDetailedStats = viewer.isOwner || viewer.isAuthenticated;
 
   const rankedCountries = useMemo(() => {
@@ -429,6 +430,10 @@ export function FanVoteCard({
       });
       const payload = (await response.json()) as { poll?: MapPollRecord; error?: string };
       if (!response.ok || !payload.poll) {
+        if (response.status === 401) {
+          goToViewerLogin();
+          return;
+        }
         throw new Error(payload.error || "No se pudo registrar tu voto.");
       }
       onPollChange?.(payload.poll);
@@ -621,9 +626,20 @@ export function FanVoteCard({
           )}
 
           {poll?.status === "live" && !viewer.isOwner && !viewerInteractionDisabled ? (
-            <Button type="button" className="w-full" onClick={() => !poll.has_voted && setVoteOpen(true)} disabled={poll.has_voted || isExpiredLive}>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => {
+                if (requiresViewerRegistrationForVote) {
+                  goToViewerLogin();
+                  return;
+                }
+                if (!poll.has_voted) setVoteOpen(true);
+              }}
+              disabled={poll.has_voted || isExpiredLive}
+            >
               <MapPin size={14} />
-              {poll.has_voted ? "Ya votaste" : "Votar destino"}
+              {poll.has_voted ? "Ya votaste" : requiresViewerRegistrationForVote ? "Regístrate para votar" : "Votar destino"}
             </Button>
           ) : null}
 

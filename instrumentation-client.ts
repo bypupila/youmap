@@ -42,8 +42,11 @@ installExtensionHydrationGuard();
 installMicrosoftClarity();
 
 const posthogToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+const isProduction = process.env.NODE_ENV === "production";
+const enablePostHogInDev = process.env.NEXT_PUBLIC_ENABLE_POSTHOG_IN_DEV === "1";
+const enablePostHogDebugLogs = process.env.NEXT_PUBLIC_POSTHOG_DEBUG === "1";
 
-if (posthogToken) {
+if (posthogToken && (isProduction || enablePostHogInDev)) {
   posthog.init(posthogToken, {
     api_host: "/ingest",
     ui_host: "https://us.posthog.com",
@@ -51,7 +54,7 @@ if (posthogToken) {
     capture_exceptions: true,
     disable_web_experiments: true,
     disable_surveys_automatic_display: true,
-    debug: process.env.NODE_ENV === "development",
+    debug: enablePostHogDebugLogs,
   });
 }
 

@@ -141,6 +141,12 @@ export interface PersistVideoAnalysisInput {
   recordingLng: number | null;
   recordingLocationDescription: string | null;
   analysis: VideoLocationAnalysis;
+  sponsorDetection?: {
+    status: "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible";
+    text: string | null;
+    confidence: number | null;
+    source: string | null;
+  };
 }
 
 export interface VideoLocationAnalysis {
@@ -881,9 +887,9 @@ export async function persistVideoAnalysis(input: PersistVideoAnalysisInput) {
         true,
         ${primaryLocation.country_code},
         ${primaryLocation.country_name || null},
-        ${primaryLocation.location_label || null},
-        ${primaryLocation.city || null},
-        ${primaryLocation.region || null},
+        ${primaryLocation.country_name || primaryLocation.country_code},
+        ${null},
+        ${null},
         ${primaryLocation.lat},
         ${primaryLocation.lng},
         ${primaryLocation.confidence_score || null},
@@ -918,6 +924,10 @@ export async function persistVideoAnalysis(input: PersistVideoAnalysisInput) {
       geo_hints = ${JSON.stringify(input.analysis.geoHints || [])}::jsonb,
       location_precision = ${input.analysis.locationPrecision},
       needs_manual_reason = ${input.analysis.needsManualReason},
+      sponsor_detection_status = ${input.sponsorDetection?.status || "no_disponible"},
+      sponsor_detectado_texto = ${input.sponsorDetection?.text || null},
+      sponsor_detectado_confianza = ${input.sponsorDetection?.confidence || null},
+      sponsor_detectado_fuente = ${input.sponsorDetection?.source || null},
       last_location_checked_at = ${now},
       updated_at = ${now}
     where id = ${input.videoRecordId}
@@ -971,14 +981,14 @@ export async function confirmManualLocationWithPrecision(input: {
 
   const normalizedCountry = String(input.countryCode || "").trim().toUpperCase();
   const country = getCountryCatalogEntry(normalizedCountry);
-  const geoQuery = [input.city?.trim(), country?.countryName || normalizedCountry].filter(Boolean).join(", ");
+  const geoQuery = [country?.countryName || normalizedCountry].filter(Boolean).join(", ");
   const geo = await getCachedGeocode(geoQuery);
   if (!geo) {
     throw new Error("No se pudo geocodificar la ubicacion manual.");
   }
 
-  const locationPrecision: LocationPrecision = input.city?.trim() ? "city" : "country";
-  const score = input.city?.trim() ? 0.98 : 0.9;
+  const locationPrecision: LocationPrecision = "country";
+  const score = 0.9;
   const location = buildLocation({
     youtubeVideoId: videoRow.youtube_video_id,
     title: videoRow.title,
@@ -991,17 +1001,17 @@ export async function confirmManualLocationWithPrecision(input: {
     geo,
     countryCode: geo.countryCode || normalizedCountry,
     countryName: geo.countryName || country?.countryName || normalizedCountry,
-    city: input.city?.trim() || null,
+    city: null,
     region: geo.region || null,
-    label: input.city?.trim() ? `${input.city.trim()}, ${geo.countryName || normalizedCountry}` : geo.countryName || normalizedCountry,
+    label: geo.countryName || normalizedCountry,
     score,
     verificationSource: "manual",
-    locationSource: input.city?.trim() ? "manual+nominatim" : "manual_country_only+nominatim",
+    locationSource: "manual_country_only+nominatim",
     locationPrecision,
     evidence: {
       manual: {
         country_code: normalizedCountry,
-        city: input.city?.trim() || null,
+        city: null,
       },
       geocode: geo.raw,
       geo_hints: videoRow.geo_hints || [],
@@ -1050,8 +1060,8 @@ export async function confirmManualLocationWithPrecision(input: {
       ${manualLocation.country_code},
       ${manualLocation.country_name || null},
       ${manualLocation.location_label || null},
-      ${manualLocation.city || null},
-      ${manualLocation.region || null},
+      ${null},
+      ${null},
       ${manualLocation.lat},
       ${manualLocation.lng},
       ${manualLocation.confidence_score || null},

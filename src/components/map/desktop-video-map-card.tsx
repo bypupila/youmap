@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 interface DesktopVideoMapCardProps {
   videos: TravelVideoLocation[];
   currentVideo: TravelVideoLocation | null;
+  sponsorNames?: string[];
   activity: VideoActivityController;
   onClose: () => void;
   onChangeVideo: (video: TravelVideoLocation) => void;
@@ -46,6 +47,7 @@ interface DesktopVideoMapCardProps {
 export function DesktopVideoMapCard({
   videos,
   currentVideo,
+  sponsorNames = [],
   activity,
   onClose,
   onChangeVideo,
@@ -118,6 +120,11 @@ export function DesktopVideoMapCard({
           <header className="relative flex items-start gap-3 px-4 pb-3 pt-4">
             <div className="min-w-0 flex-1 text-center">
               <h2 className="text-sm font-extrabold leading-tight text-white">{selectedVideo.title}</h2>
+              {sponsorNames.length > 0 ? (
+                <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#ffb49f]">
+                  Sponsor: {sponsorNames.join(", ")}
+                </p>
+              ) : null}
               <div className="mt-1.5 flex items-center justify-between gap-2">
                 <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold text-zinc-500">
                   <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white">
@@ -282,9 +289,16 @@ export function DesktopVideoMapCard({
               </p>
             </>
           ) : (
-            <p className="mt-0.5 truncate text-[12px] text-[#d8dee6]">
-            {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName} · {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
-            </p>
+            <>
+              <p className="mt-0.5 truncate text-[12px] text-[#d8dee6]">
+              {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName} · {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
+              </p>
+              {sponsorNames.length > 0 ? (
+                <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#ffb49f]">
+                  Sponsor: {sponsorNames.join(", ")}
+                </p>
+              ) : null}
+            </>
           )}
         </div>
         <div className="flex items-center gap-1">

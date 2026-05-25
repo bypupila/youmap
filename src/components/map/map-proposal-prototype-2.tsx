@@ -18,6 +18,7 @@ import {
   List,
   MagnifyingGlass,
   MapPin,
+  ShareNetwork,
   SquaresFour,
   Star,
   Users,
@@ -37,7 +38,6 @@ import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 type ContentFilterWindow = "all" | "365" | "90" | "30";
 type ActivityFilter = "all" | "favorites" | "saved" | "watched" | "watch_later" | "incomplete";
 type ProposalMapMode = "viewer" | "creator";
-type ProposalExperienceMode = ProposalMapMode | "demo-viewer" | "demo-creator";
 type LocalVotePrompt = {
   countryCode: string;
   countryName: string;
@@ -80,12 +80,10 @@ type SidebarCountryItem = {
 
 type ProposalAnalytics = {
   countries: number;
-  cities: number;
   videos: number;
-  exploredPlaces: number;
   watchedHours: number;
   visitedCountries: number;
-  reactions: number;
+  viewedVideosFromPlatform: number;
 };
 
 type ProposalVideoWatchState = "watched" | "incomplete" | "none";
@@ -252,7 +250,13 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
   const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("alphabetical");
   const [hasMounted, setHasMounted] = useState(false);
   const isCreatorWorkspace = activeMapMode === "creator";
-  const activeExperienceMode: ProposalExperienceMode = isDemoMode ? `demo-${activeMapMode}` : activeMapMode;
+  const adminPanelHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (channel.id) params.set("channelId", channel.id);
+    if (isDemoMode) params.set("demo", "1");
+    const query = params.toString();
+    return `/creator-panel${query ? `?${query}` : ""}`;
+  }, [channel.id, isDemoMode]);
   const sidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     const bucket = new Map<string, SidebarCountryItem>();
     for (const video of videoLocations) {
@@ -402,35 +406,20 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
   }, [filteredVideoLocations.length, railSourceVideos.length, selectedCountryCode, sidebarCountries, videoLocations.length]);
   const proposalAnalytics = useMemo<ProposalAnalytics>(() => {
     const countryCodes = new Set<string>();
-    const cityKeys = new Set<string>();
-    const placeKeys = new Set<string>();
-    let reactions = 0;
     let watchedSeconds = 0;
+    let viewedVideosFromPlatform = 0;
 
     for (const video of videoLocations) {
       const countryCode = String(video.country_code || "").toUpperCase().trim();
       if (countryCode) countryCodes.add(countryCode);
 
-      const city = String(video.city || video.location_label || video.region || "").trim();
-      if (city) cityKeys.add(`${countryCode}:${city.toLowerCase()}`);
-
-      const lat = Number(video.lat);
-      const lng = Number(video.lng);
-      if (city) {
-        placeKeys.add(`${countryCode}:${city.toLowerCase()}`);
-      } else if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        placeKeys.add(`${countryCode}:${lat.toFixed(2)}:${lng.toFixed(2)}`);
-      } else if (countryCode) {
-        placeKeys.add(countryCode);
-      }
-
-      reactions += Number(video.like_count || 0) + Number(video.comment_count || 0);
-
       const id = String(video.youtube_video_id || "");
-      const wasWatched = getProposalVideoWatchState(id, {
+      const watchState = getProposalVideoWatchState(id, {
         seenIds: videoActivity.seenIds,
         watchStatusById: videoActivity.watchStatusById,
-      }) === "watched";
+      });
+      if (watchState !== "none") viewedVideosFromPlatform += 1;
+      const wasWatched = watchState === "watched";
       if (wasWatched) watchedSeconds += Number(video.duration_seconds || 0);
     }
 
@@ -449,12 +438,10 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
 
     return {
       countries: countryCodes.size,
-      cities: cityKeys.size,
       videos: videoLocations.length,
-      exploredPlaces: placeKeys.size,
       watchedHours: Math.round(watchedSeconds / 3600),
       visitedCountries: watchedCountryCodes.size,
-      reactions,
+      viewedVideosFromPlatform,
     };
   }, [videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
 
@@ -471,6 +458,11 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
     void message;
     // Intentionally quiet: this prototype no longer renders transient toast copy over the map.
   }
+
+  const openAdminPanel = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.location.assign(adminPanelHref);
+  }, [adminPanelHref]);
 
   const commitPlaybackElapsed = useCallback((videoId: string | null | undefined) => {
     const normalized = String(videoId || "").trim();
@@ -703,12 +695,13 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
             activeMapMode={activeMapMode}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            isMenuOpen={menuOpen}
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
             onPreviewViewer={() => setActiveMapMode("viewer")}
             onReturnToCreator={() => setActiveMapMode("creator")}
             canReturnToCreator={viewMode === "creator"}
             onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
-            onOpenAdmin={() => flash("Panel admin abierto (simulado).")}
+            onOpenAdmin={openAdminPanel}
             lastExtractionAt={channel.last_synced_at || null}
             onOpenMenu={() => setMenuOpen(true)}
           />
@@ -736,7 +729,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
                 pointMode="video"
                 showSummaryCard={false}
                 showPointPanel
-                pointPanelClassName="left-1/2 top-4 w-[340px] -translate-x-1/2"
+                pointPanelClassName="left-1/2 top-4 w-[clamp(180px,38vw,320px)] -translate-x-1/2"
                 openVideoOnCountrySelect={false}
                 selectedCountryCode={selectedCountryCode}
                 watchedVideoIds={videoActivity.seenIds}
@@ -787,7 +780,8 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
               </div>
 
               {!isVideoFocusMode ? (
-              <div className="pointer-events-none absolute right-4 top-4 z-[90] flex items-start gap-2">
+              <>
+              <div className="pointer-events-none absolute left-4 top-4 z-[90]">
                 <div className="relative pointer-events-auto">
                   <button
                     type="button"
@@ -826,7 +820,9 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
                     </div>
                   ) : null}
                 </div>
+              </div>
 
+              <div className="pointer-events-none absolute right-4 top-4 z-[90]">
                 <div className="relative pointer-events-auto">
                   <button
                     type="button"
@@ -861,6 +857,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
                   ) : null}
                 </div>
               </div>
+              </>
               ) : null}
 
               {!isVideoFocusMode && !isCreatorWorkspace ? (
@@ -927,11 +924,10 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
               onManageSponsors={() => setShowSponsorModal(true)}
               onCreatePoll={() => setShowPollModal(true)}
               onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
-              onOpenAdmin={() => flash("Panel admin abierto (simulado).")}
+              onOpenAdmin={openAdminPanel}
               onAction={flash}
               analytics={proposalAnalytics}
               mapMode={activeMapMode}
-              experienceMode={activeExperienceMode}
             />
           </aside>
         ) : null}
@@ -1374,6 +1370,7 @@ function ProposalTopbar2({
   activeMapMode,
   searchQuery,
   setSearchQuery,
+  isMenuOpen,
   onCopyUrl,
   onPreviewViewer,
   onReturnToCreator,
@@ -1386,6 +1383,7 @@ function ProposalTopbar2({
   activeMapMode: ProposalMapMode;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
+  isMenuOpen: boolean;
   onCopyUrl: () => void;
   onPreviewViewer: () => void;
   onReturnToCreator: () => void;
@@ -1397,28 +1395,114 @@ function ProposalTopbar2({
 }) {
   const lastExtractionLabel = formatStableDateTime(lastExtractionAt);
   const isViewer = activeMapMode === "viewer";
+  const [isSearchExpandedOnCompact, setIsSearchExpandedOnCompact] = useState(false);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const compactSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isSearchExpandedOnCompact) return;
+    compactSearchInputRef.current?.focus();
+    const onResize = () => {
+      if (window.innerWidth >= 1280) setIsSearchExpandedOnCompact(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [isSearchExpandedOnCompact]);
+
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!shareMenuRef.current?.contains(event.target as Node)) setShareMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShareMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [shareMenuOpen]);
+
+  const shareUrl = typeof window === "undefined" ? "" : window.location.href;
+  const shareTitle = typeof document === "undefined" ? "TravelYourMap" : document.title || "TravelYourMap";
+  const encodedUrl = encodeURIComponent(shareUrl);
+  const encodedText = encodeURIComponent(shareTitle);
+
+  const shareTargets = [
+    {
+      id: "whatsapp",
+      label: "WhatsApp",
+      href: `https://wa.me/?text=${encodeURIComponent(`${shareTitle} ${shareUrl}`.trim())}`,
+    },
+    {
+      id: "x",
+      label: "X",
+      href: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
+    },
+    {
+      id: "facebook",
+      label: "Facebook",
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    },
+    {
+      id: "telegram",
+      label: "Telegram",
+      href: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`,
+    },
+  ];
 
   return (
-    <header className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
+    <header className="relative z-[120] grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
       {/* Broadened Sleek Search Bar */}
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="relative flex min-w-0 items-center gap-3">
+        {!isMenuOpen ? (
+          <button
+            type="button"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden"
+            onClick={onOpenMenu}
+            aria-label="Abrir menú lateral"
+          >
+            <List size={19} />
+          </button>
+        ) : null}
         <button
           type="button"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] 2xl:hidden"
-          onClick={onOpenMenu}
-          aria-label="Abrir menú lateral"
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden",
+            isSearchExpandedOnCompact && "pointer-events-none opacity-0"
+          )}
+          onClick={() => setIsSearchExpandedOnCompact(true)}
+          aria-label="Abrir busqueda"
         >
-          <List size={19} />
+          <MagnifyingGlass size={17} />
         </button>
-        <label className="flex h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all">
+        <label
+          className={cn(
+            "h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all",
+            isSearchExpandedOnCompact ? "absolute inset-x-0 top-0 z-30 flex" : "hidden xl:flex"
+          )}
+        >
           <MagnifyingGlass size={17} className="text-[#818b95]" />
           <input
+            ref={compactSearchInputRef}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-[#818b95]"
             placeholder="Buscar destinos, creadores o videos..."
           />
-          {searchQuery ? (
+          {isSearchExpandedOnCompact ? (
+            <button
+              type="button"
+              onClick={() => setIsSearchExpandedOnCompact(false)}
+              aria-label="Cerrar busqueda"
+              className="text-slate-400 hover:text-white"
+            >
+              <X size={15} />
+            </button>
+          ) : searchQuery ? (
             <button type="button" onClick={() => setSearchQuery("")} aria-label="Limpiar busqueda" className="text-slate-400 hover:text-white">
               <X size={15} />
             </button>
@@ -1457,7 +1541,7 @@ function ProposalTopbar2({
               onClick={onPreviewViewer}
             >
               <Eye size={15} />
-              Vista del Viewer
+              Seguidor
             </button>
             <button
               type="button"
@@ -1477,21 +1561,48 @@ function ProposalTopbar2({
             </button>
           </>
         )}
-        <button
-          type="button"
-          className="flex h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] px-4 text-[12px] font-bold text-white transition hover:bg-[#ff6a50]"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(window.location.href);
-              onCopyUrl();
-            } catch {
-              onCopyUrl();
-            }
-          }}
-        >
-          <CopySimple size={15} />
-          Copiar URL
-        </button>
+        <div className="relative" ref={shareMenuRef}>
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] text-white transition hover:bg-[#ff6a50]"
+            onClick={() => setShareMenuOpen((current) => !current)}
+            aria-label="Compartir"
+          >
+            <ShareNetwork size={16} weight="bold" />
+          </button>
+          {shareMenuOpen ? (
+            <div className="absolute right-0 top-[calc(100%+8px)] z-[160] min-w-[176px] overflow-hidden rounded-xl border border-white/10 bg-[#050b10]/95 p-1.5 shadow-2xl backdrop-blur-xl">
+              {shareTargets.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="flex h-9 w-full items-center rounded-lg px-3 text-left text-[11px] font-bold text-[#dbe2ea] transition hover:bg-white/[0.06] hover:text-white"
+                  onClick={() => {
+                    window.open(item.href, "_blank", "noopener,noreferrer");
+                    setShareMenuOpen(false);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="mt-1 flex h-9 w-full items-center gap-2 rounded-lg border border-[#ff5a3d] bg-[#ff5a3d] px-3 text-left text-[11px] font-bold text-black transition hover:bg-[#ff6b4f] hover:text-black"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    onCopyUrl();
+                  } finally {
+                    setShareMenuOpen(false);
+                  }
+                }}
+              >
+                <CopySimple size={13} />
+                Copiar URL
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   );
@@ -1806,8 +1917,7 @@ function ProposalRightRail2({
   onOpenAdmin,
   onAction,
   analytics,
-  mapMode,
-  experienceMode
+  mapMode
 }: {
   channel: TravelChannel;
   onBecomePatron: () => void;
@@ -1818,19 +1928,10 @@ function ProposalRightRail2({
   onAction: (m: string) => void;
   analytics: ProposalAnalytics;
   mapMode: ProposalMapMode;
-  experienceMode: ProposalExperienceMode;
 }) {
   const channelAvatarSrc = channel.thumbnail_url || "/creators/luisito-comunica.png";
   const channelName = channel.channel_name || "Canal";
   const isCreatorWorkspace = mapMode === "creator";
-  const workspaceLabel =
-    experienceMode === "demo-creator"
-      ? "Demo creator"
-      : experienceMode === "demo-viewer"
-        ? "Demo publica"
-        : isCreatorWorkspace
-          ? "Workspace creator"
-          : "Mapa publico";
 
   return (
     <div className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -1844,19 +1945,12 @@ function ProposalRightRail2({
               <p className="truncate text-[14px] font-black leading-tight text-white">{channelName}</p>
               <CheckCircle size={15} weight="fill" className="shrink-0 text-[#ff5a3d]" />
             </div>
-            <p className="mt-0.5 text-[10px] font-medium leading-none text-[#818a93]">
-              {workspaceLabel}
-            </p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3 py-3">
+        <div className="mt-4 grid grid-cols-2 py-3">
           <div className="border-r border-white/[0.06] text-center">
             <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.countries)}</p>
             <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Paises</p>
-          </div>
-          <div className="border-r border-white/[0.06] text-center">
-            <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.cities)}</p>
-            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#818a93]">Ciudades</p>
           </div>
           <div className="text-center">
             <p className="font-mono text-[16px] font-black leading-none text-white">{formatCompactMetric(analytics.videos)}</p>
@@ -1867,52 +1961,50 @@ function ProposalRightRail2({
       
       {/* 1. Trip metrics box */}
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm flex flex-col">
-        <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#818a93] mb-4">
-          {isCreatorWorkspace ? "Analytics del mapa" : "Tu viaje en números"}
-        </h2>
+        <div className="mb-3.5 flex items-center justify-between">
+          <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#818a93]">
+            {isCreatorWorkspace ? "Analiticas" : "Tu viaje en números"}
+          </h2>
+          {isCreatorWorkspace ? (
+            <button
+              type="button"
+              className="text-[10px] font-bold text-[#b9c1cb] transition hover:text-white"
+              onClick={() => onAction("Abrir analiticas detalladas.")}
+            >
+              Ver Mas
+            </button>
+          ) : null}
+        </div>
         
         {/* Metric widgets grouped horizontally */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
-              <MapPin size={17} weight="fill" />
-            </span>
-            <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.exploredPlaces)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Lugares explorados</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="flex flex-col items-center text-center">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
               <Clock size={17} weight="fill" />
             </span>
-            <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.watchedHours)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">
-                {isCreatorWorkspace ? "Horas consumidas" : "Horas vistas del canal"}
-              </p>
-            </div>
+            <p className="mt-2 font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.watchedHours)}</p>
+            <p className="mt-1 text-[7px] font-bold uppercase tracking-wider text-[#818a93] leading-tight">
+              {isCreatorWorkspace ? "Horas consumidas" : "Horas vistas"}
+            </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+          <div className="flex flex-col items-center text-center">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
               <GlobeHemisphereWest size={17} weight="fill" />
             </span>
-            <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.visitedCountries)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Países visitados</p>
-            </div>
+            <p className="mt-2 font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.visitedCountries)}</p>
+            <p className="mt-1 text-[7px] font-bold uppercase tracking-wider text-[#818a93] leading-tight">Países visitados</p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
-              <Heart size={17} weight="fill" />
+          <div className="flex flex-col items-center text-center">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.03] border border-white/5 text-[#ff5a3d]">
+              <Video size={17} weight="fill" />
             </span>
-            <div>
-              <p className="font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.reactions)}</p>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#818a93] mt-1">Reacciones recibidas</p>
-            </div>
+            <p className="mt-2 font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.viewedVideosFromPlatform)}</p>
+            <p className="mt-1 text-[7px] font-bold uppercase tracking-wider text-[#818a93] leading-tight">
+              <span className="block">Videos</span>
+              <span className="block">vistos</span>
+            </p>
           </div>
         </div>
       </section>

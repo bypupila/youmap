@@ -5,6 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { RoleManagementCard } from "@/components/admin/role-management-card";
 import { AdminUsersPanel } from "@/components/admin/admin-users-panel";
 import { RoleAuditPanel } from "@/components/admin/role-audit-panel";
+import { AdminAnalyticsOverview } from "@/components/admin/admin-analytics-overview";
+import { ReleaseReadinessPanel } from "@/components/admin/release-readiness-panel";
+import { OpsAlertsPanel } from "@/components/admin/ops-alerts-panel";
 import { getRecentRoleChanges, ensureUserRoleAuditTable } from "@/lib/admin-role-audit";
 import { getSessionUserById, getValidSessionUserIdFromServerCookies, userIsSuperAdmin } from "@/lib/current-user";
 import { loadAdminUsersPageData } from "@/lib/admin-users";
@@ -64,6 +67,18 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <SummaryCard label="Creators" value={adminUsers.summary.creator} />
           <SummaryCard label="Viewers" value={adminUsers.summary.viewer} />
           <SummaryCard label="Superadmins" value={adminUsers.summary.superadmin} />
+        </section>
+
+        <section className="mt-6">
+          <AdminAnalyticsOverview />
+        </section>
+
+        <section className="mt-6">
+          <ReleaseReadinessPanel />
+        </section>
+
+        <section className="mt-6">
+          <OpsAlertsPanel />
         </section>
 
         <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)]">

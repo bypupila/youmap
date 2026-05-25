@@ -22,6 +22,19 @@ export interface AnalyticsResponse {
   total_mapped_videos: number;
   total_views: number;
   monthly_visitors: number;
+  internal_metrics?: {
+    map_views: number;
+    video_panel_opens: number;
+    sponsor_clicks: number;
+    poll_votes: number;
+  };
+  internal_top_countries?: Array<{ country_code: string; interactions: number }>;
+  metric_sources?: {
+    total_views?: "youtube" | "travelyourmap";
+    top_countries?: "youtube" | "travelyourmap";
+    monthly_visitors?: "youtube" | "travelyourmap";
+    internal_metrics?: "youtube" | "travelyourmap";
+  };
 }
 
 export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: string; initialStats?: AnalyticsResponse | null }) {
@@ -63,6 +76,13 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
   }, [channelId, initialStats]);
 
   const topCountries = useMemo(() => stats?.top_countries || [], [stats]);
+  const internalMetrics = stats?.internal_metrics || {
+    map_views: 0,
+    video_panel_opens: 0,
+    sponsor_clicks: 0,
+    poll_votes: 0,
+  };
+  const internalTopCountries = stats?.internal_top_countries || [];
 
   if (loading) {
     return <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-6 text-sm text-slate-300">Cargando analytics...</div>;
@@ -79,13 +99,13 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
   return (
     <section className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Países visitados" value={stats.total_countries} />
-        <KpiCard label="Videos mapeados" value={stats.total_mapped_videos} />
-        <KpiCard label="Total views" value={formatNumber(stats.total_views)} />
-        <KpiCard label="Visitantes/mes" value={formatNumber(stats.monthly_visitors)} />
+        <KpiCard label="Países (YouTube)" value={stats.total_countries} source={stats.metric_sources?.top_countries || "youtube"} />
+        <KpiCard label="Videos mapeados" value={stats.total_mapped_videos} source="travelyourmap" />
+        <KpiCard label="Total views" value={formatNumber(stats.total_views)} source={stats.metric_sources?.total_views || "youtube"} />
+        <KpiCard label="Visitantes/mes (TYM)" value={formatNumber(stats.monthly_visitors)} source={stats.metric_sources?.monthly_visitors || "travelyourmap"} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-3">
         <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
           <h3 className="mb-3 text-sm font-semibold text-slate-100">Top países por videos</h3>
           <ResponsiveContainer width="100%" height={260}>
@@ -117,6 +137,25 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
             </LineChart>
           </ResponsiveContainer>
         </article>
+
+        <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-slate-100">Interacciones internas (Travel Your Map)</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <MiniMetric label="Map views" value={internalMetrics.map_views} />
+            <MiniMetric label="Video opens" value={internalMetrics.video_panel_opens} />
+            <MiniMetric label="Sponsor clicks" value={internalMetrics.sponsor_clicks} />
+            <MiniMetric label="Poll votes" value={internalMetrics.poll_votes} />
+          </div>
+          <div className="mt-4 space-y-2">
+            {internalTopCountries.slice(0, 5).map((country) => (
+              <div key={country.country_code} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+                <span className="text-xs text-slate-200">{country.country_code}</span>
+                <span className="text-xs text-slate-400">{formatNumber(country.interactions)}</span>
+              </div>
+            ))}
+            {internalTopCountries.length === 0 ? <p className="text-xs text-slate-500">Sin interacciones internas aún.</p> : null}
+          </div>
+        </article>
       </div>
 
       {stats.unlocated_videos.length > 0 ? (
@@ -138,11 +177,21 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string | number }) {
+function KpiCard({ label, value, source }: { label: string; value: string | number; source: "youtube" | "travelyourmap" }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+      <p className="mb-1 text-[10px] uppercase tracking-[0.15em] text-slate-500">{source === "youtube" ? "Fuente: YouTube" : "Fuente: Travel Your Map"}</p>
       <p className="text-2xl font-semibold text-slate-50">{value}</p>
       <p className="mt-1 text-xs text-slate-400">{label}</p>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="text-sm font-semibold text-slate-100">{formatNumber(value)}</p>
     </div>
   );
 }

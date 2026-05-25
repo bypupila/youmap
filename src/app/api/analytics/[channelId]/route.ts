@@ -84,6 +84,35 @@ export async function GET(
       `,
     ]);
 
+    const [internalSummaryRows, internalCountryRows] = await Promise.all([
+      sql<Array<{ map_views: number; video_panel_opens: number; sponsor_clicks: number; poll_votes: number }>>`
+        select
+          count(*) filter (where event_type = 'map_view')::int as map_views,
+          count(*) filter (where event_type = 'video_panel_open')::int as video_panel_opens,
+          count(*) filter (where event_type = 'sponsor_click')::int as sponsor_clicks,
+          count(*) filter (where event_type = 'poll_vote')::int as poll_votes
+        from public.map_events
+        where channel_id = ${channelId}
+      `,
+      sql<Array<{ country_code: string; interactions: number }>>`
+        select country_code, count(*)::int as interactions
+        from public.map_events
+        where channel_id = ${channelId}
+          and country_code is not null
+          and event_type in ('map_view', 'video_panel_open', 'country_select', 'poll_vote')
+        group by country_code
+        order by interactions desc, country_code asc
+        limit 10
+      `,
+    ]);
+
+    const internalSummary = internalSummaryRows[0] || {
+      map_views: 0,
+      video_panel_opens: 0,
+      sponsor_clicks: 0,
+      poll_votes: 0,
+    };
+
     return NextResponse.json({
       top_countries: topCountries || [],
       videos_by_month: videosByMonth || [],
@@ -92,6 +121,19 @@ export async function GET(
       total_mapped_videos: totalStats?.[0]?.total_mapped || 0,
       total_views: totalStats?.[0]?.total_views || 0,
       monthly_visitors: totalStats?.[0]?.monthly_visitors || 0,
+      internal_metrics: {
+        map_views: internalSummary.map_views || 0,
+        video_panel_opens: internalSummary.video_panel_opens || 0,
+        sponsor_clicks: internalSummary.sponsor_clicks || 0,
+        poll_votes: internalSummary.poll_votes || 0,
+      },
+      internal_top_countries: internalCountryRows || [],
+      metric_sources: {
+        total_views: "youtube",
+        top_countries: "youtube",
+        monthly_visitors: "travelyourmap",
+        internal_metrics: "travelyourmap",
+      },
     });
   } catch (error) {
     console.error("[api/analytics]", error);

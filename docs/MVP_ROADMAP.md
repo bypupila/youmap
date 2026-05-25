@@ -2,6 +2,11 @@
 
 Auditoria realizada el 2026-04-23 sobre el repo local y las rutas principales.
 
+Actualizacion 2026-05-23:
+- Alcance funcional consolidado en `docs/MVP_DECISIONES_CERRADAS_176.md`.
+- Orden de desarrollo para cierre de MVP en `docs/MVP_PLAN_EJECUCION_PRIORIZADO.md`.
+- Desarrollo futuro separado en `docs/BACKLOG_POST_MVP_ETAPAS_FUTURAS.md`.
+
 ## Estado actual
 
 TravelYourMap ya tiene la base de MVP: landing, onboarding, auth, dashboard/mapa, perfil publico, explore, billing Polar, importacion YouTube, Neon y sponsors. El producto compila y el contrato de entorno local pasa validacion.

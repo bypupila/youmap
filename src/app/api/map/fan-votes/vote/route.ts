@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeUsername } from "@/lib/auth-identifiers";
 import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
+import { isDemoChannelId } from "@/lib/demo-data";
 import { buildRecommendedFanVoteOptions } from "@/lib/fan-vote-options";
 import { buildMapFanVoteIdentity, loadMapFanVoteSummary, MapFanVoteError, recordMapFanVote } from "@/lib/map-fan-votes";
 import { loadMapDataByChannelId } from "@/lib/map-data";
@@ -20,10 +21,23 @@ const payloadSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const sessionUserId = await getValidSessionUserIdFromRequest(request);
+    if (!sessionUserId) {
+      return NextResponse.json(
+        { error: "Debes registrarte e iniciar sesión como viewer para votar.", requires_viewer_registration: true },
+        { status: 401 }
+      );
+    }
+
     const payload = payloadSchema.parse(await request.json());
+    if (isDemoChannelId(payload.channelId)) {
+      return NextResponse.json(
+        { error: "Modo demo: esta operación no persiste cambios. Usa el flujo simulado en pantalla." },
+        { status: 400 }
+      );
+    }
     const fingerprint = await getOrCreateVoterFingerprint();
     const requestHashes = await getRequestHashes();
-    const sessionUserId = await getValidSessionUserIdFromRequest(request);
     const voterIdentity = buildMapFanVoteIdentity({
       userId: sessionUserId,
       voterFingerprint: fingerprint.hashed,

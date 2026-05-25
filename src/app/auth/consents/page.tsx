@@ -1,0 +1,120 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+
+type ConsentState = {
+  account_operation: { accepted: boolean; consent_version: string; accepted_at: string } | null;
+  platform_promotions: { accepted: boolean; consent_version: string; accepted_at: string } | null;
+  creator_promotions: { accepted: boolean; consent_version: string; accepted_at: string } | null;
+};
+
+export default function AuthConsentsPage() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [consentPlatformPromotions, setConsentPlatformPromotions] = useState(false);
+  const [consentCreatorPromotions, setConsentCreatorPromotions] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/consents", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("No se pudo cargar consentimientos.");
+        return response.json() as Promise<ConsentState>;
+      })
+      .then((data) => {
+        if (!active) return;
+        setConsentPlatformPromotions(Boolean(data.platform_promotions?.accepted));
+        setConsentCreatorPromotions(Boolean(data.creator_promotions?.accepted));
+      })
+      .catch((loadError) => {
+        if (!active) return;
+        setError(loadError instanceof Error ? loadError.message : "No se pudo cargar consentimientos.");
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function saveConsents() {
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/auth/consents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consentVersion: "v1",
+          platformPromotions: consentPlatformPromotions,
+          creatorPromotions: consentCreatorPromotions,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error || "No se pudieron guardar consentimientos.");
+      setMessage("Preferencias guardadas correctamente.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "No se pudieron guardar consentimientos.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
+      <div className="relative z-10 mx-auto max-w-[760px] px-4 py-8">
+        <section className="tm-surface-strong rounded-[2rem] border border-white/10 p-6 sm:p-8">
+          <p className="tym-overline">Privacidad</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-foreground">Consentimientos</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Puedes cambiar tus consentimientos promocionales cuando quieras. El consentimiento de operación de cuenta es obligatorio para mantener acceso.
+          </p>
+
+          {loading ? <p className="mt-4 text-sm text-muted-foreground">Cargando...</p> : null}
+
+          {!loading ? (
+            <div className="mt-6 grid gap-3">
+              <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={consentPlatformPromotions}
+                  onChange={(event) => setConsentPlatformPromotions(event.target.checked)}
+                />
+                <span>Recibir promociones de Travel Your Map.</span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={consentCreatorPromotions}
+                  onChange={(event) => setConsentCreatorPromotions(event.target.checked)}
+                />
+                <span>Recibir promociones de creadores.</span>
+              </label>
+
+              <div className="mt-2 flex items-center gap-2">
+                <Button onClick={saveConsents} disabled={saving}>
+                  {saving ? "Guardando..." : "Guardar preferencias"}
+                </Button>
+                <Link href="/" className="text-sm text-muted-foreground underline underline-offset-2">
+                  Volver
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
+          {error ? <p className="mt-3 text-sm text-[#ffb0a7]">{error}</p> : null}
+          {message ? <p className="mt-3 text-sm text-[#b7d9ff]">{message}</p> : null}
+        </section>
+      </div>
+    </main>
+  );
+}
