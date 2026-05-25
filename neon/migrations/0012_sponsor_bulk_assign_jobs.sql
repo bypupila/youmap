@@ -36,4 +36,4 @@ create index if not exists sponsor_bulk_assign_jobs_sponsor_created_idx
 drop trigger if exists trg_sponsor_bulk_assign_jobs_updated_at on public.sponsor_bulk_assign_jobs;
 create trigger trg_sponsor_bulk_assign_jobs_updated_at
 before update on public.sponsor_bulk_assign_jobs
-for each row execute function public.set_updated_at();
+for each row execute function public.touch_updated_at();

@@ -307,6 +307,19 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
 - Se amplian paneles de analitica (creador y admin):
   - `GET /api/analytics/[channelId]` agrega favoritos, ver mas tarde y horas reproducidas en Travel Your Map.
   - `GET /api/admin/analytics/overview` agrega KPIs globales de favoritos, ver mas tarde y horas reproducidas de plataforma.
+- Se normaliza catalogo geografico global para votaciones:
+  - nuevo modulo `src/lib/geo-catalog.ts` como fuente comun de paises/ciudades basada en `country-state-city`.
+  - `map-polls` valida ciudades contra catalogo global por pais (no solo contra ciudades de videos) y canoniza nombres.
+  - `fan-vote-options` recomienda ciudades desde catalogo global deduplicado por pais.
+- Se corrige bloqueo de migracion en `0012_sponsor_bulk_assign_jobs.sql`:
+  - trigger `updated_at` ahora usa `public.touch_updated_at()` (antes referenciaba `public.set_updated_at()` inexistente).
+  - bootstrap Neon validado de extremo a extremo con migraciones `0001` a `0014` + `seed/demo.sql`.
+- Smoke QA tecnico ejecutado en servidor local:
+  - `GET /api/status` responde `200` y refleja indicadores operativos.
+  - `GET /status` responde `200` y muestra estado de servicios.
+  - `GET /map?channelId=demo-channel` responde `200` con badge de demo y CTA de registro.
+  - `POST /api/map/fan-votes/vote` sin sesion responde `requires_viewer_registration`.
+- Se agrega `npm run mvp:smoke` (`scripts/mvp-smoke.mjs`) para repetir smoke checks base de release en un solo comando.
 
 ### 2026-05-06
 

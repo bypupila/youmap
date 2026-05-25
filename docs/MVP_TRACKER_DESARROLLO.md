@@ -32,6 +32,8 @@ Referencias:
 - Etapa Tres:
   - cierre de votacion de pais crea borrador idempotente de votacion de ciudades para el pais ganador.
   - la creacion automatica de borrador de ciudades queda auditada en `creator_activity_log` para trazabilidad operativa.
+  - validacion de ciudades en votaciones ahora acepta catalogo global completo por pais (no solo ciudades presentes en videos).
+  - recomendaciones de ciudades para votacion se alimentan desde catalogo global por pais con deduplicacion y normalizacion.
 - Etapa Cuatro:
   - endpoint separado `POST /api/auth/register-viewer` con ciudad/pais obligatorios y consentimientos versionados.
   - UI de registro viewer en `/auth/viewer-register`.
@@ -72,6 +74,19 @@ Referencias:
 - Permisos por rol validados.
 - Eventos y auditoria verificados.
 - Documentacion actualizada.
+
+## Validacion tecnica reciente (2026-05-25)
+
+- `npm run validate:env` en verde.
+- Bootstrap Neon ejecutado en `DATABASE_URL` con migraciones `0001` a `0014` y `seed/demo.sql` aplicado.
+- `npm run lint` en verde.
+- `npm run build` en verde.
+- `npm run mvp:smoke` en verde.
+- Smoke HTTP local:
+  - `GET /api/status` = `200`
+  - `GET /status` = `200`
+  - `GET /map?channelId=demo-channel` = `200`
+  - `POST /api/map/fan-votes/vote` sin sesion = bloqueo esperado con `requires_viewer_registration`.
 
 ## Regla de actualizacion
 

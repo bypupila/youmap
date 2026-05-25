@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "crypto";
-import { City, Country } from "country-state-city";
 import { cookies, headers } from "next/headers";
 import type { NextResponse } from "next/server";
 import { recordCreatorActivity } from "@/lib/creator-admin-actions";
+import { getAllCitiesForCountry, getCountryDisplayName, isKnownCityForCountry, normalizeCountryCodeForCatalog, normalizeGeoComparable, normalizeGeoLabel, resolveCanonicalCityForCountry } from "@/lib/geo-catalog";
 import type { TravelVideoLocation } from "@/lib/types";
 import { sql } from "@/lib/neon";
 import { getPostHogClient } from "@/lib/posthog-server";
@@ -113,11 +113,11 @@ export class MapPollVoteError extends Error {
 }
 
 export function normalizeCountryCode(value: string) {
-  return String(value || "").trim().toUpperCase();
+  return normalizeCountryCodeForCatalog(value);
 }
 
 export function normalizeCity(value: string) {
-  return String(value || "").trim();
+  return normalizeGeoLabel(value);
 }
 
 export function normalizePollMode(value: string | null | undefined): MapPollMode {
@@ -153,11 +153,38 @@ export function buildPollOptionsFromVideos(videoLocations: TravelVideoLocation[]
       country_code,
       country_name: value.country_name,
       sort_order: index,
-      cities: Array.from(value.cities.entries())
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([city], cityIndex) => ({ city, sort_order: cityIndex })),
+      cities: resolveCountryCitiesForPollOptions(country_code, value.country_name, value.cities),
     }))
     .sort((a, b) => a.country_name.localeCompare(b.country_name));
+}
+
+function resolveCountryCitiesForPollOptions(
+  countryCode: string,
+  countryName: string,
+  weightedCities: Map<string, number>
+) {
+  const topFromVideos = Array.from(weightedCities.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([city]) => city);
+
+  const fallbackFromGlobal = getAllCitiesForCountry(countryCode)
+    .filter((city) => !isCountryLabel(city, countryCode, countryName))
+    .slice(0, MAX_AUTO_CITY_OPTIONS);
+
+  const merged = [...topFromVideos, ...fallbackFromGlobal];
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const city of merged) {
+    const key = normalizeComparableLocation(city);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(city);
+  }
+
+  return deduped.slice(0, MAX_AUTO_CITY_OPTIONS).map((city, cityIndex) => ({
+    city,
+    sort_order: cityIndex,
+  }));
 }
 
 function isCountryLabel(city: string, countryCode: string, countryName: string) {
@@ -166,10 +193,7 @@ function isCountryLabel(city: string, countryCode: string, countryName: string) 
 }
 
 function normalizeComparableLocation(value: string) {
-  return normalizeCity(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  return normalizeGeoComparable(value);
 }
 
 export function normalizePollOptions(
@@ -178,7 +202,7 @@ export function normalizePollOptions(
   pollMode: MapPollMode
 ) {
   const availableByCountry = new Map(
-    available.map((country) => [country.country_code, new Set(country.cities.map((city) => city.city))])
+    available.map((country) => [country.country_code, new Set(country.cities.map((city) => normalizeComparableLocation(city.city)))])
   );
   const availableNames = new Map(available.map((country) => [country.country_code, country.country_name]));
 
@@ -218,18 +242,23 @@ export function normalizePollOptions(
         throw new Error(`El pais ${countryCode} tiene una ciudad vacia.`);
       }
 
-      if (!availableCities.has(normalizedCity)) {
+      const canonicalCity = resolveCanonicalCityForCountry(countryCode, normalizedCity) || normalizedCity;
+      const comparableCity = normalizeComparableLocation(canonicalCity);
+      const existsInGlobalCatalog = isKnownCityForCountry(countryCode, normalizedCity);
+      const existsInAvailable = availableCities.has(comparableCity);
+
+      if (!existsInAvailable && !existsInGlobalCatalog) {
         throw new Error(`La ciudad ${normalizedCity} no existe en ${countryCode} para esta votacion.`);
       }
 
-      const cityKey = normalizedCity.toLowerCase();
+      const cityKey = normalizeComparableLocation(canonicalCity);
       if (seenCities.has(cityKey)) {
-        throw new Error(`La ciudad ${normalizedCity} esta repetida en ${countryCode}.`);
+        throw new Error(`La ciudad ${canonicalCity} esta repetida en ${countryCode}.`);
       }
       seenCities.add(cityKey);
 
       return {
-        city: normalizedCity,
+        city: canonicalCity,
         sort_order: Number.isFinite(Number(city.sort_order)) ? Number(city.sort_order) : cityIndex,
       };
     });
@@ -712,8 +741,8 @@ async function ensureCityDraftAfterCountryPollClose(pollId: string, channelId: s
     return;
   }
 
-  const candidateCities = (City.getCitiesOfCountry(winnerCountryCode) || [])
-    .map((city) => normalizeCity(city.name))
+  const candidateCities = getAllCitiesForCountry(winnerCountryCode)
+    .map((city) => normalizeCity(city))
     .filter(Boolean);
   const uniqueCities = Array.from(new Set(candidateCities.map((city) => city.trim().toLowerCase()))).map((normalized) =>
     candidateCities.find((city) => city.trim().toLowerCase() === normalized)
@@ -721,7 +750,7 @@ async function ensureCityDraftAfterCountryPollClose(pollId: string, channelId: s
   const cities = uniqueCities.filter((city): city is string => Boolean(city)).slice(0, MAX_AUTO_CITY_OPTIONS);
   if (!cities.length) return;
 
-  const countryName = Country.getCountryByCode(winnerCountryCode)?.name || winnerCountryCode;
+  const countryName = getCountryDisplayName(winnerCountryCode) || winnerCountryCode;
   const now = new Date().toISOString();
   if (!createdByUserId) return;
 

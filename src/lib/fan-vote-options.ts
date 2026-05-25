@@ -1,4 +1,4 @@
-import { City, Country } from "country-state-city";
+import { getCountryDisplayName, getRecommendedCitiesForCountry as getRecommendedCitiesFromCatalog, normalizeCountryCodeForCatalog, normalizeGeoComparable, normalizeGeoLabel } from "@/lib/geo-catalog";
 import type { TravelVideoLocation } from "@/lib/types";
 
 export const MAX_FAN_VOTE_CITY_OPTIONS = 40;
@@ -14,10 +14,10 @@ export function buildRecommendedFanVoteOptions(videoLocations: TravelVideoLocati
   const countries = new Map<string, { country_name: string; seenCities: Set<string> }>();
 
   for (const video of videoLocations) {
-    const countryCode = normalizeCountryCode(video.country_code || "");
+    const countryCode = normalizeCountryCodeForCatalog(video.country_code || "");
     if (!countryCode) continue;
 
-    const countryName = normalizeText(video.country_name || "") || Country.getCountryByCode(countryCode)?.name || countryCode;
+    const countryName = normalizeText(video.country_name || "") || getCountryDisplayName(countryCode) || countryCode;
     const bucket = countries.get(countryCode) || { country_name: countryName, seenCities: new Set<string>() };
     const city = normalizeCity(video.city || "");
 
@@ -43,28 +43,11 @@ export function buildRecommendedFanVoteOptions(videoLocations: TravelVideoLocati
 }
 
 function getRecommendedCitiesForCountry(countryCode: string, countryName: string, seenCities: Set<string>) {
-  const allCities = (City.getCitiesOfCountry(countryCode) || [])
-    .map((city) => normalizeCity(city.name))
-    .filter(Boolean);
-  const uniqueCities = dedupeCities(allCities).filter((city) => !isCountryLabel(city, countryCode, countryName));
-  const unseenCities = uniqueCities.filter((city) => !seenCities.has(normalizeComparable(city)));
-  const source = unseenCities.length ? unseenCities : uniqueCities;
-
-  return source.slice(0, MAX_FAN_VOTE_CITY_OPTIONS);
-}
-
-function dedupeCities(cities: string[]) {
-  const seen = new Set<string>();
-  const deduped: string[] = [];
-
-  for (const city of cities) {
-    const key = normalizeComparable(city);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(city);
-  }
-
-  return deduped;
+  return getRecommendedCitiesFromCatalog({
+    countryCode,
+    seenCities,
+    limit: MAX_FAN_VOTE_CITY_OPTIONS,
+  }).filter((city) => !isCountryLabel(city, countryCode, countryName));
 }
 
 function isCountryLabel(city: string, countryCode: string, countryName: string) {
@@ -72,13 +55,8 @@ function isCountryLabel(city: string, countryCode: string, countryName: string) 
   return cityKey === normalizeComparable(countryCode) || cityKey === normalizeComparable(countryName);
 }
 
-function normalizeCountryCode(value: string) {
-  const normalized = normalizeText(value).toUpperCase();
-  return /^[A-Z]{2}$/.test(normalized) ? normalized : "";
-}
-
 function normalizeCity(value: string) {
-  return normalizeText(value).replace(/\s+/g, " ");
+  return normalizeGeoLabel(value);
 }
 
 function normalizeText(value: string) {
@@ -86,8 +64,5 @@ function normalizeText(value: string) {
 }
 
 function normalizeComparable(value: string) {
-  return normalizeText(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  return normalizeGeoComparable(value);
 }
