@@ -193,8 +193,9 @@ Si quieres proteger el cron de cierre de votaciones:
 
 - En Vercel Hobby el cron corre diario (`0 6 * * *`); el cierre inmediato queda cubierto por lazy close al consultar/votar.
 - En Vercel Pro se puede subir la frecuencia a `*/5 * * * *`.
-- Define `MAP_POLLS_CRON_TOKEN`.
-- El cron de `vercel.json` sigue funcionando por `user-agent` de Vercel Cron.
+- Define `CRON_SECRET` (requerido en producción para los cron `GET` de Vercel).
+- Opcionalmente define `MAP_POLLS_CRON_TOKEN` para invocaciones manuales/externas.
+- No se confía en `user-agent` para autorizar cron.
 - Para ejecuciones manuales/externas, usa:
   `/api/map/polls/close-expired?token=<MAP_POLLS_CRON_TOKEN>`
   o header `x-cron-token` / `Authorization: Bearer`.

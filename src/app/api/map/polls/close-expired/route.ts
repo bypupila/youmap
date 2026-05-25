@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 function isAuthorized(request: Request) {
   const url = new URL(request.url);
   const configuredToken = String(process.env.MAP_POLLS_CRON_TOKEN || "").trim();
+  const cronSecret = String(process.env.CRON_SECRET || "").trim();
   const queryToken = String(url.searchParams.get("token") || "").trim();
   const providedToken = String(request.headers.get("x-cron-token") || "").trim();
   const bearerToken = String(request.headers.get("authorization") || "")
@@ -14,7 +15,8 @@ function isAuthorized(request: Request) {
   const hasMatchingToken =
     (queryToken.length > 0 && queryToken === configuredToken) ||
     (providedToken.length > 0 && providedToken === configuredToken) ||
-    (bearerToken.length > 0 && bearerToken === configuredToken);
+    (bearerToken.length > 0 && bearerToken === configuredToken) ||
+    (cronSecret.length > 0 && bearerToken === cronSecret);
 
   if (configuredToken) {
     return hasMatchingToken;
@@ -36,16 +38,13 @@ async function handle(request: Request) {
   return NextResponse.json({ ok: true, closed_count: closedPolls.length, poll_ids: closedPolls.map((poll) => poll.id) });
 }
 
-export async function GET() {
-  return NextResponse.json(
-    { error: "Method Not Allowed. Use POST." },
-    {
-      status: 405,
-      headers: {
-        Allow: "POST",
-      },
-    }
-  );
+export async function GET(request: Request) {
+  if (process.env.NODE_ENV === "production" && !String(process.env.CRON_SECRET || "").trim()) {
+    return NextResponse.json({ error: "CRON_SECRET is required in production for cron GET." }, { status: 500 });
+  }
+
+  // Vercel Cron invokes GET and sends Authorization: Bearer <CRON_SECRET>.
+  return handle(request);
 }
 
 export async function POST(request: Request) {
