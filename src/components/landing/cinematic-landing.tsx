@@ -27,7 +27,7 @@ const creatorStats = [
 const creatorsList = [
   { name: "BY PUPILA", src: "/creators/by-pupila.png" },
   { name: "Drew Binsky", src: "/creators/drew-binsky.png" },
-  { name: "Alan por el Mundo", src: "/creators/alan-por-el-mundo.png" },
+  { name: "Alan por el Mundo", src: "/creators/alan-poeguridr-el-mundo.png" },
   { name: "Misias pero Viajeras", src: "/creators/misias-pero-viajeras.png" },
 ];
 
