@@ -15,6 +15,7 @@ import {
 } from "recharts";
 
 export interface AnalyticsResponse {
+  window_days?: number;
   top_countries: Array<{ country_name: string; video_count: number }>;
   videos_by_month: Array<{ month: string; count: number }>;
   unlocated_videos: Array<{ id: string; title: string; view_count: number }>;
@@ -27,6 +28,10 @@ export interface AnalyticsResponse {
     video_panel_opens: number;
     sponsor_clicks: number;
     poll_votes: number;
+    saved_added: number;
+    favorites_added: number;
+    watch_later_added: number;
+    watch_time_hours: number;
   };
   internal_top_countries?: Array<{ country_code: string; interactions: number }>;
   metric_sources?: {
@@ -38,12 +43,13 @@ export interface AnalyticsResponse {
 }
 
 export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: string; initialStats?: AnalyticsResponse | null }) {
+  const [days, setDays] = useState<7 | 30 | 90 | 180>(30);
   const [loading, setLoading] = useState(!initialStats);
   const [stats, setStats] = useState<AnalyticsResponse | null>(initialStats || null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (initialStats || !channelId) {
+    if (!channelId) {
       setLoading(false);
       return;
     }
@@ -51,7 +57,7 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
     let active = true;
     setLoading(true);
 
-    fetch(`/api/analytics/${channelId}`, { cache: "no-store" })
+    fetch(`/api/analytics/${channelId}?days=${days}`, { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
@@ -73,7 +79,7 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
     return () => {
       active = false;
     };
-  }, [channelId, initialStats]);
+  }, [channelId, days]);
 
   const topCountries = useMemo(() => stats?.top_countries || [], [stats]);
   const internalMetrics = stats?.internal_metrics || {
@@ -81,6 +87,10 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
     video_panel_opens: 0,
     sponsor_clicks: 0,
     poll_votes: 0,
+    saved_added: 0,
+    favorites_added: 0,
+    watch_later_added: 0,
+    watch_time_hours: 0,
   };
   const internalTopCountries = stats?.internal_top_countries || [];
 
@@ -98,6 +108,19 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
 
   return (
     <section className="space-y-5">
+      <div className="inline-flex items-center gap-2 text-xs">
+        <span className="text-slate-400">Periodo</span>
+        <select
+          value={days}
+          onChange={(event) => setDays(Number(event.target.value) as 7 | 30 | 90 | 180)}
+          className="h-8 rounded-lg border border-slate-800 bg-slate-950/70 px-2 text-slate-200 outline-none"
+        >
+          <option value={7}>7 días</option>
+          <option value={30}>30 días</option>
+          <option value={90}>90 días</option>
+          <option value={180}>180 días</option>
+        </select>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Países (YouTube)" value={stats.total_countries} source={stats.metric_sources?.top_countries || "youtube"} />
         <KpiCard label="Videos mapeados" value={stats.total_mapped_videos} source="travelyourmap" />
@@ -139,12 +162,18 @@ export function AnalyticsDashboard({ channelId, initialStats }: { channelId?: st
         </article>
 
         <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-100">Interacciones internas (Travel Your Map)</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-100">
+            Interacciones internas (Travel Your Map · {stats.window_days || days}d)
+          </h3>
           <div className="grid gap-2 sm:grid-cols-2">
             <MiniMetric label="Map views" value={internalMetrics.map_views} />
             <MiniMetric label="Video opens" value={internalMetrics.video_panel_opens} />
             <MiniMetric label="Sponsor clicks" value={internalMetrics.sponsor_clicks} />
             <MiniMetric label="Poll votes" value={internalMetrics.poll_votes} />
+            <MiniMetric label="Guardados" value={internalMetrics.saved_added} />
+            <MiniMetric label="Favoritos" value={internalMetrics.favorites_added} />
+            <MiniMetric label="Ver más tarde" value={internalMetrics.watch_later_added} />
+            <MiniMetric label="Horas reproducidas (TYM)" value={internalMetrics.watch_time_hours} />
           </div>
           <div className="mt-4 space-y-2">
             {internalTopCountries.slice(0, 5).map((country) => (

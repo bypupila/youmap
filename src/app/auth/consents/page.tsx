@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 type ConsentState = {
@@ -11,12 +12,16 @@ type ConsentState = {
 };
 
 export default function AuthConsentsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [consentPlatformPromotions, setConsentPlatformPromotions] = useState(false);
   const [consentCreatorPromotions, setConsentCreatorPromotions] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -67,6 +72,30 @@ export default function AuthConsentsPage() {
     }
   }
 
+  async function deleteViewerAccount() {
+    setDeleting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/auth/viewer-account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmationText: deleteConfirmationText.trim(),
+          reason: deleteReason.trim() || null,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error || "No se pudo eliminar la cuenta.");
+      router.push("/");
+      router.refresh();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "No se pudo eliminar la cuenta.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
       <div className="relative z-10 mx-auto max-w-[760px] px-4 py-8">
@@ -107,6 +136,38 @@ export default function AuthConsentsPage() {
                 <Link href="/" className="text-sm text-muted-foreground underline underline-offset-2">
                   Volver
                 </Link>
+              </div>
+            </div>
+          ) : null}
+
+          {!loading ? (
+            <div className="mt-8 rounded-2xl border border-[#ff5a3d]/30 bg-[#ff5a3d]/10 p-4">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[#ffcabf]">Zona crítica</p>
+              <h2 className="mt-1 text-sm font-semibold text-[#ffd8d1]">Eliminar cuenta viewer</h2>
+              <p className="mt-2 text-xs text-[#ffd8d1]/85">
+                Esta acción elimina tu perfil viewer, consentimientos y credenciales de acceso. Para continuar, escribe exactamente{" "}
+                <span className="font-semibold">ELIMINAR MI CUENTA</span>.
+              </p>
+              <div className="mt-3 grid gap-2">
+                <input
+                  value={deleteConfirmationText}
+                  onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                  placeholder="ELIMINAR MI CUENTA"
+                  className="h-10 rounded-lg border border-white/15 bg-black/20 px-3 text-[13px] text-white outline-none"
+                />
+                <input
+                  value={deleteReason}
+                  onChange={(event) => setDeleteReason(event.target.value)}
+                  placeholder="Motivo (opcional)"
+                  className="h-10 rounded-lg border border-white/15 bg-black/20 px-3 text-[13px] text-white outline-none"
+                />
+                <Button
+                  onClick={deleteViewerAccount}
+                  disabled={deleting || deleteConfirmationText.trim() !== "ELIMINAR MI CUENTA"}
+                  variant="destructive"
+                >
+                  {deleting ? "Eliminando..." : "Eliminar mi cuenta"}
+                </Button>
               </div>
             </div>
           ) : null}

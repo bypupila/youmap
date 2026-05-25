@@ -444,7 +444,7 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   const previewChannel = DEMO_CHANNEL;
   const previewLocations = DEMO_VIDEO_LOCATIONS;
   const analytics = DEMO_ANALYTICS as ChannelAnalytics;
-  const demoMapPath = locale === "en" ? "/map?channelId=drew-global-map" : "/map?channelId=luisito-global-map";
+  const demoMapPath = "/map?channelId=demo-channel";
 
   const currentMeta = copy.stepMeta[step];
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 type OverviewPayload = {
+  window_days: number;
   product: {
     registered_viewers: number;
     registered_creators: number;
@@ -12,6 +13,10 @@ type OverviewPayload = {
     video_opens_30d: number;
     votes_30d: number;
     sponsor_clicks_30d: number;
+    saved_30d: number;
+    favorites_30d: number;
+    watch_later_30d: number;
+    watch_time_hours_30d: number;
   };
   creators: Array<{
     channel_id: string;
@@ -34,13 +39,14 @@ type OverviewPayload = {
 };
 
 export function AdminAnalyticsOverview() {
+  const [days, setDays] = useState<7 | 30 | 90 | 180>(30);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OverviewPayload | null>(null);
 
   useEffect(() => {
     let active = true;
-    fetch("/api/admin/analytics/overview", { cache: "no-store" })
+    fetch(`/api/admin/analytics/overview?days=${days}`, { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<OverviewPayload>;
@@ -60,13 +66,26 @@ export function AdminAnalyticsOverview() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [days]);
 
   return (
     <section className="tm-surface-strong rounded-[2rem] border border-white/10 p-5 shadow-[0_24px_100px_-56px_rgba(0,0,0,0.9)]">
       <p className="tym-overline text-[#8ff0ff]">Analytics globales</p>
       <h2 className="mt-1 text-lg font-semibold text-[#f5f7fb]">Producto, creadores, sponsors y geografía</h2>
       <p className="mt-1 text-xs text-[#9aa3af]">Fuente: Travel Your Map (eventos internos de plataforma)</p>
+      <div className="mt-3 inline-flex items-center gap-2 text-xs">
+        <span className="text-[#9aa3af]">Periodo</span>
+        <select
+          value={days}
+          onChange={(event) => setDays(Number(event.target.value) as 7 | 30 | 90 | 180)}
+          className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-2 text-[#d8dee6] outline-none"
+        >
+          <option value={7}>7 días</option>
+          <option value={30}>30 días</option>
+          <option value={90}>90 días</option>
+          <option value={180}>180 días</option>
+        </select>
+      </div>
 
       {loading ? <p className="mt-4 text-sm text-[#aab2bc]">Cargando métricas...</p> : null}
       {error ? <p className="mt-4 text-sm text-[#ffb0a7]">{error}</p> : null}
@@ -76,18 +95,22 @@ export function AdminAnalyticsOverview() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Viewers registrados" value={data.product.registered_viewers} />
             <MetricCard label="Creators registrados" value={data.product.registered_creators} />
-            <MetricCard label="Map views (30d)" value={data.product.map_views_30d} />
-            <MetricCard label="Clicks sponsor (30d)" value={data.product.sponsor_clicks_30d} />
+            <MetricCard label={`Map views (${data.window_days}d)`} value={data.product.map_views_30d} />
+            <MetricCard label={`Clicks sponsor (${data.window_days}d)`} value={data.product.sponsor_clicks_30d} />
+            <MetricCard label={`Guardados (${data.window_days}d)`} value={data.product.saved_30d} />
+            <MetricCard label={`Favoritos (${data.window_days}d)`} value={data.product.favorites_30d} />
+            <MetricCard label={`Ver más tarde (${data.window_days}d)`} value={data.product.watch_later_30d} />
+            <MetricCard label={`Horas reproducidas TYM (${data.window_days}d)`} value={data.product.watch_time_hours_30d} />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
             <SimpleTable
-              title="Top creadores (30d)"
+              title={`Top creadores (${data.window_days}d)`}
               headers={["Canal", "Owner", "Videos", "Views mapa", "Votos"]}
               rows={data.creators.map((item) => [item.channel_name, item.owner_username, n(item.videos_count), n(item.map_views_30d), n(item.votes_30d)])}
             />
             <SimpleTable
-              title="Top sponsors (30d)"
+              title={`Top sponsors (${data.window_days}d)`}
               headers={["Sponsor", "Videos", "Clicks"]}
               rows={data.sponsors.map((item) => [item.brand_name, n(item.videos_count), n(item.clicks_30d)])}
             />
@@ -100,7 +123,7 @@ export function AdminAnalyticsOverview() {
               rows={data.geography.top_viewer_countries.map((item) => [item.country_code, n(item.users)])}
             />
             <SimpleTable
-              title="Países por eventos (30d)"
+              title={`Países por eventos (${data.window_days}d)`}
               headers={["País", "Eventos"]}
               rows={data.geography.top_event_countries.map((item) => [item.country_code, n(item.events)])}
             />

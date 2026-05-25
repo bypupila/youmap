@@ -1,6 +1,17 @@
 import * as Sentry from "@sentry/nextjs";
 import posthog from "posthog-js";
 
+declare global {
+  type ClarityStub = {
+    (...args: unknown[]): void;
+    q?: unknown[][];
+  };
+
+  interface Window {
+    clarity?: ClarityStub;
+  }
+}
+
 function installExtensionHydrationGuard() {
   if (typeof window === "undefined" || typeof document === "undefined") return;
 
@@ -30,11 +41,23 @@ function installExtensionHydrationGuard() {
 function installMicrosoftClarity() {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   if (document.getElementById("microsoft-clarity-script")) return;
+  const clarityProjectId = process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID;
+  const clarityEnabled =
+    process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_ENABLE_CLARITY_IN_DEV === "1";
+  if (!clarityEnabled || !clarityProjectId) return;
+
+  if (typeof window.clarity !== "function") {
+    const stub: ClarityStub = (...args: unknown[]) => {
+      stub.q ||= [];
+      stub.q.push(args);
+    };
+    window.clarity = stub;
+  }
 
   const script = document.createElement("script");
   script.id = "microsoft-clarity-script";
   script.async = true;
-  script.src = "https://www.clarity.ms/tag/wf6i1kgiq2";
+  script.src = `https://www.clarity.ms/tag/${clarityProjectId}`;
   document.head.appendChild(script);
 }
 

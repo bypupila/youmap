@@ -3,11 +3,14 @@ import { DEMO_ANALYTICS, isDemoChannelId } from "@/lib/demo-data";
 import { sql } from "@/lib/neon";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ channelId: string }> }
 ) {
   try {
     const { channelId } = await params;
+    const url = new URL(request.url);
+    const requestedDays = Number(url.searchParams.get("days") || "30");
+    const windowDays = [7, 30, 90, 180].includes(requestedDays) ? requestedDays : 30;
 
     if (isDemoChannelId(channelId)) {
       return NextResponse.json(DEMO_ANALYTICS);
@@ -85,21 +88,56 @@ export async function GET(
     ]);
 
     const [internalSummaryRows, internalCountryRows] = await Promise.all([
-      sql<Array<{ map_views: number; video_panel_opens: number; sponsor_clicks: number; poll_votes: number }>>`
+      sql<
+        Array<{
+          map_views: number;
+          video_panel_opens: number;
+          sponsor_clicks: number;
+          poll_votes: number;
+          saved_added: number;
+          favorites_added: number;
+          watch_later_added: number;
+          watch_seconds: number;
+        }>
+      >`
         select
           count(*) filter (where event_type = 'map_view')::int as map_views,
           count(*) filter (where event_type = 'video_panel_open')::int as video_panel_opens,
           count(*) filter (where event_type = 'sponsor_click')::int as sponsor_clicks,
-          count(*) filter (where event_type = 'poll_vote')::int as poll_votes
+          count(*) filter (where event_type = 'poll_vote')::int as poll_votes,
+          count(*) filter (where event_type = 'video_saved_added')::int as saved_added,
+          count(*) filter (where event_type = 'video_favorite_added')::int as favorites_added,
+          count(*) filter (where event_type = 'video_watch_later_added')::int as watch_later_added,
+          coalesce(
+            sum(
+              case
+                when event_type = 'video_watch_time_logged'
+                  and coalesce(metadata->>'watch_seconds', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                then (metadata->>'watch_seconds')::numeric
+                else 0
+              end
+            ),
+            0
+          )::int as watch_seconds
         from public.map_events
         where channel_id = ${channelId}
+          and created_at >= now() - make_interval(days => ${windowDays})
       `,
       sql<Array<{ country_code: string; interactions: number }>>`
         select country_code, count(*)::int as interactions
         from public.map_events
         where channel_id = ${channelId}
           and country_code is not null
-          and event_type in ('map_view', 'video_panel_open', 'country_select', 'poll_vote')
+          and event_type in (
+            'map_view',
+            'video_panel_open',
+            'country_select',
+            'poll_vote',
+            'video_favorite_added',
+            'video_watch_later_added',
+            'video_watch_time_logged'
+          )
+          and created_at >= now() - make_interval(days => ${windowDays})
         group by country_code
         order by interactions desc, country_code asc
         limit 10
@@ -111,9 +149,14 @@ export async function GET(
       video_panel_opens: 0,
       sponsor_clicks: 0,
       poll_votes: 0,
+      saved_added: 0,
+      favorites_added: 0,
+      watch_later_added: 0,
+      watch_seconds: 0,
     };
 
     return NextResponse.json({
+      window_days: windowDays,
       top_countries: topCountries || [],
       videos_by_month: videosByMonth || [],
       unlocated_videos: unlocatedVideos || [],
@@ -126,6 +169,10 @@ export async function GET(
         video_panel_opens: internalSummary.video_panel_opens || 0,
         sponsor_clicks: internalSummary.sponsor_clicks || 0,
         poll_votes: internalSummary.poll_votes || 0,
+        saved_added: internalSummary.saved_added || 0,
+        favorites_added: internalSummary.favorites_added || 0,
+        watch_later_added: internalSummary.watch_later_added || 0,
+        watch_time_hours: Math.round(((internalSummary.watch_seconds || 0) / 3600) * 10) / 10,
       },
       internal_top_countries: internalCountryRows || [],
       metric_sources: {

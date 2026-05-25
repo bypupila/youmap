@@ -38,9 +38,13 @@ Referencias:
   - endpoint de consulta/actualizacion de consentimientos en `/api/auth/consents`.
   - pantalla de gestion de consentimientos en `/auth/consents`.
   - votaciones bloqueadas para anonimos en backend (`/api/map/fan-votes/vote`, `/api/map/polls/[pollId]/vote`) con respuesta `401` y flujo de registro obligatorio.
+  - flujo de eliminacion de cuenta viewer implementado (`DELETE /api/auth/viewer-account`) con revocacion de sesion, auditoria y limpieza de cookie.
 - Etapa Cinco:
   - API de analitica extendida con metricas internas de Travel Your Map (map views, video opens, sponsor clicks, poll votes).
   - dashboard de analitica actualizado con origen de metrica (YouTube vs Travel Your Map).
+  - dashboard de analitica de creador con filtro de periodo (`7/30/90/180 dias`) para metrica interna.
+  - instrumentacion interna adicional en mapa para favoritos, ver mas tarde y horas reproducidas dentro de Travel Your Map.
+  - paneles de analitica (creador y admin) ampliados con favoritos, ver mas tarde y horas reproducidas (Travel Your Map).
   - visual de analitica embebida en tab de actividad del panel actual de creador.
   - endpoint global `GET /api/admin/analytics/overview` para superadmin con:
     - producto (viewers/creators registrados, actividad mensual, interacciones 30d)
@@ -48,6 +52,7 @@ Referencias:
     - top sponsors
     - geografia de viewers y eventos.
   - modulo visual `AdminAnalyticsOverview` integrado en `/admin`.
+  - filtro por periodo en analytics de admin (`7/30/90/180 dias`) via `GET /api/admin/analytics/overview?days=`.
 - Etapa Seis:
   - indicador visual explicito de `Modo demo · sin persistencia` en experiencia de mapa.
   - llamada a accion visible a registro real (`Crear cuenta gratis`) desde experiencia demo con atribucion de origen.

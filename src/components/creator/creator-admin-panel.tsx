@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowsClockwise, Check, Copy, GlobeHemisphereWest, MapPin, Plus, Trash, Video } from "@phosphor-icons/react";
 import { AnalyticsDashboard } from "@/components/analytics-dashboard";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
@@ -76,6 +76,10 @@ export function CreatorAdminPanel({
   const [bulkPage, setBulkPage] = useState(1);
   const [bulkBusy, setBulkBusy] = useState<"idle" | "preview" | "assign">("idle");
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [bulkJobId, setBulkJobId] = useState<string | null>(null);
+  const [bulkJobStatus, setBulkJobStatus] = useState<string | null>(null);
+  const [bulkUndoAvailable, setBulkUndoAvailable] = useState(false);
+  const bulkPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const totalVotes = initialFanVotes?.total_votes || 0;
   const activeLive = Boolean(pollState?.status === "live");
@@ -356,27 +360,121 @@ export function CreatorAdminPanel({
         }),
       });
       const body = (await response.json().catch(() => null)) as
-        | { error?: string; requested?: number; applied?: number; skipped?: number; preview?: boolean }
+        | {
+            error?: string;
+            requested?: number;
+            applied?: number;
+            skipped?: number;
+            preview?: boolean;
+            queued?: boolean;
+            job?: { id?: string; status?: string; appliedCount?: number; skippedCount?: number; reversibleUntil?: string | null };
+          }
         | null;
       if (!response.ok) throw new Error(body?.error || "No se pudo ejecutar la asignación masiva.");
 
       if (preview) {
         setBulkMessage(`Preview listo: ${body?.requested || 0} seleccionados, ${body?.applied || 0} aplicables, ${body?.skipped || 0} omitidos.`);
       } else {
-        setBulkMessage(`Asignación completada: ${body?.applied || 0} videos actualizados, ${body?.skipped || 0} omitidos.`);
-        const sponsor = sponsors.find((entry) => entry.id === bulkSelectedSponsorId);
-        if (sponsor) {
-          setSponsors((current) =>
-            current.map((entry) =>
-              entry.id === sponsor.id
-                ? { ...entry, video_ids: Array.from(new Set([...(entry.video_ids || []), ...bulkSelectedVideoIds])), scope: "video" }
-                : entry
-            )
-          );
+        if (body?.job?.id) {
+          setBulkJobId(body.job.id);
+          setBulkJobStatus(body.job.status || null);
+          if (body.queued) {
+            setBulkMessage(
+              `Job encolado: ${body.requested || 0} seleccionados, ${body.applied || 0} aplicables. Procesando en segundo plano...`
+            );
+            void triggerBulkWorker(body.job.id);
+            void pollBulkJob(body.job.id, true);
+          } else {
+            setBulkMessage(`Asignación completada: ${body?.applied || 0} videos actualizados, ${body?.skipped || 0} omitidos.`);
+            setBulkUndoAvailable(Boolean(body?.job?.reversibleUntil));
+            const sponsor = sponsors.find((entry) => entry.id === bulkSelectedSponsorId);
+            if (sponsor) {
+              setSponsors((current) =>
+                current.map((entry) =>
+                  entry.id === sponsor.id
+                    ? { ...entry, video_ids: Array.from(new Set([...(entry.video_ids || []), ...bulkSelectedVideoIds])), scope: "video" }
+                    : entry
+                )
+              );
+            }
+          }
+        } else {
+          setBulkMessage(`Asignación completada: ${body?.applied || 0} videos actualizados, ${body?.skipped || 0} omitidos.`);
         }
       }
     } catch (error) {
       setBulkMessage(error instanceof Error ? error.message : "No se pudo ejecutar la asignación masiva.");
+    } finally {
+      setBulkBusy("idle");
+    }
+  }
+
+  async function triggerBulkWorker(jobId: string) {
+    await fetch("/api/map-admin/sponsors/bulk-assign/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId, jobId }),
+    });
+  }
+
+  async function pollBulkJob(jobId: string, fromQueue: boolean) {
+    if (bulkPollTimerRef.current) {
+      clearTimeout(bulkPollTimerRef.current);
+      bulkPollTimerRef.current = null;
+    }
+    const response = await fetch(`/api/map-admin/sponsors/bulk-assign/jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+    const body = (await response.json().catch(() => null)) as
+      | { job?: { status?: string; appliedCount?: number; skippedCount?: number; reversibleUntil?: string | null; errorMessage?: string | null } }
+      | null;
+    if (!response.ok || !body?.job) {
+      setBulkMessage("No se pudo consultar el estado del job.");
+      return;
+    }
+
+    const status = String(body.job.status || "");
+    setBulkJobStatus(status || null);
+    if (status === "queued" || status === "running") {
+      setBulkMessage(fromQueue ? "Procesando asignación masiva..." : "Job en progreso...");
+      if (status === "queued") {
+        void triggerBulkWorker(jobId);
+      }
+      bulkPollTimerRef.current = setTimeout(() => {
+        void pollBulkJob(jobId, false);
+      }, 1800);
+      return;
+    }
+
+    if (status === "completed") {
+      setBulkUndoAvailable(Boolean(body.job.reversibleUntil));
+      setBulkMessage(`Asignación completada: ${body.job.appliedCount || 0} videos actualizados, ${body.job.skippedCount || 0} omitidos.`);
+      return;
+    }
+    if (status === "failed") {
+      setBulkUndoAvailable(false);
+      setBulkMessage(body.job.errorMessage || "El job falló.");
+      return;
+    }
+    if (status === "reverted") {
+      setBulkUndoAvailable(false);
+      setBulkMessage("Se deshizo la última asignación masiva.");
+      return;
+    }
+  }
+
+  async function undoBulkAssign() {
+    if (!bulkJobId) return;
+    setBulkBusy("assign");
+    try {
+      const response = await fetch(`/api/map-admin/sponsors/bulk-assign/jobs/${encodeURIComponent(bulkJobId)}/undo`, {
+        method: "POST",
+      });
+      const body = (await response.json().catch(() => null)) as { error?: string; job?: { status?: string } } | null;
+      if (!response.ok) throw new Error(body?.error || "No se pudo deshacer el job.");
+      setBulkJobStatus(body?.job?.status || "reverted");
+      setBulkUndoAvailable(false);
+      setBulkMessage("Deshacer aplicado. Recarga el panel para ver todos los cambios reflejados.");
+    } catch (error) {
+      setBulkMessage(error instanceof Error ? error.message : "No se pudo deshacer el job.");
     } finally {
       setBulkBusy("idle");
     }
@@ -578,6 +676,17 @@ export function CreatorAdminPanel({
                   {bulkBusy === "assign" ? "Asignando..." : "Asignar sponsor"}
                 </Button>
               </div>
+              {bulkJobId ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#9da5ae]">
+                  <span>Job: {bulkJobId}</span>
+                  <span>Estado: {bulkJobStatus || "-"}</span>
+                  {bulkUndoAvailable ? (
+                    <Button type="button" size="sm" variant="outline" onClick={() => void undoBulkAssign()} disabled={bulkBusy !== "idle"}>
+                      Deshacer asignación
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
               {bulkMessage ? <p className="mt-2 text-[12px] text-[#b7d9ff]">{bulkMessage}</p> : null}
 
               <div className="mt-3 overflow-x-auto rounded-lg border border-white/10">

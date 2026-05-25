@@ -2,6 +2,7 @@ import { sql } from "@/lib/neon";
 import { tableExists } from "@/lib/db-schema";
 
 export interface AdminOverviewMetrics {
+  window_days: number;
   product: {
     registered_viewers: number;
     registered_creators: number;
@@ -11,6 +12,10 @@ export interface AdminOverviewMetrics {
     video_opens_30d: number;
     votes_30d: number;
     sponsor_clicks_30d: number;
+    saved_30d: number;
+    favorites_30d: number;
+    watch_later_30d: number;
+    watch_time_hours_30d: number;
   };
   creators: Array<{
     channel_id: string;
@@ -32,7 +37,9 @@ export interface AdminOverviewMetrics {
   };
 }
 
-export async function loadAdminOverviewMetrics(): Promise<AdminOverviewMetrics> {
+export async function loadAdminOverviewMetrics(input?: { windowDays?: number }): Promise<AdminOverviewMetrics> {
+  const requestedDays = Number(input?.windowDays || 30);
+  const windowDays = [7, 30, 90, 180].includes(requestedDays) ? requestedDays : 30;
   const [
     usersTable,
     creatorActivityTable,
@@ -72,14 +79,14 @@ export async function loadAdminOverviewMetrics(): Promise<AdminOverviewMetrics> 
           ${creatorActivityTable
             ? sql`select distinct actor_user_id as user_id
                  from public.creator_activity_log
-                 where created_at >= now() - interval '30 day'
+                 where created_at >= now() - make_interval(days => ${windowDays})
                    and actor_user_id is not null`
             : sql`select null::uuid as user_id where false`}
           union
           ${fanVotesTable
             ? sql`select distinct voter_user_id as user_id
                  from public.map_fan_votes
-                 where created_at >= now() - interval '30 day'
+                 where created_at >= now() - make_interval(days => ${windowDays})
                    and voter_user_id is not null`
             : sql`select null::uuid as user_id where false`}
         )
@@ -92,16 +99,41 @@ export async function loadAdminOverviewMetrics(): Promise<AdminOverviewMetrics> 
     : Promise.resolve([{ mav_viewers: 0, mav_creators: 0 }]);
 
   const eventSummaryRowsPromise = mapEventsTable
-    ? sql<Array<{ map_views: number; video_opens: number; votes: number; sponsor_clicks: number }>>`
+    ? sql<
+        Array<{
+          map_views: number;
+          video_opens: number;
+          votes: number;
+          sponsor_clicks: number;
+          saved: number;
+          favorites: number;
+          watch_later: number;
+          watch_seconds: number;
+        }>
+      >`
         select
           count(*) filter (where event_type = 'map_view')::int as map_views,
           count(*) filter (where event_type = 'video_panel_open')::int as video_opens,
           count(*) filter (where event_type = 'poll_vote')::int as votes,
-          count(*) filter (where event_type = 'sponsor_click')::int as sponsor_clicks
+          count(*) filter (where event_type = 'sponsor_click')::int as sponsor_clicks,
+          count(*) filter (where event_type = 'video_saved_added')::int as saved,
+          count(*) filter (where event_type = 'video_favorite_added')::int as favorites,
+          count(*) filter (where event_type = 'video_watch_later_added')::int as watch_later,
+          coalesce(
+            sum(
+              case
+                when event_type = 'video_watch_time_logged'
+                  and coalesce(metadata->>'watch_seconds', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                then (metadata->>'watch_seconds')::numeric
+                else 0
+              end
+            ),
+            0
+          )::int as watch_seconds
         from public.map_events
-        where created_at >= now() - interval '30 day'
+        where created_at >= now() - make_interval(days => ${windowDays})
       `
-    : Promise.resolve([{ map_views: 0, video_opens: 0, votes: 0, sponsor_clicks: 0 }]);
+    : Promise.resolve([{ map_views: 0, video_opens: 0, votes: 0, sponsor_clicks: 0, saved: 0, favorites: 0, watch_later: 0, watch_seconds: 0 }]);
 
   const creatorRowsPromise =
     channelsTable && usersTable
@@ -124,12 +156,12 @@ export async function loadAdminOverviewMetrics(): Promise<AdminOverviewMetrics> 
             } as videos_count,
             ${
               mapEventsTable
-                ? sql`count(me.*) filter (where me.event_type = 'map_view' and me.created_at >= now() - interval '30 day')::int`
+                ? sql`count(me.*) filter (where me.event_type = 'map_view' and me.created_at >= now() - make_interval(days => ${windowDays}))::int`
                 : sql`0::int`
             } as map_views_30d,
             ${
               mapEventsTable
-                ? sql`count(me.*) filter (where me.event_type = 'poll_vote' and me.created_at >= now() - interval '30 day')::int`
+                ? sql`count(me.*) filter (where me.event_type = 'poll_vote' and me.created_at >= now() - make_interval(days => ${windowDays}))::int`
                 : sql`0::int`
             } as votes_30d
           from public.channels c
@@ -155,7 +187,7 @@ export async function loadAdminOverviewMetrics(): Promise<AdminOverviewMetrics> 
             } as videos_count,
             ${
               sponsorClicksTable
-                ? sql`count(sc.*) filter (where sc.clicked_at >= now() - interval '30 day')::int`
+                ? sql`count(sc.*) filter (where sc.clicked_at >= now() - make_interval(days => ${windowDays}))::int`
                 : sql`0::int`
             } as clicks_30d
           from public.sponsors s
@@ -184,7 +216,7 @@ export async function loadAdminOverviewMetrics(): Promise<AdminOverviewMetrics> 
         select upper(country_code) as country_code, count(*)::int as events
         from public.map_events
         where country_code is not null
-          and created_at >= now() - interval '30 day'
+          and created_at >= now() - make_interval(days => ${windowDays})
         group by upper(country_code)
         order by events desc, country_code asc
         limit 10
@@ -211,9 +243,10 @@ export async function loadAdminOverviewMetrics(): Promise<AdminOverviewMetrics> 
 
   const users = userCountRows[0] || { viewers: 0, creators: 0 };
   const active = monthlyActiveRows[0] || { mav_viewers: 0, mav_creators: 0 };
-  const events = eventSummaryRows[0] || { map_views: 0, video_opens: 0, votes: 0, sponsor_clicks: 0 };
+  const events = eventSummaryRows[0] || { map_views: 0, video_opens: 0, votes: 0, sponsor_clicks: 0, saved: 0, favorites: 0, watch_later: 0, watch_seconds: 0 };
 
   return {
+    window_days: windowDays,
     product: {
       registered_viewers: users.viewers || 0,
       registered_creators: users.creators || 0,
@@ -223,6 +256,10 @@ export async function loadAdminOverviewMetrics(): Promise<AdminOverviewMetrics> 
       video_opens_30d: events.video_opens || 0,
       votes_30d: events.votes || 0,
       sponsor_clicks_30d: events.sponsor_clicks || 0,
+      saved_30d: events.saved || 0,
+      favorites_30d: events.favorites || 0,
+      watch_later_30d: events.watch_later || 0,
+      watch_time_hours_30d: Math.round(((events.watch_seconds || 0) / 3600) * 10) / 10,
     },
     creators: creatorRows || [],
     sponsors: sponsorRows || [],

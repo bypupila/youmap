@@ -5,6 +5,7 @@ import { getValidSessionUserFromRequest } from "@/lib/current-user";
 import { isDemoChannelId } from "@/lib/demo-data";
 import { tableExists } from "@/lib/db-schema";
 import { sql } from "@/lib/neon";
+import { createSponsorBulkAssignJob, processSponsorBulkAssignJob } from "@/lib/sponsor-bulk-assign-jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,13 @@ export async function POST(request: Request) {
     const hasSponsorVideoRules = await tableExists("public", "sponsor_video_rules");
     if (!hasSponsorVideoRules) {
       return NextResponse.json({ error: "La tabla sponsor_video_rules no existe en este entorno." }, { status: 400 });
+    }
+    const hasBulkJobs = await tableExists("public", "sponsor_bulk_assign_jobs");
+    if (!hasBulkJobs) {
+      return NextResponse.json(
+        { error: "La tabla sponsor_bulk_assign_jobs no existe en este entorno. Ejecuta migraciones." },
+        { status: 400 }
+      );
     }
 
     const sponsorRows = await sql<Array<{ id: string; brand_name: string }>>`
@@ -84,70 +92,80 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No hay videos validos para asignar." }, { status: 400 });
     }
 
-    if (payload.setPrimary) {
-      await sql.query(
-        `
-          update public.sponsor_video_rules
-          set is_primary = false, updated_at = now()
-          where video_id = any($1::uuid[])
-            and sponsor_id <> $2
-            and is_primary = true
-        `,
-        [validVideoIds, sponsor.id]
-      );
+    const job = await createSponsorBulkAssignJob({
+      channelId: payload.channelId,
+      sponsorId: sponsor.id,
+      actorUserId: sessionUser.id,
+      requestedVideoIds: uniqueVideoIds,
+      validVideoIds,
+      skippedVideoIds,
+      reason: String(payload.reason || "").trim(),
+      setPrimary: payload.setPrimary,
+    });
+    if (!job) {
+      return NextResponse.json({ error: "No se pudo crear el job de asignación." }, { status: 400 });
     }
 
-    for (const videoId of validVideoIds) {
-      await sql`
-        insert into public.sponsor_video_rules (sponsor_id, video_id, priority, is_primary, created_at, updated_at)
-        values (${sponsor.id}, ${videoId}, 100, ${payload.setPrimary}, now(), now())
-        on conflict (sponsor_id, video_id)
-        do update set
-          is_primary = excluded.is_primary,
-          updated_at = now()
-      `;
+    const processInBackground = validVideoIds.length > 150;
+    if (processInBackground) {
+      await recordCreatorActivity({
+        channelId: payload.channelId,
+        actorUserId: sessionUser.id,
+        eventType: "sponsor_bulk_assigned_async",
+        entityType: "bulk",
+        entityId: job.id,
+        description: `${sessionUser.username} encoló asignación masiva async "${sponsor.brand_name}"`,
+        metadata: {
+          sponsorId: sponsor.id,
+          sponsorName: sponsor.brand_name,
+          requested: uniqueVideoIds.length,
+          applicable: validVideoIds.length,
+          skipped: skippedVideoIds.length,
+          jobId: job.id,
+        },
+      });
+      return NextResponse.json({
+        ok: true,
+        queued: true,
+        job,
+        sponsorId: sponsor.id,
+        sponsorName: sponsor.brand_name,
+        requested: uniqueVideoIds.length,
+        applicable: validVideoIds.length,
+        skipped: skippedVideoIds.length,
+        skippedVideoIds,
+      });
     }
 
-    await sql.query(
-      `
-        update public.videos
-        set
-          sponsor_detection_status = 'confirmado',
-          sponsor_detectado_texto = coalesce(sponsor_detectado_texto, $2),
-          sponsor_detectado_confianza = 1,
-          sponsor_detectado_fuente = 'manual_admin',
-          updated_at = now()
-        where channel_id = $1
-          and id = any($3::uuid[])
-      `,
-      [payload.channelId, sponsor.brand_name, validVideoIds]
-    );
-
+    const processedJob = await processSponsorBulkAssignJob(job.id);
     await recordCreatorActivity({
       channelId: payload.channelId,
       actorUserId: sessionUser.id,
       eventType: "sponsor_bulk_assigned",
       entityType: "bulk",
-      entityId: sponsor.id,
-      description: `${sessionUser.username} asigno masivamente sponsor "${sponsor.brand_name}"`,
+      entityId: job.id,
+      description: `${sessionUser.username} asignó masivamente sponsor "${sponsor.brand_name}"`,
       metadata: {
         sponsorId: sponsor.id,
         sponsorName: sponsor.brand_name,
         requested: uniqueVideoIds.length,
-        applied: validVideoIds.length,
+        applied: processedJob?.appliedCount ?? validVideoIds.length,
         skipped: skippedVideoIds.length,
         skippedVideoIds,
         reason: payload.reason || null,
         setPrimary: payload.setPrimary,
+        jobId: job.id,
       },
     });
 
     return NextResponse.json({
       ok: true,
+      queued: false,
+      job: processedJob,
       sponsorId: sponsor.id,
       sponsorName: sponsor.brand_name,
       requested: uniqueVideoIds.length,
-      applied: validVideoIds.length,
+      applied: processedJob?.appliedCount ?? validVideoIds.length,
       skipped: skippedVideoIds.length,
       skippedVideoIds,
     });

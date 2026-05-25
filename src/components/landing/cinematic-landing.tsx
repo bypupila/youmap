@@ -16,7 +16,7 @@ import {
   YoutubeLogo,
 } from "@phosphor-icons/react/dist/ssr";
 import { MiniMapModel } from "@/components/landing/mini-map-model";
-import { loadLuisitoMapData } from "@/lib/luisito-map-data";
+import { DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import type { TravelVideoLocation } from "@/lib/types";
 
 const creatorStats = [
@@ -25,7 +25,7 @@ const creatorStats = [
 ];
 
 const creatorsList = [
-  { name: "Luisito Comunica", src: "/creators/luisito-comunica.png" },
+  { name: "BY PUPILA", src: "/creators/by-pupila.png" },
   { name: "Drew Binsky", src: "/creators/drew-binsky.png" },
   { name: "Alan por el Mundo", src: "/creators/alan-por-el-mundo.png" },
   { name: "Misias pero Viajeras", src: "/creators/misias-pero-viajeras.png" },
@@ -92,6 +92,9 @@ const faqs = [
   "¿Cuánto tarda configurarlo?",
 ];
 
+const DEMO_MAP_HREF = "/map?channelId=demo-channel";
+const REAL_CREATOR_MAP_HREF = "/u/by.pupila";
+
 type JapanDestination = {
   videoCount: number;
   thumbnailUrl?: string | null;
@@ -104,7 +107,7 @@ type PreviewVideo = {
 };
 
 export async function CinematicLanding() {
-  const { videoLocations } = await loadLuisitoMapData();
+  const videoLocations = DEMO_VIDEO_LOCATIONS;
   const japanVideos = videoLocations.filter((video) => video.country_code?.toUpperCase() === "JP");
   const japanDestination: JapanDestination = {
     videoCount: japanVideos.length,
@@ -184,8 +187,11 @@ function HeroSection({
           <Link href="/onboarding?lang=es" className="inline-flex items-center gap-3 rounded-full bg-[#ff473b] px-8 py-4 text-[14px] font-bold text-white shadow-[0_20px_46px_-24px_rgba(255,71,59,0.85)] transition hover:-translate-y-0.5 hover:bg-[#ff5b50] active:translate-y-0 active:scale-[0.98]">
             Crear mi mapa <ArrowRight size={17} weight="bold" />
           </Link>
-          <Link href="/map?channelId=luisito-global-map" className="inline-flex items-center gap-4 rounded-full border border-white/18 bg-white/[0.025] px-8 py-4 text-[14px] font-bold text-white transition hover:bg-white/[0.07] active:scale-[0.98]">
+          <Link href={DEMO_MAP_HREF} className="inline-flex items-center gap-4 rounded-full border border-white/18 bg-white/[0.025] px-8 py-4 text-[14px] font-bold text-white transition hover:bg-white/[0.07] active:scale-[0.98]">
             Ver demo <Play size={15} weight="fill" />
+          </Link>
+          <Link href={REAL_CREATOR_MAP_HREF} className="inline-flex items-center gap-4 rounded-full border border-white/18 bg-white/[0.025] px-8 py-4 text-[14px] font-bold text-white transition hover:bg-white/[0.07] active:scale-[0.98]">
+            Ver canal real by.pupila
           </Link>
         </div>
         <div className="mt-10 flex items-center gap-4">
@@ -251,7 +257,7 @@ function DestinationCard({ destination }: { destination: JapanDestination }) {
         {destination.thumbnailUrl ? (
           <Image
             src={destination.thumbnailUrl}
-            alt="Video de Luisito Comunica en Japón"
+            alt="Video del canal demo en Japón"
             fill
             sizes="(max-width: 768px) 100vw, 410px"
             className="object-cover"
@@ -261,10 +267,10 @@ function DestinationCard({ destination }: { destination: JapanDestination }) {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(7,10,13,0.18))]" />
       </div>
       <div className="px-3 pb-1 pt-4">
-        <p className="text-[13px] font-bold text-white/55">Luisito Comunica</p>
+        <p className="text-[13px] font-bold text-white/55">Canal Demo</p>
         <p className="mt-1 flex items-center gap-2 text-[17px] font-bold"><span className="h-3 w-3 rounded-full bg-[#ff473b]" /> Japón</p>
-        <p className="mt-2 text-[13px] text-white/60">{destination.videoCount} videos de @luisitocomunica</p>
-        <Link href="/map?channelId=luisito-global-map" className="mt-3 inline-flex items-center gap-2 text-[13px] font-bold text-white">Ver destino <ArrowRight size={14} weight="bold" /></Link>
+        <p className="mt-2 text-[13px] text-white/60">{destination.videoCount} videos en el canal demo</p>
+        <Link href={DEMO_MAP_HREF} className="mt-3 inline-flex items-center gap-2 text-[13px] font-bold text-white">Abrir demo <ArrowRight size={14} weight="bold" /></Link>
       </div>
     </div>
   );
@@ -379,14 +385,14 @@ function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] })
         <div className="grid min-h-[470px] gap-5 rounded-[16px] bg-[radial-gradient(circle_at_65%_48%,rgba(56,143,205,0.34),transparent_28%),radial-gradient(circle_at_62%_50%,#19314a,#071018_58%,#05070a)] p-7 md:grid-cols-[190px_1fr]">
           <aside className="relative z-10">
             <div className="relative h-24 w-24 rounded-full border-4 border-white overflow-hidden bg-[#101419] shadow-lg">
-              <Image src="/creators/luisito-comunica.png" alt="Luisito Comunica" fill sizes="96px" className="object-cover" />
+              <Image src="/creators/by-pupila.png" alt="Canal de referencia by.pupila" fill sizes="96px" className="object-cover" />
             </div>
-            <h3 className="mt-5 text-[20px] font-extrabold">Luisito Comunica</h3>
-            <p className="text-[12px] text-white/62">@luisitocomunica</p>
-            <p className="mt-2 text-[12px] text-white/62">193 videos · 86 países</p>
+            <h3 className="mt-5 text-[20px] font-extrabold">BY PUPILA</h3>
+            <p className="text-[12px] text-white/62">@by.pupila</p>
+            <p className="mt-2 text-[12px] text-white/62">Canal real autorizado · modo lectura pública</p>
             <div className="mt-7 grid gap-2 rounded-[14px] bg-[#0b1116]/78 p-3">
               {profileDestinations.map(([country, count]) => <p key={country} className="flex justify-between gap-3 text-[12px]"><span>{country}</span><span className="text-white/52">{count}</span></p>)}
-              <Link href="/u/luisitocomunica" className="mt-3 text-[12px] font-bold text-white">Ver todos los destinos</Link>
+              <Link href={REAL_CREATOR_MAP_HREF} className="mt-3 text-[12px] font-bold text-white">Ver mapa real</Link>
             </div>
           </aside>
           <div className="relative min-h-[320px] overflow-hidden rounded-[18px] bg-[#05070a] p-3">
@@ -417,7 +423,7 @@ function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] })
           ))}
         </div>
         <div className="mt-8 flex items-center justify-between rounded-[12px] border border-white/12 bg-white/[0.035] px-5 py-4 text-[14px] text-white/72">
-          travelyourmap.com/u/luisitocomunica <Copy size={20} />
+          travelyourmap.com/u/by.pupila <Copy size={20} />
         </div>
       </div>
     </section>
@@ -508,7 +514,8 @@ function FinalCta() {
           <p className="mt-5 text-[15px] leading-7 text-white/65">Transforma tu canal en un media kit interactivo listo para sponsors, marcas y partnerships.</p>
           <div className="mt-8 flex flex-wrap gap-4">
             <Link href="/onboarding?lang=es" className="rounded-[9px] bg-[#ff473b] px-10 py-4 text-[14px] font-extrabold text-white shadow-[0_20px_46px_-24px_rgba(255,71,59,0.85)]">Crear mi mapa gratis</Link>
-            <Link href="/map?channelId=luisito-global-map" className="inline-flex items-center gap-4 rounded-[9px] border border-white/20 px-10 py-4 text-[14px] font-extrabold text-white">Ver demo en vivo <Play size={15} weight="fill" /></Link>
+            <Link href={DEMO_MAP_HREF} className="inline-flex items-center gap-4 rounded-[9px] border border-white/20 px-10 py-4 text-[14px] font-extrabold text-white">Ver demo en vivo <Play size={15} weight="fill" /></Link>
+            <Link href={REAL_CREATOR_MAP_HREF} className="inline-flex items-center gap-4 rounded-[9px] border border-white/20 px-10 py-4 text-[14px] font-extrabold text-white">Ver mapa real by.pupila</Link>
           </div>
           <div className="mt-5 flex flex-wrap gap-6 text-[12px] text-white/52"><span>Sin tarjeta de crédito</span><span>Configuración en minutos</span></div>
         </div>

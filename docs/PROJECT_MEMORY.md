@@ -287,6 +287,26 @@ python scripts/extract_youtube_channel_videos.py --handle @luisitocomunica
   - nuevo panel `OpsAlertsPanel` integrado en `/admin` para alertas criticas y altas.
 - Se ajusta el puente demo -> registro real:
   - CTA `Crear cuenta gratis` desde demo pasa `channelId` y parametros `utm_*` para atribucion.
+- Se implementa operacion masiva de sponsors por jobs:
+  - migracion `0012_sponsor_bulk_assign_jobs.sql`.
+  - `POST /api/map-admin/sponsors/bulk-assign` crea job y procesa sync/async segun tamano del lote.
+  - `POST /api/map-admin/sponsors/bulk-assign/worker` para procesar cola.
+  - `GET /api/map-admin/sponsors/bulk-assign/jobs/[jobId]` para estado.
+  - `POST /api/map-admin/sponsors/bulk-assign/jobs/[jobId]/undo` con ventana controlada de deshacer.
+- Se completa capa de eliminacion de cuenta viewer:
+  - migracion `0013_viewer_account_deletions.sql` para auditoria.
+  - nuevo endpoint `DELETE /api/auth/viewer-account` con confirmacion explicita, revocacion de sesion y cierre de cookie.
+  - nueva zona critica en `/auth/consents` para activar eliminacion de cuenta viewer.
+- Se extiende analitica de admin con filtros de periodo:
+  - `GET /api/admin/analytics/overview` acepta `days=7|30|90|180`.
+  - `AdminAnalyticsOverview` incorpora selector de periodo y actualiza tablas/KPIs al rango elegido.
+- Se amplia telemetria first-party del mapa para analitica de engagement:
+  - nuevos eventos internos en `map_events`: favoritos, guardados, ver mas tarde y tiempo de reproduccion interno.
+  - migracion `0014_map_events_internal_video_activity.sql` para ampliar `event_type` y agregar indice de consulta por canal/evento.
+  - `MapExperience` ahora registra tiempo reproducido en Travel Your Map (no YouTube) al pausar, terminar, cambiar video, cerrar video y ocultar/salir de pagina.
+- Se amplian paneles de analitica (creador y admin):
+  - `GET /api/analytics/[channelId]` agrega favoritos, ver mas tarde y horas reproducidas en Travel Your Map.
+  - `GET /api/admin/analytics/overview` agrega KPIs globales de favoritos, ver mas tarde y horas reproducidas de plataforma.
 
 ### 2026-05-06
 

@@ -44,7 +44,7 @@ import { FanVoteCard } from "@/components/map/fan-vote-card";
 import { MapVideoActivityPanel } from "@/components/map/map-video-activity-panel";
 import { MissingVideosDialog } from "@/components/map/missing-videos-dialog";
 import { useLocalVideoActivity } from "@/components/map/video-activity";
-import type { VideoActivityController, VideoActivityTab } from "@/components/map/video-activity";
+import type { VideoActivityController, VideoActivityTab, VideoWatchStatus } from "@/components/map/video-activity";
 import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 import { countryCodeToFlag, getVideoCityLabel } from "@/components/map/video-viewer-utils";
 import { getDemoSponsorByCountry } from "@/lib/demo-data";
@@ -102,6 +102,7 @@ const SPONSOR_INQUIRY_STATUS_LABEL: Record<SponsorInquiryStatus, string> = {
 const MAP_BACK_BUTTON_CLASS =
   "inline-flex h-8 shrink-0 items-center justify-center rounded-lg border !border-[#ff2a1f] !bg-[#ff2a1f] px-4 text-[12px] font-semibold !text-white shadow-none transition hover:!bg-[#ff3b30]";
 const VIDEO_EXIT_PROMPT_THRESHOLD_MS = 2 * 60 * 1000;
+const INTERNAL_WATCH_TIME_MIN_MS = 15 * 1000;
 const MAP_CARD_CENTER_TOP_CLEARANCE = "4rem";
 const MAP_CARD_CENTER_BOTTOM_CLEARANCE = "11.25rem";
 const DEMO_SPONSOR_FALLBACK: MapRailSponsor[] = [
@@ -255,6 +256,12 @@ type PlaybackTrackerState = {
   videoId: string | null;
   startedAtMs: number | null;
   elapsedMsById: Record<string, number>;
+};
+
+type PreviousVideoActivityState = {
+  savedIds: Set<string>;
+  featuredIds: Set<string>;
+  watchStatusById: Record<string, VideoWatchStatus>;
 };
 
 type MapShellProps = {
@@ -434,6 +441,7 @@ export function MapExperience({
     startedAtMs: null,
     elapsedMsById: {},
   });
+  const previousVideoActivityRef = useRef<PreviousVideoActivityState | null>(null);
 
   useEffect(() => {
     setItems(videoLocations);
@@ -515,6 +523,16 @@ export function MapExperience({
         .includes(query)
     );
   }, [searchQuery, timeFilteredVideos]);
+
+  const videoLookupById = useMemo(() => {
+    const lookup = new Map<string, TravelVideoLocation>();
+    for (const video of items) {
+      const videoId = String(video.youtube_video_id || "").trim();
+      if (!videoId) continue;
+      lookup.set(videoId, video);
+    }
+    return lookup;
+  }, [items]);
 
   const watchedVideos = useMemo(
     () => searchFilteredVideos.filter((video) => videoActivity.seenIds.has(video.youtube_video_id)),
@@ -704,6 +722,123 @@ export function MapExperience({
     },
     [channelId, publicMapAnalyticsEnabled, resolvedViewMode, viewer.isAuthenticated]
   );
+
+  const trackVideoActivityEvent = useCallback(
+    (
+      eventType:
+        | "video_saved_added"
+        | "video_saved_removed"
+        | "video_favorite_added"
+        | "video_favorite_removed"
+        | "video_watch_later_added"
+        | "video_watch_later_removed",
+      videoId: string,
+      metadata: Record<string, unknown> = {}
+    ) => {
+      const normalizedVideoId = String(videoId || "").trim();
+      if (!normalizedVideoId) return;
+      const video = videoLookupById.get(normalizedVideoId);
+
+      trackMapEvent(eventType, {
+        youtubeVideoId: normalizedVideoId,
+        countryCode: video?.country_code || selectedCountryCode || null,
+        metadata: {
+          video_title: video?.title || null,
+          ...metadata,
+        },
+      });
+    },
+    [selectedCountryCode, trackMapEvent, videoLookupById]
+  );
+
+  const trackWatchTimeEvent = useCallback(
+    (videoId: string | null | undefined, elapsedMs: number, reason: "paused" | "ended" | "switch" | "exit" | "pagehide" | "unmount" | "visibility_hidden") => {
+      const normalizedVideoId = String(videoId || "").trim();
+      if (!normalizedVideoId || elapsedMs < INTERNAL_WATCH_TIME_MIN_MS) return;
+
+      const video = videoLookupById.get(normalizedVideoId);
+      const watchSeconds = Math.round(elapsedMs / 1000);
+
+      trackMapEvent("video_watch_time_logged", {
+        youtubeVideoId: normalizedVideoId,
+        countryCode: video?.country_code || selectedCountryCode || null,
+        metadata: {
+          video_title: video?.title || null,
+          watch_seconds: watchSeconds,
+          event_reason: reason,
+        },
+      });
+    },
+    [selectedCountryCode, trackMapEvent, videoLookupById]
+  );
+
+  useEffect(() => {
+    if (!publicMapAnalyticsEnabled) return;
+
+    const previous = previousVideoActivityRef.current;
+    if (!previous) {
+      previousVideoActivityRef.current = {
+        savedIds: new Set(videoActivity.savedIds),
+        featuredIds: new Set(videoActivity.featuredIds),
+        watchStatusById: { ...videoActivity.watchStatusById },
+      };
+      return;
+    }
+
+    for (const videoId of videoActivity.savedIds) {
+      if (!previous.savedIds.has(videoId)) {
+        trackVideoActivityEvent("video_saved_added", videoId);
+      }
+    }
+    for (const videoId of previous.savedIds) {
+      if (!videoActivity.savedIds.has(videoId)) {
+        trackVideoActivityEvent("video_saved_removed", videoId);
+      }
+    }
+
+    for (const videoId of videoActivity.featuredIds) {
+      if (!previous.featuredIds.has(videoId)) {
+        trackVideoActivityEvent("video_favorite_added", videoId);
+      }
+    }
+    for (const videoId of previous.featuredIds) {
+      if (!videoActivity.featuredIds.has(videoId)) {
+        trackVideoActivityEvent("video_favorite_removed", videoId);
+      }
+    }
+
+    const watchStatusKeys = new Set<string>([
+      ...Object.keys(previous.watchStatusById),
+      ...Object.keys(videoActivity.watchStatusById),
+    ]);
+    for (const videoId of watchStatusKeys) {
+      const previousStatus = previous.watchStatusById[videoId];
+      const currentStatus = videoActivity.watchStatusById[videoId];
+      if (previousStatus === currentStatus) continue;
+
+      if (currentStatus === "watch_later" && previousStatus !== "watch_later") {
+        trackVideoActivityEvent("video_watch_later_added", videoId, {
+          previous_status: previousStatus || null,
+        });
+      } else if (previousStatus === "watch_later" && currentStatus !== "watch_later") {
+        trackVideoActivityEvent("video_watch_later_removed", videoId, {
+          current_status: currentStatus || null,
+        });
+      }
+    }
+
+    previousVideoActivityRef.current = {
+      savedIds: new Set(videoActivity.savedIds),
+      featuredIds: new Set(videoActivity.featuredIds),
+      watchStatusById: { ...videoActivity.watchStatusById },
+    };
+  }, [
+    publicMapAnalyticsEnabled,
+    trackVideoActivityEvent,
+    videoActivity.featuredIds,
+    videoActivity.savedIds,
+    videoActivity.watchStatusById,
+  ]);
 
   useEffect(() => {
     if (!publicMapAnalyticsEnabled || !channelId || typeof window === "undefined") return;
@@ -1231,11 +1366,12 @@ export function MapExperience({
   const commitPlaybackElapsed = useCallback((videoId: string | null | undefined) => {
     const normalized = String(videoId || "").trim();
     const tracker = playbackTrackerRef.current;
-    if (!normalized || tracker.videoId !== normalized || tracker.startedAtMs === null) return;
+    if (!normalized || tracker.videoId !== normalized || tracker.startedAtMs === null) return 0;
 
     const elapsed = Math.max(0, Date.now() - tracker.startedAtMs);
     tracker.elapsedMsById[normalized] = (tracker.elapsedMsById[normalized] || 0) + elapsed;
     tracker.startedAtMs = null;
+    return elapsed;
   }, []);
 
   const getPlaybackElapsedMs = useCallback((videoId: string | null | undefined) => {
@@ -1257,7 +1393,8 @@ export function MapExperience({
       if (state === "playing") {
         const tracker = playbackTrackerRef.current;
         if (tracker.videoId && tracker.videoId !== videoId) {
-          commitPlaybackElapsed(tracker.videoId);
+          const switchedElapsedMs = commitPlaybackElapsed(tracker.videoId);
+          trackWatchTimeEvent(tracker.videoId, switchedElapsedMs, "switch");
         }
         tracker.videoId = videoId;
         if (tracker.startedAtMs === null) tracker.startedAtMs = Date.now();
@@ -1266,15 +1403,42 @@ export function MapExperience({
       }
 
       if (state === "paused") {
-        commitPlaybackElapsed(videoId);
+        const pausedElapsedMs = commitPlaybackElapsed(videoId);
+        trackWatchTimeEvent(videoId, pausedElapsedMs, "paused");
         return;
       }
 
-      commitPlaybackElapsed(videoId);
+      const endedElapsedMs = commitPlaybackElapsed(videoId);
+      trackWatchTimeEvent(videoId, endedElapsedMs, "ended");
       videoActivity.setVideoWatchStatus(videoId, "watched");
     },
-    [commitPlaybackElapsed, videoActivity]
+    [commitPlaybackElapsed, trackWatchTimeEvent, videoActivity]
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    const flushPlayback = (reason: "pagehide" | "visibility_hidden" | "unmount") => {
+      const tracker = playbackTrackerRef.current;
+      if (!tracker.videoId) return;
+      const elapsedMs = commitPlaybackElapsed(tracker.videoId);
+      trackWatchTimeEvent(tracker.videoId, elapsedMs, reason);
+    };
+
+    const handlePageHide = () => flushPlayback("pagehide");
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushPlayback("visibility_hidden");
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      flushPlayback("unmount");
+    };
+  }, [commitPlaybackElapsed, trackWatchTimeEvent]);
 
   const requestVideoExit = useCallback(
     (action: () => void) => {
@@ -1331,7 +1495,8 @@ export function MapExperience({
 
   function confirmVideoExitComplete() {
     if (!videoExitPrompt) return;
-    commitPlaybackElapsed(videoExitPrompt.videoId);
+    const exitElapsedMs = commitPlaybackElapsed(videoExitPrompt.videoId);
+    trackWatchTimeEvent(videoExitPrompt.videoId, exitElapsedMs, "exit");
     videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "watched");
     const nextAction = videoExitPrompt.action;
     setVideoExitPrompt(null);
@@ -1345,7 +1510,8 @@ export function MapExperience({
 
   function watchLaterPendingVideoExit() {
     if (!videoExitPrompt) return;
-    commitPlaybackElapsed(videoExitPrompt.videoId);
+    const exitElapsedMs = commitPlaybackElapsed(videoExitPrompt.videoId);
+    trackWatchTimeEvent(videoExitPrompt.videoId, exitElapsedMs, "exit");
     videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "not_finished");
     if (!videoActivity.savedIds.has(videoExitPrompt.videoId)) {
       videoActivity.toggleVideoSaved(videoExitPrompt.videoId);

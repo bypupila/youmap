@@ -11,7 +11,11 @@ export async function GET(request: Request) {
     if (!sessionUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!userIsSuperAdmin(sessionUser.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const data = await loadAdminOverviewMetrics();
+    const url = new URL(request.url);
+    const requestedDays = Number(url.searchParams.get("days") || "30");
+    const windowDays = [7, 30, 90, 180].includes(requestedDays) ? requestedDays : 30;
+
+    const data = await loadAdminOverviewMetrics({ windowDays });
     return NextResponse.json(data);
   } catch (error) {
     console.error("[api/admin/analytics/overview GET]", error);
