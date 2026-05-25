@@ -18,7 +18,9 @@ import {
   getVideoWatchStateLabel,
   getVideoWatchStateTone,
 } from "@/components/map/video-viewer-utils";
+import { DemoVideoEmbedPreview } from "@/components/map/demo-video-embed-preview";
 import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
+import { getDemoMapPreviewImage } from "@/lib/demo-video-previews";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
@@ -35,9 +37,10 @@ interface VideoSelectionSheetProps {
   openButtonLabel?: string;
   playbackCommand?: { id: number; action: "pause" | "play" } | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
+  isDemoMode?: boolean;
 }
 
-export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsorNames, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, playbackCommand, onPlaybackStateChange }: VideoSelectionSheetProps) {
+export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsorNames, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, playbackCommand, onPlaybackStateChange, isDemoMode = false }: VideoSelectionSheetProps) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
   const sections = useMemo(() => buildCountryVideoSections(videos, currentVideo), [currentVideo, videos]);
 
@@ -69,6 +72,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
   }
 
   function openYouTubeVideo() {
+    if (isDemoMode) return;
     if (!currentVideo || !youtubeHref) return;
 
     if (!currentVideo.made_for_kids) {
@@ -132,18 +136,26 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
                     <span className="text-white/45">/</span>
                     <span>{currentIndex + 1} de {Math.max(1, orderedVideos.length)}</span>
                   </div>
-                  <YouTubeEmbedPlayer
-                    videoId={currentVideo?.youtube_video_id || null}
-                    title={currentVideo?.title || "Video seleccionado"}
-                    youtubeHref={youtubeHref}
-                    thumbnailUrl={currentVideo?.thumbnail_url || null}
-                    openButtonLabel={openButtonLabel || (currentOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
-                    playbackCommand={playbackCommand}
-                    onOpenInYouTube={openYouTubeVideo}
-                    onPlaybackStateChange={onPlaybackStateChange}
-                    isMadeForKids={Boolean(currentVideo?.made_for_kids)}
-                    frameClassName="max-h-[32dvh] lg:max-h-none"
-                  />
+                  {isDemoMode ? (
+                    <DemoVideoEmbedPreview
+                      video={currentVideo}
+                      openButtonLabel={openButtonLabel || (currentOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
+                      frameClassName="max-h-[32dvh] lg:max-h-none"
+                    />
+                  ) : (
+                    <YouTubeEmbedPlayer
+                      videoId={currentVideo?.youtube_video_id || null}
+                      title={currentVideo?.title || "Video seleccionado"}
+                      youtubeHref={youtubeHref}
+                      thumbnailUrl={currentVideo?.thumbnail_url || null}
+                      openButtonLabel={openButtonLabel || (currentOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
+                      playbackCommand={playbackCommand}
+                      onOpenInYouTube={openYouTubeVideo}
+                      onPlaybackStateChange={onPlaybackStateChange}
+                      isMadeForKids={Boolean(currentVideo?.made_for_kids)}
+                      frameClassName="max-h-[32dvh] lg:max-h-none"
+                    />
+                  )}
                 </div>
 
                 <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
@@ -234,6 +246,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
                             key={`${section.country_code}-${video.youtube_video_id}`}
                             video={video}
                             sponsorNames={resolveSponsorNames?.(video) || []}
+                            isDemoMode={isDemoMode}
                             active={video.youtube_video_id === currentVideo?.youtube_video_id}
                             seen={activity.seenIds.has(video.youtube_video_id)}
                             onSelect={() => onChangeVideo(video)}
@@ -259,16 +272,19 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
 function VideoRow({
   video,
   sponsorNames,
+  isDemoMode,
   active,
   seen,
   onSelect,
 }: {
   video: TravelVideoLocation;
   sponsorNames: string[];
+  isDemoMode: boolean;
   active: boolean;
   seen: boolean;
   onSelect: () => void;
 }) {
+  const thumbnailSrc = isDemoMode ? getDemoMapPreviewImage(video.youtube_video_id) : (toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url);
   return (
     <button
       type="button"
@@ -281,9 +297,9 @@ function VideoRow({
       )}
     >
       <span className="relative h-[62px] w-[92px] shrink-0 overflow-hidden rounded-lg bg-white/[0.05]">
-        {video.thumbnail_url ? (
+        {thumbnailSrc ? (
           <Image
-            src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
+            src={thumbnailSrc}
             alt={video.title}
             width={184}
             height={124}

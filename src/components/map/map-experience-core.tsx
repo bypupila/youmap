@@ -35,6 +35,8 @@ import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
 import { useLocalVideoActivity, type VideoActivityController } from "@/components/map/video-activity";
 import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
+import { isDemoChannelId } from "@/lib/demo-data";
+import { getDemoMapPreviewImage } from "@/lib/demo-video-previews";
 
 type ContentFilterWindow = "all" | "365" | "90" | "30";
 type ActivityFilter = "all" | "favorites" | "saved" | "watched" | "watch_later" | "incomplete";
@@ -169,6 +171,7 @@ const ACTIVITY_FILTER_OPTIONS: Array<{ id: ActivityFilter; label: string; Icon: 
 ];
 
 export function MapExperienceCore({ channel, videoLocations, sponsors = [], viewMode = "viewer", isDemoMode = false }: MapExperienceCoreProps) {
+  const useDemoMapEmbedPreviews = isDemoMode && isDemoChannelId(String(channel.id || ""));
   const [activeMapMode, setActiveMapMode] = useState<ProposalMapMode>(viewMode);
   const [filter, setFilter] = useState<ContentFilterWindow>("all");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
@@ -777,6 +780,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                       variant="youtube-theater"
                       openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
                       playbackCommand={videoPlaybackCommand}
+                      isDemoMode={useDemoMapEmbedPreviews}
                       onPlaybackStateChange={(state) => {
                         if (!pinnedVideo) return;
                         handleVideoPlaybackStateChange(pinnedVideo, state);
@@ -914,6 +918,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                 activity={videoActivity}
                 totalVideos={railVideoTotal}
                 highlightedVideoId={String(pinnedVideo?.youtube_video_id || "").trim() || null}
+                isDemoMode={useDemoMapEmbedPreviews}
                 onOpenAllVideos={() => setShowAllVideosModal(true)}
                 onSelect={(video) => {
                   requestVideoExit(() => openMapVideo(video));
@@ -971,6 +976,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
         onOpenInYouTube={handleOpenInYouTube}
         openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
         playbackCommand={videoPlaybackCommand}
+        isDemoMode={useDemoMapEmbedPreviews}
         onPlaybackStateChange={(state) => {
           if (!pinnedVideo) return;
           handleVideoPlaybackStateChange(pinnedVideo, state);
@@ -1085,7 +1091,13 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                     }}
                   >
                     <div className="relative h-36 w-full">
-                      <Image src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} fill sizes="420px" className="object-cover" />
+                      <Image
+                        src={useDemoMapEmbedPreviews ? getDemoMapPreviewImage(video.youtube_video_id) : (video.thumbnail_url || "/creators/final-cta-map-mockup.png")}
+                        alt={video.title}
+                        fill
+                        sizes="420px"
+                        className="object-cover"
+                      />
                       <span className="absolute inset-0 bg-gradient-to-t from-black/90 to-black/10" />
                     </div>
                     <div className="p-3">
@@ -1804,6 +1816,7 @@ function VideoInspirationRail2({
   activity,
   totalVideos,
   highlightedVideoId,
+  isDemoMode,
   onOpenAllVideos,
   onSelect
 }: {
@@ -1813,6 +1826,7 @@ function VideoInspirationRail2({
   activity: Pick<VideoActivityController, "seenIds" | "watchStatusById">;
   totalVideos: number;
   highlightedVideoId: string | null;
+  isDemoMode: boolean;
   onOpenAllVideos: () => void;
   onSelect: (video: TravelVideoLocation) => void;
 }) {
@@ -1875,7 +1889,7 @@ function VideoInspirationRail2({
             >
               {/* Image background cover */}
               <Image 
-                src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} 
+                src={isDemoMode ? getDemoMapPreviewImage(video.youtube_video_id) : (video.thumbnail_url || "/creators/final-cta-map-mockup.png")}
                 alt={video.title} 
                 fill 
                 sizes="215px" 

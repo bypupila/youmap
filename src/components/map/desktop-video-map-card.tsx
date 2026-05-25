@@ -26,6 +26,7 @@ import {
   getVideoWatchStateLabel,
   getVideoWatchStateTone,
 } from "@/components/map/video-viewer-utils";
+import { DemoVideoEmbedPreview } from "@/components/map/demo-video-embed-preview";
 import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ interface DesktopVideoMapCardProps {
   playbackCommand?: { id: number; action: "pause" | "play" } | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
   variant?: "default" | "youtube-theater";
+  isDemoMode?: boolean;
 }
 
 export function DesktopVideoMapCard({
@@ -56,6 +58,7 @@ export function DesktopVideoMapCard({
   playbackCommand,
   onPlaybackStateChange,
   variant = "default",
+  isDemoMode = false,
 }: DesktopVideoMapCardProps) {
   const [watchMenuOpen, setWatchMenuOpen] = useState(false);
   useEffect(() => {
@@ -94,6 +97,7 @@ export function DesktopVideoMapCard({
   }
 
   function openYouTubeVideo() {
+    if (isDemoMode) return;
     if (!youtubeHref) return;
 
     if (!selectedVideo.made_for_kids) {
@@ -216,35 +220,46 @@ export function DesktopVideoMapCard({
 
           <div className="px-4 pb-2">
             <div className="relative overflow-hidden bg-black">
-              <YouTubeEmbedPlayer
-                videoId={selectedVideo.youtube_video_id}
-                title={selectedVideo.title}
-                youtubeHref={youtubeHref}
-                thumbnailUrl={selectedVideo.thumbnail_url}
-                openButtonLabel="YouTube"
-                frameClassName="rounded-none border-0"
-                hideFooter
-                playbackCommand={playbackCommand}
-                onOpenInYouTube={openYouTubeVideo}
-                onPlaybackStateChange={onPlaybackStateChange}
-                isMadeForKids={Boolean(selectedVideo.made_for_kids)}
-              />
+              {isDemoMode ? (
+                <DemoVideoEmbedPreview
+                  video={selectedVideo}
+                  openButtonLabel="Ver en YouTube"
+                  frameClassName="rounded-none border-0"
+                  hideFooter
+                />
+              ) : (
+                <YouTubeEmbedPlayer
+                  videoId={selectedVideo.youtube_video_id}
+                  title={selectedVideo.title}
+                  youtubeHref={youtubeHref}
+                  thumbnailUrl={selectedVideo.thumbnail_url}
+                  openButtonLabel="YouTube"
+                  frameClassName="rounded-none border-0"
+                  hideFooter
+                  playbackCommand={playbackCommand}
+                  onOpenInYouTube={openYouTubeVideo}
+                  onPlaybackStateChange={onPlaybackStateChange}
+                  isMadeForKids={Boolean(selectedVideo.made_for_kids)}
+                />
+              )}
             </div>
 
             <div className="flex items-center justify-between gap-2 border-t border-white/[0.04] bg-[#0c0c0c]/85 py-2">
               <span className="text-[11px] text-[#8f98a3]">
-                {selectedVideo.made_for_kids
+                {isDemoMode
+                  ? "Modo demo: preview fijo sin reproducción."
+                  : selectedVideo.made_for_kids
                   ? "Contenido Made for Kids: tracking local desactivado."
                   : "Reproductor oficial de YouTube."}
               </span>
               <button
                 type="button"
                 onClick={openYouTubeVideo}
-                disabled={!youtubeHref}
+                disabled={isDemoMode || !youtubeHref}
                 className="inline-flex h-8 items-center gap-1 rounded-md border border-white/10 bg-[#1b1f26] px-2.5 text-[11px] font-medium text-[#b7bfcb] transition hover:bg-[#232a33] disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Abrir en YouTube"
               >
-                YouTube
+                {isDemoMode ? "Deshabilitado en demo" : "YouTube"}
               </button>
             </div>
           </div>
@@ -462,17 +477,24 @@ export function DesktopVideoMapCard({
 
       <div className={cn("p-2", isTheater && "p-3 pt-2")}>
         <div className={cn("rounded-xl p-2", isTheater ? "bg-black" : "border border-white/10 bg-black/35")}>
-          <YouTubeEmbedPlayer
-            videoId={selectedVideo.youtube_video_id}
-            title={selectedVideo.title}
-            youtubeHref={youtubeHref}
-            thumbnailUrl={selectedVideo.thumbnail_url}
-            openButtonLabel={openButtonLabel || (isOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
-            playbackCommand={playbackCommand}
-            onOpenInYouTube={openYouTubeVideo}
-            onPlaybackStateChange={onPlaybackStateChange}
-            isMadeForKids={Boolean(selectedVideo.made_for_kids)}
-          />
+          {isDemoMode ? (
+            <DemoVideoEmbedPreview
+              video={selectedVideo}
+              openButtonLabel={openButtonLabel || (isOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
+            />
+          ) : (
+            <YouTubeEmbedPlayer
+              videoId={selectedVideo.youtube_video_id}
+              title={selectedVideo.title}
+              youtubeHref={youtubeHref}
+              thumbnailUrl={selectedVideo.thumbnail_url}
+              openButtonLabel={openButtonLabel || (isOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
+              playbackCommand={playbackCommand}
+              onOpenInYouTube={openYouTubeVideo}
+              onPlaybackStateChange={onPlaybackStateChange}
+              isMadeForKids={Boolean(selectedVideo.made_for_kids)}
+            />
+          )}
         </div>
 
         <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11.5px] text-[#aab2bc]">
