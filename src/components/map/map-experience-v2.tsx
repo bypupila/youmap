@@ -45,13 +45,12 @@ interface MapExperienceV2Props {
 function resolveViewMode({
   viewer,
   viewMode,
-  isDemoMode,
   forceViewerMode,
 }: Pick<MapExperienceV2Props, "viewer" | "viewMode" | "isDemoMode" | "forceViewerMode">): MapViewMode {
   if (forceViewerMode) return "viewer";
-  if (isDemoMode) return "creator";
+  if (viewMode) return viewMode;
   if (viewer?.isOwner || viewer?.role === "creator" || viewer?.role === "superadmin") return "creator";
-  return viewMode || "viewer";
+  return "viewer";
 }
 
 export function MapExperienceV2({
