@@ -1295,7 +1295,7 @@ function ProposalSidebar2({
         
         {/* Country list */}
         <div className="space-y-2.5 overflow-y-auto bg-[#03060a] pr-1 [scrollbar-gutter:stable] lg:flex-1">
-          {countries.map((country) => (
+          {countries.slice(0, 5).map((country) => (
             (() => {
               const isComplete = country.count > 0 && country.watchedCount >= country.count;
               const isPartial = country.activeCount > 0 && !isComplete;
@@ -1544,14 +1544,11 @@ function ProposalTopbar2({
       <div className="flex items-center justify-end gap-2 shrink-0">
         {isDemoMode ? (
           <>
-            <span className="hidden h-10 items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-4 text-[12px] font-bold text-amber-200 sm:flex">
-              Modo demo · sin persistencia
-            </span>
             <Link
               href={viewerRegisterHref}
               className="hidden h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] px-4 text-[12px] font-bold text-white transition hover:bg-[#ff6a50] sm:inline-flex"
             >
-              Crear cuenta gratis
+              Crear Mapa
             </Link>
           </>
         ) : null}
@@ -1982,8 +1979,8 @@ function ProposalRightRail2({
   analytics: ProposalAnalytics;
   mapMode: ProposalMapMode;
 }) {
-  const channelAvatarSrc = channel.thumbnail_url || "/creators/luisito-comunica.png";
-  const channelName = channel.channel_name || "Canal";
+  const isDemoChannel = isDemoChannelId(String(channel.id || ""));
+  const channelName = isDemoChannel ? "Demo Creator" : channel.channel_name || "Canal";
   const isCreatorWorkspace = mapMode === "creator";
   const visibleSponsors = sponsors.slice(0, 8);
 
@@ -1991,13 +1988,12 @@ function ProposalRightRail2({
     <div data-component="ProposalRightRail2" className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm">
         <div className="flex items-center justify-center gap-3 text-center">
-          <span className="relative h-12 w-12 overflow-hidden rounded-full border border-white/15 bg-white/[0.06]">
-            <Image src={channelAvatarSrc} alt={channelName} fill sizes="48px" className="object-cover" />
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#ff5a3d]/35 bg-[#ff5a3d]/12">
+            <CheckCircle size={26} weight="fill" className="text-[#ff5a3d]" />
           </span>
           <div className="min-w-0">
             <div className="flex items-center justify-center gap-1.5">
               <p className="truncate text-[14px] font-black leading-tight text-white">{channelName}</p>
-              <CheckCircle size={15} weight="fill" className="shrink-0 text-[#ff5a3d]" />
             </div>
           </div>
         </div>
@@ -2038,7 +2034,8 @@ function ProposalRightRail2({
             </span>
             <p className="mt-2 font-mono text-[16px] font-black text-white leading-none">{formatCompactMetric(analytics.watchedHours)}</p>
             <p className="mt-1 text-[7px] font-bold uppercase tracking-wider text-[#818a93] leading-tight">
-              {isCreatorWorkspace ? "Horas consumidas" : "Horas vistas"}
+              <span className="block">Horas</span>
+              <span className="block">{isCreatorWorkspace ? "consumidas" : "vistas"}</span>
             </p>
           </div>
 
@@ -2144,13 +2141,15 @@ function ProposalRightRail2({
                 {sponsor.affiliate_url ? (
                   <button
                     type="button"
-                    className="flex h-8 shrink-0 items-center rounded-full border border-white/10 bg-white/[0.02] px-3.5 text-[9px] font-black text-white transition-all hover:border-white/20 hover:bg-white/[0.07]"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] text-white transition-all hover:border-white/20 hover:bg-white/[0.07]"
+                    aria-label={`Ir al sitio de ${sponsor.brand_name}`}
+                    title={`Ir al sitio de ${sponsor.brand_name}`}
                     onClick={() => {
                       onAction(`Redirigiendo a sponsor: ${sponsor.brand_name}`);
                       window.open(sponsorHref, "_blank", "noopener");
                     }}
                   >
-                    Ir al sitio
+                    <ArrowsOutSimple size={13} weight="bold" />
                   </button>
                 ) : null}
               </div>

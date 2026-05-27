@@ -93,7 +93,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
           availablePollOptions={payload.availablePollOptions}
           fanVoteOptions={payload.fanVoteOptions}
           forceViewerMode={forceViewerMode}
-          viewMode={isDemoMap ? "viewer" : payload.viewer.isOwner ? "creator" : "viewer"}
+          viewMode={isDemoMap || payload.viewer.isOwner ? "creator" : "viewer"}
           isDemoMode={isDemoMap}
         />
       </div>

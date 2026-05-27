@@ -1,4 +1,9 @@
+import { DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
+
 const DEMO_MAP_PREVIEW_TOTAL = 20;
+const DEMO_PREVIEW_BY_VIDEO_ID = new Map(
+  DEMO_VIDEO_LOCATIONS.map((video) => [video.youtube_video_id, video.thumbnail_url || ""])
+);
 
 function hashString(input: string) {
   let hash = 0;
@@ -10,6 +15,10 @@ function hashString(input: string) {
 
 export function getDemoMapPreviewImage(videoId: string | null | undefined) {
   const normalized = String(videoId || "").trim();
+  if (normalized) {
+    const mapped = DEMO_PREVIEW_BY_VIDEO_ID.get(normalized);
+    if (mapped) return mapped;
+  }
   if (!normalized) return "/images/demo/map-previews/preview-01.svg";
   const bucket = (hashString(normalized) % DEMO_MAP_PREVIEW_TOTAL) + 1;
   return `/images/demo/map-previews/preview-${String(bucket).padStart(2, "0")}.svg`;

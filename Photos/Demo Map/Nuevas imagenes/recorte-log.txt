@@ -1,0 +1,5 @@
+017E11A6-B854-41DE-925D-0ADC998C27FD.png -> Ruta-costera-entre-acantilados-y-calas-escondidas.png | 1672x941 -> 1672x941 | crop=(0, 0, 1672, 941)
+08FFA958-5494-4FE2-B4F3-A75130B8EF8A.png -> Templos-y-mercados-nocturnos-en-la-capital.png | 1774x887 -> 1774x887 | crop=(0, 0, 1774, 887)
+251FE450-A7A1-4C52-BB92-1004730FBB99.png -> Lagos-glaciares-y-senderos-de-alta-montana.png | 1774x887 -> 1774x887 | crop=(0, 0, 1774, 887)
+6539AECF-1C14-4D96-BB3C-73FB576B1379.png -> Islas-tropicales-en-barco-al-amanecer.png | 1774x887 -> 1774x887 | crop=(0, 0, 1774, 887)
+95D8CE2F-B08F-475F-B859-F9EF92061EE7.png -> Safari-fotografico-entre-elefantes-y-sabanas.png | 1672x941 -> 1672x941 | crop=(0, 0, 1672, 941)

@@ -24,12 +24,9 @@ const creatorStats = [
   { value: "165", label: "países cubiertos", icon: GlobeHemisphereWest },
 ];
 
-const creatorsList = [
-  { name: "BY PUPILA", src: "/creators/by-pupila.png" },
-  { name: "Drew Binsky", src: "/creators/drew-binsky.png" },
-  { name: "Alan por el Mundo", src: "/creators/alan-poeguridr-el-mundo.png" },
-  { name: "Misias pero Viajeras", src: "/creators/misias-pero-viajeras.png" },
-];
+const BRAND_PROFILE_IMAGE = "/creators/by-pupila.png";
+const DESTINATION_PREVIEW_IMAGE = "/creators/demo-country-landscape.svg";
+const FINAL_CTA_IMAGE = "/creators/final-cta-influencer-mountain.svg";
 
 const sponsorLogos = ["Booking.com", "GoPro", "airbnb", "NordVPN", "LATAM AIRLINES", "SafetyWing"];
 
@@ -93,26 +90,17 @@ const faqs = [
 ];
 
 const DEMO_MAP_HREF = "/map?channelId=demo-channel";
-const REAL_CREATOR_MAP_HREF = "/u/by.pupila";
-
-type JapanDestination = {
-  videoCount: number;
-  thumbnailUrl?: string | null;
-};
 
 type PreviewVideo = {
   country: string;
   title: string;
-  thumbnailUrl: string;
+  styleClass: string;
+  glowClass: string;
+  imageSrc?: string;
 };
 
 export async function CinematicLanding() {
   const videoLocations = DEMO_VIDEO_LOCATIONS;
-  const japanVideos = videoLocations.filter((video) => video.country_code?.toUpperCase() === "JP");
-  const japanDestination: JapanDestination = {
-    videoCount: japanVideos.length,
-    thumbnailUrl: japanVideos.find((video) => video.thumbnail_url)?.thumbnail_url,
-  };
   const previewVideos = buildPreviewVideos(videoLocations);
 
   return (
@@ -120,7 +108,7 @@ export async function CinematicLanding() {
       <div className="pointer-events-none fixed inset-0 z-0 creator-noise" />
       <div className="relative z-[1] mx-auto w-full max-w-[1500px] px-5 py-4 sm:px-8 lg:px-14">
         <CreatorNav />
-        <HeroSection videoLocations={videoLocations} japanDestination={japanDestination} />
+        <HeroSection videoLocations={videoLocations} />
         <BrandStrip />
         <HowItWorks />
         <FeatureGrid />
@@ -168,10 +156,8 @@ function CreatorNav() {
 
 function HeroSection({
   videoLocations,
-  japanDestination,
 }: {
   videoLocations: TravelVideoLocation[];
-  japanDestination: JapanDestination;
 }) {
   return (
     <section className="relative mt-[30px] grid min-h-[860px] items-start gap-10 pb-12 pt-20 lg:min-h-[820px] lg:grid-cols-[0.92fr_1.08fr] lg:pt-4">
@@ -187,24 +173,15 @@ function HeroSection({
           <Link href="/onboarding?lang=es" className="inline-flex items-center gap-3 rounded-full bg-[#ff473b] px-8 py-4 text-[14px] font-bold text-white shadow-[0_20px_46px_-24px_rgba(255,71,59,0.85)] transition hover:-translate-y-0.5 hover:bg-[#ff5b50] active:translate-y-0 active:scale-[0.98]">
             Crear mi mapa <ArrowRight size={17} weight="bold" />
           </Link>
-          <Link href={DEMO_MAP_HREF} className="inline-flex items-center gap-4 rounded-full border border-white/18 bg-white/[0.025] px-8 py-4 text-[14px] font-bold text-white transition hover:bg-white/[0.07] active:scale-[0.98]">
-            Ver demo <Play size={15} weight="fill" />
-          </Link>
-          <Link href={REAL_CREATOR_MAP_HREF} className="inline-flex items-center gap-4 rounded-full border border-white/18 bg-white/[0.025] px-8 py-4 text-[14px] font-bold text-white transition hover:bg-white/[0.07] active:scale-[0.98]">
-            Ver canal real by.pupila
-          </Link>
         </div>
         <div className="mt-10 flex items-center gap-4">
-          <div className="flex -space-x-3">
-            {creatorsList.map((creator) => (
-              <div key={creator.name} className="relative h-11 w-11 rounded-full border-2 border-[#080b0e] bg-[#101419] overflow-hidden shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
-                <Image src={creator.src} alt={creator.name} fill sizes="44px" className="object-cover" />
-              </div>
-            ))}
+          <div className="relative h-11 w-11 overflow-hidden rounded-[12px] border border-white/20 bg-[#101419] shadow-[0_8px_20px_rgba(0,0,0,0.45)]">
+            <Image src={BRAND_PROFILE_IMAGE} alt="BY PUPILA" fill sizes="44px" className="object-cover" />
           </div>
           <div>
-            <div className="flex gap-1 text-[#ff473b]" aria-hidden="true">
-              {Array.from({ length: 5 }).map((_, index) => <span key={index} className="h-2 w-2 rounded-full bg-current" />)}
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#ff473b]/35 bg-[#ff473b]/12 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#ff6a60]">
+              <RocketLaunch size={14} weight="fill" />
+              Creator Mode
             </div>
             <p className="mt-2 max-w-[250px] text-[13px] leading-5 text-white/68">Únete a creadores que ya están cerrando mejores deals.</p>
           </div>
@@ -218,7 +195,7 @@ function HeroSection({
             {creatorStats.map((stat) => <MetricCard key={stat.label} {...stat} />)}
           </div>
           <div className="w-full max-w-[410px] self-end lg:w-[410px]">
-            <DestinationCard destination={japanDestination} />
+            <DestinationCard />
           </div>
         </div>
       </div>
@@ -250,27 +227,27 @@ function MetricCard({ value, label, icon: Icon }: { value: string; label: string
   );
 }
 
-function DestinationCard({ destination }: { destination: JapanDestination }) {
+function DestinationCard() {
   return (
     <div className="w-full rounded-[24px] border border-white/13 bg-[#101419]/90 p-4 shadow-[0_32px_90px_-44px_rgba(0,0,0,0.95)] backdrop-blur-xl">
-      <div className="relative h-[170px] overflow-hidden rounded-[16px] bg-[linear-gradient(165deg,rgba(255,209,165,0.82),rgba(42,65,89,0.72)_45%,rgba(12,17,21,0.98))]">
-        {destination.thumbnailUrl ? (
-          <Image
-            src={destination.thumbnailUrl}
-            alt="Video del canal demo en Japón"
-            fill
-            sizes="(max-width: 768px) 100vw, 410px"
-            className="object-cover"
-            unoptimized
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(7,10,13,0.18))]" />
+      <div className="relative h-[170px] overflow-hidden rounded-[16px]">
+        <Image
+          src={DESTINATION_PREVIEW_IMAGE}
+          alt="Vista previa creada de TravelYourMap"
+          fill
+          sizes="(max-width: 768px) 100vw, 410px"
+          className="object-cover"
+        />
       </div>
       <div className="px-3 pb-1 pt-4">
         <p className="text-[13px] font-bold text-white/55">Canal Demo</p>
-        <p className="mt-1 flex items-center gap-2 text-[17px] font-bold"><span className="h-3 w-3 rounded-full bg-[#ff473b]" /> Japón</p>
-        <p className="mt-2 text-[13px] text-white/60">{destination.videoCount} videos en el canal demo</p>
-        <Link href={DEMO_MAP_HREF} className="mt-3 inline-flex items-center gap-2 text-[13px] font-bold text-white">Abrir demo <ArrowRight size={14} weight="bold" /></Link>
+        <p className="mt-1 flex items-center gap-2 text-[17px] font-bold">Prueba la Plataforma</p>
+        <Link
+          href={DEMO_MAP_HREF}
+          className="mt-3 inline-flex items-center gap-4 rounded-full border border-white/18 bg-white/[0.025] px-8 py-4 text-[14px] font-bold text-white transition hover:bg-white/[0.07] active:scale-[0.98]"
+        >
+          Ver demo <Play size={15} weight="fill" />
+        </Link>
       </div>
     </div>
   );
@@ -385,25 +362,43 @@ function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] })
         <div className="grid min-h-[470px] gap-5 rounded-[16px] bg-[radial-gradient(circle_at_65%_48%,rgba(56,143,205,0.34),transparent_28%),radial-gradient(circle_at_62%_50%,#19314a,#071018_58%,#05070a)] p-7 md:grid-cols-[190px_1fr]">
           <aside className="relative z-10">
             <div className="relative h-24 w-24 rounded-full border-4 border-white overflow-hidden bg-[#101419] shadow-lg">
-              <Image src="/creators/by-pupila.png" alt="Canal de referencia by.pupila" fill sizes="96px" className="object-cover" />
+              <Image src={BRAND_PROFILE_IMAGE} alt="Canal de referencia by.pupila" fill sizes="96px" className="object-cover" />
             </div>
             <h3 className="mt-5 text-[20px] font-extrabold">BY PUPILA</h3>
             <p className="text-[12px] text-white/62">@by.pupila</p>
             <p className="mt-2 text-[12px] text-white/62">Canal real autorizado · modo lectura pública</p>
             <div className="mt-7 grid gap-2 rounded-[14px] bg-[#0b1116]/78 p-3">
               {profileDestinations.map(([country, count]) => <p key={country} className="flex justify-between gap-3 text-[12px]"><span>{country}</span><span className="text-white/52">{count}</span></p>)}
-              <Link href={REAL_CREATOR_MAP_HREF} className="mt-3 text-[12px] font-bold text-white">Ver mapa real</Link>
+              <Link
+                href={DEMO_MAP_HREF}
+                className="mt-3 inline-flex items-center justify-center rounded-[9px] bg-[#ff473b] px-3 py-2 text-[12px] font-extrabold text-white transition hover:bg-[#ff5b50] active:scale-[0.98]"
+              >
+                Ver demo
+              </Link>
             </div>
           </aside>
           <div className="relative min-h-[320px] overflow-hidden rounded-[18px] bg-[#05070a] p-3">
             <div className="grid h-full min-h-[320px] grid-cols-2 gap-3">
               {previewVideos.map((video, index) => (
                 <article
-                  key={`${video.country}-${video.thumbnailUrl}`}
-                  className={index === 0 ? "relative col-span-2 overflow-hidden rounded-[14px]" : "relative overflow-hidden rounded-[14px]"}
+                  key={`${video.country}-${video.title}`}
+                  className={`${index === 0 ? "col-span-2" : ""} relative overflow-hidden rounded-[14px] border border-white/12 ${video.styleClass}`}
                 >
-                  <Image src={video.thumbnailUrl} alt={video.title} fill sizes="(max-width: 768px) 50vw, 320px" className="object-cover" unoptimized />
-                  <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(5,8,13,0.82))]" />
+                  {video.imageSrc ? (
+                    <Image
+                      src={video.imageSrc}
+                      alt={`Paisaje de ${video.country}`}
+                      fill
+                      sizes="(max-width: 768px) 50vw, 320px"
+                      className="object-cover"
+                    />
+                  ) : null}
+                  <div className={`absolute -right-6 -top-8 h-24 w-24 rounded-full blur-2xl ${video.glowClass}`} />
+                  <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.08),transparent_40%)]" />
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_40%,rgba(5,8,13,0.88))]" />
+                  <div className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full border border-white/25 bg-black/25 text-white/90">
+                    <Play size={12} weight="fill" />
+                  </div>
                   <div className="absolute bottom-3 left-3 right-3">
                     <p className="text-[11px] font-extrabold uppercase text-[#ff473b]">{video.country}</p>
                     <h4 className="mt-1 line-clamp-2 text-[13px] font-extrabold leading-4 text-white">{video.title}</h4>
@@ -432,13 +427,39 @@ function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] })
 
 function buildPreviewVideos(videoLocations: TravelVideoLocation[]): PreviewVideo[] {
   const preferredCountries = ["JP", "AR", "IT", "TH"];
+  const countryImageMap: Record<string, string> = {
+    JP: "/creators/japan-preview.svg",
+    AR: "/creators/argentina-preview.svg",
+  };
+  const stylePresets = [
+    {
+      styleClass: "bg-[radial-gradient(circle_at_18%_20%,rgba(255,147,84,0.35),transparent_40%),linear-gradient(140deg,#2d1a16,#101a27_52%,#090c12)]",
+      glowClass: "bg-[#ff6a3d]/60",
+    },
+    {
+      styleClass: "bg-[radial-gradient(circle_at_75%_22%,rgba(136,197,255,0.38),transparent_42%),linear-gradient(145deg,#102233,#131a23_58%,#0a0f16)]",
+      glowClass: "bg-[#50b7ff]/60",
+    },
+    {
+      styleClass: "bg-[radial-gradient(circle_at_68%_75%,rgba(255,204,120,0.32),transparent_42%),linear-gradient(145deg,#2b2417,#151922_56%,#090c13)]",
+      glowClass: "bg-[#ffb45a]/55",
+    },
+    {
+      styleClass: "bg-[radial-gradient(circle_at_26%_70%,rgba(142,255,206,0.28),transparent_45%),linear-gradient(145deg,#11241f,#141a24_58%,#090c13)]",
+      glowClass: "bg-[#66f0c1]/55",
+    },
+  ];
+
   return preferredCountries.flatMap((countryCode) => {
-    const video = videoLocations.find((item) => item.country_code?.toUpperCase() === countryCode && item.thumbnail_url);
-    if (!video?.thumbnail_url) return [];
+    const video = videoLocations.find((item) => item.country_code?.toUpperCase() === countryCode);
+    if (!video) return [];
+    const preset = stylePresets[preferredCountries.indexOf(countryCode) % stylePresets.length];
     return [{
       country: video.country_name || countryCode,
       title: video.title,
-      thumbnailUrl: video.thumbnail_url,
+      styleClass: preset.styleClass,
+      glowClass: preset.glowClass,
+      imageSrc: countryImageMap[countryCode],
     }];
   });
 }
@@ -501,8 +522,8 @@ function FinalCta() {
       <div className="mx-auto grid max-w-[1500px] gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_1fr] lg:px-14">
         <div className="relative min-h-[260px] overflow-hidden rounded-[40px] border border-white/10 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.8)] lg:min-h-[320px]">
           <Image
-            src="/creators/final-cta-map-mockup.png"
-            alt="TravelYourMap interactive 3D map interface"
+            src={FINAL_CTA_IMAGE}
+            alt="Influencer de viaje grabando en una montaña"
             fill
             sizes="(max-width: 1024px) 100vw, 50vw"
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-105"
@@ -515,9 +536,8 @@ function FinalCta() {
           <div className="mt-8 flex flex-wrap gap-4">
             <Link href="/onboarding?lang=es" className="rounded-[9px] bg-[#ff473b] px-10 py-4 text-[14px] font-extrabold text-white shadow-[0_20px_46px_-24px_rgba(255,71,59,0.85)]">Crear mi mapa gratis</Link>
             <Link href={DEMO_MAP_HREF} className="inline-flex items-center gap-4 rounded-[9px] border border-white/20 px-10 py-4 text-[14px] font-extrabold text-white">Ver demo en vivo <Play size={15} weight="fill" /></Link>
-            <Link href={REAL_CREATOR_MAP_HREF} className="inline-flex items-center gap-4 rounded-[9px] border border-white/20 px-10 py-4 text-[14px] font-extrabold text-white">Ver mapa real by.pupila</Link>
           </div>
-          <div className="mt-5 flex flex-wrap gap-6 text-[12px] text-white/52"><span>Sin tarjeta de crédito</span><span>Configuración en minutos</span></div>
+          <div className="mt-5 flex flex-wrap gap-6 text-[12px] text-white/52"><span>Requiere tarjeta de crédito</span><span>Configuración en minutos</span></div>
         </div>
       </div>
     </section>

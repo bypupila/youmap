@@ -1,0 +1,24 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" fill="#0A111A"/>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <circle cx="920" cy="150" r="92" fill="#FFD6A8"/>
+  <path d="M0 520C132 470 254 460 380 510C516 564 648 568 780 516C926 458 1066 452 1200 500V800H0V520Z" fill="url(#hills)"/>
+  <path d="M318 566L600 174L882 566H318Z" fill="#1B2A3B"/>
+  <path d="M595 190L726 384H463L595 190Z" fill="#F4F8FF"/>
+  <path d="M0 620C118 596 246 606 378 658C496 706 624 716 744 682C880 643 1032 648 1200 710V800H0V620Z" fill="#111C29"/>
+  <rect x="160" y="492" width="25" height="168" fill="#2F1E1E"/>
+  <path d="M95 517C122 491 146 478 173 478C199 478 225 491 252 517C225 542 199 556 173 556C146 556 122 542 95 517Z" fill="#F4A9B0"/>
+  <rect x="970" y="486" width="26" height="175" fill="#301F1F"/>
+  <path d="M902 514C938 478 972 460 1008 460C1044 460 1078 478 1114 514C1078 552 1044 571 1008 571C972 571 938 552 902 514Z" fill="#F2B4BC"/>
+  <defs>
+    <linearGradient id="sky" x1="600" y1="0" x2="600" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#273C56"/>
+      <stop offset="0.52" stop-color="#1D3046"/>
+      <stop offset="1" stop-color="#101B28"/>
+    </linearGradient>
+    <linearGradient id="hills" x1="600" y1="458" x2="600" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#304B66"/>
+      <stop offset="1" stop-color="#172635"/>
+    </linearGradient>
+  </defs>
+</svg>

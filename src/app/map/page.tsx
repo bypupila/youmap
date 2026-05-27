@@ -93,7 +93,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           fanVoteOptions={payload.fanVoteOptions}
           headerEyebrow={headerEyebrow}
           forceViewerMode={forceViewerMode}
-          viewMode={isDemoMap ? "viewer" : payload.viewer.isOwner ? "creator" : "viewer"}
+          viewMode={isDemoMap || payload.viewer.isOwner ? "creator" : "viewer"}
           isDemoMode={isDemoMap}
         />
       </div>
