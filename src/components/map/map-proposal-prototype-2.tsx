@@ -695,7 +695,6 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
             activeMapMode={activeMapMode}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
-            isMenuOpen={menuOpen}
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
             onPreviewViewer={() => setActiveMapMode("viewer")}
             onReturnToCreator={() => setActiveMapMode("creator")}
@@ -703,7 +702,6 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
             onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
             onOpenAdmin={openAdminPanel}
             lastExtractionAt={channel.last_synced_at || null}
-            onOpenMenu={() => setMenuOpen(true)}
           />
           ) : null}
 
@@ -1370,20 +1368,17 @@ function ProposalTopbar2({
   activeMapMode,
   searchQuery,
   setSearchQuery,
-  isMenuOpen,
   onCopyUrl,
   onPreviewViewer,
   onReturnToCreator,
   canReturnToCreator,
   onExtractVideos,
   onOpenAdmin,
-  lastExtractionAt,
-  onOpenMenu
+  lastExtractionAt
 }: {
   activeMapMode: ProposalMapMode;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
-  isMenuOpen: boolean;
   onCopyUrl: () => void;
   onPreviewViewer: () => void;
   onReturnToCreator: () => void;
@@ -1391,24 +1386,11 @@ function ProposalTopbar2({
   onExtractVideos: () => void;
   onOpenAdmin: () => void;
   lastExtractionAt: string | null;
-  onOpenMenu: () => void;
 }) {
   const lastExtractionLabel = formatStableDateTime(lastExtractionAt);
   const isViewer = activeMapMode === "viewer";
-  const [isSearchExpandedOnCompact, setIsSearchExpandedOnCompact] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
-  const compactSearchInputRef = useRef<HTMLInputElement | null>(null);
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!isSearchExpandedOnCompact) return;
-    compactSearchInputRef.current?.focus();
-    const onResize = () => {
-      if (window.innerWidth >= 1280) setIsSearchExpandedOnCompact(false);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [isSearchExpandedOnCompact]);
 
   useEffect(() => {
     if (!shareMenuOpen) return;
@@ -1458,51 +1440,17 @@ function ProposalTopbar2({
     <header className="relative z-[120] grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
       {/* Broadened Sleek Search Bar */}
       <div className="relative flex min-w-0 items-center gap-3">
-        {!isMenuOpen ? (
-          <button
-            type="button"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden"
-            onClick={onOpenMenu}
-            aria-label="Abrir menú lateral"
-          >
-            <List size={19} />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden",
-            isSearchExpandedOnCompact && "pointer-events-none opacity-0"
-          )}
-          onClick={() => setIsSearchExpandedOnCompact(true)}
-          aria-label="Abrir busqueda"
-        >
-          <MagnifyingGlass size={17} />
-        </button>
         <label
-          className={cn(
-            "h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all",
-            isSearchExpandedOnCompact ? "absolute inset-x-0 top-0 z-30 flex" : "hidden xl:flex"
-          )}
+          className="flex h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all"
         >
           <MagnifyingGlass size={17} className="text-[#818b95]" />
           <input
-            ref={compactSearchInputRef}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-[#818b95]"
             placeholder="Buscar destinos, creadores o videos..."
           />
-          {isSearchExpandedOnCompact ? (
-            <button
-              type="button"
-              onClick={() => setIsSearchExpandedOnCompact(false)}
-              aria-label="Cerrar busqueda"
-              className="text-slate-400 hover:text-white"
-            >
-              <X size={15} />
-            </button>
-          ) : searchQuery ? (
+          {searchQuery ? (
             <button type="button" onClick={() => setSearchQuery("")} aria-label="Limpiar busqueda" className="text-slate-400 hover:text-white">
               <X size={15} />
             </button>

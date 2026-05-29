@@ -696,7 +696,6 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
             onToggleViewer={() => setIsMapFullscreen(true)}
             lastExtractionAt={channel.last_synced_at || null}
-            onOpenMenu={() => setMenuOpen(true)}
           />
           ) : null}
 
@@ -1318,15 +1317,13 @@ function ProposalTopbar2({
   setSearchQuery,
   onCopyUrl,
   onToggleViewer,
-  lastExtractionAt,
-  onOpenMenu
+  lastExtractionAt
 }: {
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   onCopyUrl: () => void;
   onToggleViewer: () => void;
   lastExtractionAt: string | null;
-  onOpenMenu: () => void;
 }) {
   const lastExtractionLabel = formatStableDateTime(lastExtractionAt);
 
@@ -1334,14 +1331,6 @@ function ProposalTopbar2({
     <header className="relative z-30 grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
       {/* Broadened Sleek Search Bar */}
       <div className="flex min-w-0 items-center gap-3">
-        <button
-          type="button"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] 2xl:hidden"
-          onClick={onOpenMenu}
-          aria-label="Abrir menú lateral"
-        >
-          <List size={19} />
-        </button>
         <label className="flex h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all">
           <MagnifyingGlass size={17} className="text-[#818b95]" />
           <input

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BatteryCharging,
   BookmarkSimple,
@@ -12,6 +12,7 @@ import {
   MapPin,
   Star,
   X,
+  ArrowSquareOut,
 } from "@phosphor-icons/react";
 import posthog from "posthog-js";
 import type { VideoActivityController } from "@/components/map/video-activity";
@@ -29,12 +30,20 @@ import {
 import { DemoVideoEmbedPreview } from "@/components/map/demo-video-embed-preview";
 import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
 import type { TravelVideoLocation } from "@/lib/types";
+import type { MapRailSponsor } from "@/lib/map-public";
 import { cn } from "@/lib/utils";
 
 interface DesktopVideoMapCardProps {
   videos: TravelVideoLocation[];
   currentVideo: TravelVideoLocation | null;
-  sponsorNames?: string[];
+  sponsors?: MapRailSponsor[];
+  hidePlatformAds?: boolean;
+  platformAd?: {
+    title: string;
+    description?: string | null;
+    cta_label?: string | null;
+    href?: string | null;
+  } | null;
   activity: VideoActivityController;
   onClose: () => void;
   onChangeVideo: (video: TravelVideoLocation) => void;
@@ -46,10 +55,39 @@ interface DesktopVideoMapCardProps {
   isDemoMode?: boolean;
 }
 
+function hashSponsorSeed(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getSponsorCategoryLabel(sponsor: MapRailSponsor) {
+  const explicitCategory = String(sponsor.category_name || "").trim();
+  if (explicitCategory) return explicitCategory;
+
+  const searchableText = `${sponsor.brand_name} ${sponsor.description || ""}`.toLowerCase();
+  if (searchableText.includes("booking") || searchableText.includes("airbnb") || searchableText.includes("alojamiento")) {
+    return "Alojamiento";
+  }
+  if (searchableText.includes("getyourguide") || searchableText.includes("tour") || searchableText.includes("experiencia")) {
+    return "Experiencias";
+  }
+  if (searchableText.includes("iati") || searchableText.includes("seguro")) {
+    return "Seguro de viaje";
+  }
+
+  return "Servicio";
+}
+
 export function DesktopVideoMapCard({
   videos,
   currentVideo,
-  sponsorNames = [],
+  sponsors = [],
+  hidePlatformAds = false,
+  platformAd = null,
   activity,
   onClose,
   onChangeVideo,
@@ -61,9 +99,53 @@ export function DesktopVideoMapCard({
   isDemoMode = false,
 }: DesktopVideoMapCardProps) {
   const [watchMenuOpen, setWatchMenuOpen] = useState(false);
+  const [copiedCouponId, setCopiedCouponId] = useState<string | null>(null);
+  const [sponsorStartIndex, setSponsorStartIndex] = useState(0);
+
   useEffect(() => {
     setWatchMenuOpen(false);
+    setCopiedCouponId(null);
+    setSponsorStartIndex(0);
   }, [currentVideo?.youtube_video_id]);
+
+  const sponsorStripData = useMemo(() => {
+    if (!currentVideo || sponsors.length === 0) return { cards: [] as MapRailSponsor[], isManualByVideo: false };
+
+    const currentVideoRecordId = String(currentVideo.id || "").trim();
+    const directVideoSponsors = sponsors.filter((sponsor) => {
+      const ids = sponsor.video_ids || [];
+      if (!ids.length) return false;
+      if (currentVideoRecordId && ids.includes(currentVideoRecordId)) return true;
+      return ids.includes(String(currentVideo.youtube_video_id || "").trim());
+    });
+
+    const isManualByVideo = directVideoSponsors.length > 0;
+    const seed = String(currentVideoRecordId || currentVideo.youtube_video_id || "video");
+    const toSort = isManualByVideo ? directVideoSponsors : sponsors;
+    const sorted = [...toSort].sort((a, b) => {
+      const aOrder = Number.isFinite(Number(a.display_order)) ? Number(a.display_order) : 100;
+      const bOrder = Number.isFinite(Number(b.display_order)) ? Number(b.display_order) : 100;
+      if (isManualByVideo && aOrder !== bOrder) return aOrder - bOrder;
+      const hashA = hashSponsorSeed(`${seed}:${a.id}`);
+      const hashB = hashSponsorSeed(`${seed}:${b.id}`);
+      if (hashA !== hashB) return hashA - hashB;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.brand_name.localeCompare(b.brand_name);
+    });
+
+    return { cards: sorted, isManualByVideo };
+  }, [currentVideo, sponsors]);
+
+  useEffect(() => {
+    if (hidePlatformAds || sponsorStripData.cards.length <= 2) return;
+    const intervalId = window.setInterval(() => {
+      setSponsorStartIndex((current) => (current + 1) % sponsorStripData.cards.length);
+    }, 60_000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [hidePlatformAds, sponsorStripData.cards.length]);
+
   if (!currentVideo) return null;
 
   const selectedVideo = currentVideo;
@@ -89,6 +171,159 @@ export function DesktopVideoMapCard({
   });
   const selectedCountryName = getCountryNameInSpanish(selectedVideo.country_code, selectedVideo.country_name);
 
+  const handleCopyCoupon = (code: string, id: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCouponId(id);
+    setTimeout(() => {
+      setCopiedCouponId(null);
+    }, 2000);
+  };
+
+  const renderSponsorStrip = () => {
+    if (hidePlatformAds || sponsorStripData.cards.length === 0) return null;
+    const cards = sponsorStripData.cards;
+    const visibleCount = Math.min(2, cards.length);
+    const normalizedStart = ((sponsorStartIndex % cards.length) + cards.length) % cards.length;
+    const visibleCards = Array.from({ length: visibleCount }, (_, offset) => cards[(normalizedStart + offset) % cards.length]);
+    const canRotate = cards.length > 2;
+    const goSponsors = (direction: -1 | 1) => {
+      if (!canRotate) return;
+      setSponsorStartIndex((current) => (current + direction + cards.length) % cards.length);
+    };
+
+    return (
+      <div className="border-t border-red-500/35 bg-[#0c0c0c]/85 px-4 py-2 text-white">
+        <div className="flex items-center gap-1 w-full">
+          <button
+            type="button"
+            onClick={() => goSponsors(-1)}
+            disabled={!canRotate}
+            className={cn(
+              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-200 shadow-sm",
+              canRotate
+                ? "border-white/15 bg-white/[0.06] text-white hover:bg-white/15 hover:border-white/25"
+                : "cursor-not-allowed border-white/10 bg-white/[0.03] text-zinc-600"
+            )}
+            aria-label="Ver sponsors anteriores"
+          >
+            <CaretLeft size={14} weight="bold" />
+          </button>
+          <div className="grid gap-1.5 grid-cols-2 flex-1 min-w-0">
+            {visibleCards.map((sponsor) => {
+              const categoryText = getSponsorCategoryLabel(sponsor);
+              const coupon = sponsor.action_type === "coupon" ? sponsor.action_value || sponsor.discount_code : sponsor.discount_code;
+              const ctaLabel = sponsor.cta_label || (coupon ? "Copiar" : "Ver beneficio");
+              const cardClassName =
+                "group relative flex min-h-[64px] w-full items-center rounded-xl border border-white/10 bg-white/[0.03] p-2 text-left shadow-sm transition-all duration-300 hover:border-white/20 hover:bg-white/[0.06] active:scale-[0.98]";
+              const cardContent = (
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1">
+                      <p className="truncate text-[15px] font-bold leading-none text-white">
+                        {categoryText}
+                      </p>
+                      <span className="inline-flex items-center rounded bg-[#ff8a72]/20 px-1 py-0 text-[10px] font-black leading-none text-[#ff8a72] border border-[#ff8a72]/30 shrink-0">
+                        {coupon ? "PROMO" : "LINK"}
+                      </span>
+                  </div>
+                  <p
+                    className="line-clamp-2 text-[11px] text-[#cbd5e1] group-hover:text-white transition-colors leading-snug mt-0 overflow-hidden text-ellipsis"
+                    title={sponsor.description || ""}
+                  >
+                    {sponsor.description || "Oferta recomendada"}
+                  </p>
+                </div>
+              );
+
+              return (
+                <div key={sponsor.id} className="min-w-0">
+                  {coupon ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCoupon(coupon, sponsor.id)}
+                      className={cardClassName}
+                      title={copiedCouponId === sponsor.id ? "Copiado!" : ctaLabel}
+                      aria-label={`${ctaLabel} de ${sponsor.brand_name}`}
+                    >
+                      {cardContent}
+                    </button>
+                  ) : (
+                    <a
+                      href={sponsor.affiliate_url || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cardClassName}
+                      title={ctaLabel}
+                      aria-label={`${ctaLabel} de ${sponsor.brand_name}`}
+                    >
+                      {cardContent}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => goSponsors(1)}
+            disabled={!canRotate}
+            className={cn(
+              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-200 shadow-sm",
+              canRotate
+                ? "border-white/15 bg-white/[0.06] text-white hover:bg-white/15 hover:border-white/25"
+                : "cursor-not-allowed border-white/10 bg-white/[0.03] text-zinc-600"
+            )}
+            aria-label="Ver más sponsors"
+          >
+            <CaretRight size={14} weight="bold" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPlatformBanner = () => {
+    if (hidePlatformAds) return null;
+    const ad = platformAd || {
+      title: "Descuento del 15%",
+      description: "En tu primer mapa como creador, disfrutando de todas las herramientas que Travel Your Map te ofrece.",
+      cta_label: "Ver promoción",
+      href: "#",
+    };
+    const promoTitle = "Descuento del 15%";
+    const promoDescription = "En tu primer mapa como creador, disfrutando de todas las herramientas que Travel Your Map te ofrece.";
+    return (
+      <section className="group relative w-full overflow-hidden rounded-xl border border-red-500/35 bg-[radial-gradient(ellipse_at_top_left,rgba(255,90,61,0.12),transparent_58%)] bg-[#050b10]/70 px-4 py-2.5 text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)] transition-all duration-300 hover:border-red-500/45">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,143,120,0.06),transparent_60%)] transition-all duration-300 group-hover:scale-125" />
+        
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="min-w-0">
+              <p className="line-clamp-2 max-w-[330px] text-[17px] font-extrabold text-white group-hover:text-white transition-colors leading-[1.05]">
+                {promoTitle}
+              </p>
+              <p className="line-clamp-2 text-[11px] text-[#cbd5e1] leading-snug mt-0.5 max-w-[280px] overflow-hidden text-ellipsis">
+                {promoDescription}
+              </p>
+            </div>
+          </div>
+
+          <a
+            href={ad.href || "#"}
+            onClick={(event) => {
+              if (ad.href === "#" || !ad.href) {
+                event.preventDefault();
+              }
+            }}
+            className="inline-flex h-7 items-center justify-center gap-1 rounded-lg bg-gradient-to-r from-[#ff5a3d] to-[#ff7259] hover:from-[#ff7259] hover:to-[#ff8a72] px-3 text-[10px] font-black text-white shadow-md shadow-[#ff5a3d]/25 transition-all duration-300 active:scale-95 shrink-0"
+          >
+            <span>{ad.cta_label || "Ver"}</span>
+            <ArrowSquareOut size={10} weight="bold" />
+          </a>
+        </div>
+      </section>
+    );
+  };
+
   function go(direction: -1 | 1) {
     if (orderedVideos.length === 0) return;
     const nextIndex = (currentIndex + direction + orderedVideos.length) % orderedVideos.length;
@@ -97,10 +332,9 @@ export function DesktopVideoMapCard({
   }
 
   function openYouTubeVideo() {
-    if (isDemoMode) return;
     if (!youtubeHref) return;
 
-    if (!selectedVideo.made_for_kids) {
+    if (!isDemoMode && !selectedVideo.made_for_kids) {
       posthog.capture("video_youtube_opened", {
         video_id: selectedVideo.youtube_video_id,
         video_title: selectedVideo.title,
@@ -117,18 +351,14 @@ export function DesktopVideoMapCard({
 
   if (isTheater) {
     return (
-      <div className="pointer-events-auto space-y-4">
-        <article className="group relative overflow-hidden rounded-xl border border-red-500/35 bg-[#080808] text-sm text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
+      <div className="pointer-events-auto w-full max-w-[480px] space-y-3">
+        {renderPlatformBanner()}
+        <article className="group relative w-full lg:w-[480px] shrink-0 overflow-hidden rounded-xl border border-red-500/35 bg-[#080808] text-sm text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
           <div className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.04),transparent_60%)]" />
 
-          <header className="relative flex items-start gap-3 px-4 pb-3 pt-4">
-            <div className="min-w-0 flex-1 text-center">
-              <h2 className="text-sm font-extrabold leading-tight text-white">{selectedVideo.title}</h2>
-              {sponsorNames.length > 0 ? (
-                <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#ffb49f]">
-                  Sponsor: {sponsorNames.join(", ")}
-                </p>
-              ) : null}
+          <header className="relative px-4 pb-3 pt-4">
+            <div className="min-w-0 text-left">
+              <h2 className="line-clamp-2 pr-8 text-left text-[21px] font-extrabold leading-[1.1] text-white">{selectedVideo.title}</h2>
               <div className="mt-1.5 flex items-center justify-between gap-2">
                 <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold text-zinc-500">
                   <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white">
@@ -168,19 +398,19 @@ export function DesktopVideoMapCard({
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="absolute right-4 top-4 flex items-center gap-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-7.5 w-7.5 items-center justify-center rounded-md border border-white/5 bg-white/[0.02] text-zinc-400 transition-all hover:bg-white/[0.06] hover:text-white active:scale-95"
+                className="flex h-7 w-7 items-center justify-center text-red-500 transition-all hover:text-red-400 active:scale-95"
               >
-                <X size={14} />
+                <X size={18} weight="bold" />
               </button>
             </div>
           </header>
 
           <div className="grid grid-cols-3 items-center gap-2 border-t border-white/[0.04] bg-[#0c0c0c]/85 px-4 py-3">
-            <button type="button" onClick={() => go(-1)} className="flex h-8 items-center justify-center gap-1 rounded border border-white/[0.04] bg-[#141414] text-[11px] font-bold text-zinc-300 transition-all hover:border-red-500/20 hover:bg-red-600/10 hover:text-red-500 active:scale-95">
+            <button type="button" onClick={() => go(-1)} className="flex h-8 items-center justify-center gap-1 rounded border border-white/[0.04] bg-[#141414] text-[9px] font-black tracking-wider text-zinc-300 transition-all hover:border-red-500/20 hover:bg-red-600/10 hover:text-red-500 active:scale-95">
               <CaretLeft size={13} weight="bold" />
               ANTERIOR
             </button>
@@ -212,7 +442,7 @@ export function DesktopVideoMapCard({
               ) : null}
             </div>
 
-            <button type="button" onClick={() => go(1)} className="flex h-8 items-center justify-center gap-1 rounded border border-white/[0.04] bg-[#141414] text-[11px] font-bold text-zinc-300 transition-all hover:border-red-500/20 hover:bg-red-600/10 hover:text-red-500 active:scale-95">
+            <button type="button" onClick={() => go(1)} className="flex h-8 items-center justify-center gap-1 rounded border border-white/[0.04] bg-[#141414] text-[9px] font-black tracking-wider text-zinc-300 transition-all hover:border-red-500/20 hover:bg-red-600/10 hover:text-red-500 active:scale-95">
               SIGUIENTE
               <CaretRight size={13} weight="bold" />
             </button>
@@ -226,6 +456,7 @@ export function DesktopVideoMapCard({
                   openButtonLabel="Ver en YouTube"
                   frameClassName="rounded-none border-0"
                   hideFooter
+                  hidePreviewNotice
                 />
               ) : (
                 <YouTubeEmbedPlayer
@@ -247,33 +478,33 @@ export function DesktopVideoMapCard({
             <div className="flex items-center justify-between gap-2 border-t border-white/[0.04] bg-[#0c0c0c]/85 py-2">
               <span className="text-[11px] text-[#8f98a3]">
                 {isDemoMode
-                  ? "Modo demo: preview fijo sin reproducción."
+                  ? "Vista previa del video."
                   : selectedVideo.made_for_kids
                   ? "Contenido Made for Kids: tracking local desactivado."
                   : "Reproductor oficial de YouTube."}
               </span>
               <button
                 type="button"
-                onClick={openYouTubeVideo}
-                disabled={isDemoMode || !youtubeHref}
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-white/10 bg-[#1b1f26] px-2.5 text-[11px] font-medium text-[#b7bfcb] transition hover:bg-[#232a33] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled
+                className="inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border border-white/[0.06] bg-[#141414] px-2.5 text-[11px] font-medium text-zinc-600 opacity-70"
                 aria-label="Abrir en YouTube"
               >
-                {isDemoMode ? "Deshabilitado en demo" : "YouTube"}
+                Ver en Youtube
               </button>
             </div>
           </div>
 
-          <div className="border-t border-white/[0.04] bg-[#0c0c0c]/85 px-4 py-3">
+          <div className="border-t border-zinc-700/60 bg-[#0c0c0c]/85 px-4 py-3">
             <div className="grid grid-cols-3 items-center divide-x divide-white/[0.08] text-[11px] text-zinc-500">
               <span className="flex min-w-0 items-center justify-center gap-1 truncate px-2 font-semibold">
                 <MapPin size={11} className="text-red-500" />
                 <span className="truncate">{formatVideoPlace(selectedVideo)}</span>
               </span>
-              <span className="flex items-center justify-center gap-1 px-2"><Eye size={11} />{formatCompactNumber(Number(selectedVideo.view_count || 0))} vistas</span>
-              <span className="flex items-center justify-center gap-1 px-2"><Clock size={11} />{formatVideoDate(selectedVideo.published_at)}</span>
+              <span className="flex items-center justify-center gap-1 px-2"><Eye size={11} className="text-red-500" />{formatCompactNumber(Number(selectedVideo.view_count || 0))} vistas</span>
+              <span className="flex items-center justify-center gap-1 px-2"><Clock size={11} className="text-red-500" />{formatVideoDate(selectedVideo.published_at)}</span>
             </div>
           </div>
+          {renderSponsorStrip()}
         </article>
       </div>
     );
@@ -308,11 +539,6 @@ export function DesktopVideoMapCard({
               <p className="mt-0.5 truncate text-[12px] text-[#d8dee6]">
               {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName} · {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
               </p>
-              {sponsorNames.length > 0 ? (
-                <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#ffb49f]">
-                  Sponsor: {sponsorNames.join(", ")}
-                </p>
-              ) : null}
             </>
           )}
         </div>

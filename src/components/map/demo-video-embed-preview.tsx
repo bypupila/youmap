@@ -12,6 +12,7 @@ interface DemoVideoEmbedPreviewProps {
   frameClassName?: string;
   openButtonLabel?: string;
   hideFooter?: boolean;
+  hidePreviewNotice?: boolean;
 }
 
 export function DemoVideoEmbedPreview({
@@ -20,6 +21,7 @@ export function DemoVideoEmbedPreview({
   frameClassName,
   openButtonLabel = "Abrir en YouTube",
   hideFooter = false,
+  hidePreviewNotice = false,
 }: DemoVideoEmbedPreviewProps) {
   const previewSrc = getDemoMapPreviewImage(video?.youtube_video_id);
 
@@ -32,9 +34,11 @@ export function DemoVideoEmbedPreview({
             <Play size={22} weight="fill" />
           </span>
         </div>
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg border border-white/12 bg-black/55 px-3 py-2 text-[11px] text-[#d2d8e0] backdrop-blur-sm">
-          Preview demo sin reproducción ni acciones externas.
-        </div>
+        {hidePreviewNotice ? null : (
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg border border-white/12 bg-black/55 px-3 py-2 text-[11px] text-[#d2d8e0] backdrop-blur-sm">
+            Preview demo sin reproducción ni acciones externas.
+          </div>
+        )}
       </div>
 
       {hideFooter ? null : (

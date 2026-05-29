@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowsClockwise, Check, Copy, GlobeHemisphereWest, MapPin, Plus, Trash, Video } from "@phosphor-icons/react";
+import { ArrowsClockwise, CaretDown, CaretUp, Check, Copy, GlobeHemisphereWest, MapPin, Plus, Trash, Video } from "@phosphor-icons/react";
 import { AnalyticsDashboard } from "@/components/analytics-dashboard";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,15 @@ const ownerViewer = {
   adminUrl: null,
 };
 
+const SPONSOR_CATEGORY_PRESETS = [
+  "Dónde dormir",
+  "Qué hacer",
+  "Viajar cubierto",
+  "Transporte",
+  "Conectividad",
+  "Equipamiento",
+];
+
 export function CreatorAdminPanel({
   activeTab,
   channelId,
@@ -62,6 +71,7 @@ export function CreatorAdminPanel({
   const [pollState, setPollState] = useState<MapPollRecord | null>(initialPoll);
   const [sponsors, setSponsors] = useState<MapRailSponsor[]>(initialSponsors);
   const [sponsorScope, setSponsorScope] = useState<"global" | "country" | "video">("country");
+  const [sponsorActionType, setSponsorActionType] = useState<"link" | "coupon">("link");
   const [selectedCountryCodes, setSelectedCountryCodes] = useState<string[]>([]);
   const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([]);
   const [creatingSponsor, setCreatingSponsor] = useState(false);
@@ -114,6 +124,20 @@ export function CreatorAdminPanel({
       }
     }
     return map;
+  }, [sponsors]);
+  const sortedSponsors = useMemo(() => {
+    return [...sponsors].sort((a, b) => {
+      const aOrder = Number.isFinite(Number(a.display_order)) ? Number(a.display_order) : 100;
+      const bOrder = Number.isFinite(Number(b.display_order)) ? Number(b.display_order) : 100;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.brand_name.localeCompare(b.brand_name);
+    });
+  }, [sponsors]);
+  const sponsorCategoryOptions = useMemo(() => {
+    const dynamicOptions = sponsors
+      .map((sponsor) => String(sponsor.category_name || "").trim())
+      .filter(Boolean);
+    return Array.from(new Set([...SPONSOR_CATEGORY_PRESETS, ...dynamicOptions]));
   }, [sponsors]);
   const bulkRows = useMemo(() => {
     const byCountry = bulkCountryFilter === "all" ? null : bulkCountryFilter;
@@ -168,13 +192,61 @@ export function CreatorAdminPanel({
     }
   }
 
+  function applySponsorOrder(orderedIds: string[]) {
+    const orderMap = new Map<string, number>();
+    orderedIds.forEach((id, index) => orderMap.set(id, (index + 1) * 10));
+    setSponsors((current) =>
+      current.map((entry) => ({
+        ...entry,
+        display_order: orderMap.get(entry.id) ?? (Number.isFinite(Number(entry.display_order)) ? Number(entry.display_order) : 100),
+      }))
+    );
+  }
+
+  async function persistSponsorOrder(orderedIds: string[]) {
+    if (isDemoMode) return;
+    const response = await fetch("/api/map-admin/sponsors/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId, orderedSponsorIds: orderedIds }),
+    });
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) {
+      throw new Error(body?.error || "No se pudo guardar el orden de sponsors.");
+    }
+  }
+
+  async function moveSponsor(sponsorId: string, direction: -1 | 1) {
+    const ids = sortedSponsors.map((entry) => entry.id);
+    const index = ids.indexOf(sponsorId);
+    if (index === -1) return;
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= ids.length) return;
+
+    const next = [...ids];
+    const [moved] = next.splice(index, 1);
+    next.splice(targetIndex, 0, moved);
+
+    applySponsorOrder(next);
+    try {
+      await persistSponsorOrder(next);
+    } catch (error) {
+      setSponsorError(error instanceof Error ? error.message : "No se pudo guardar el orden.");
+    }
+  }
+
   async function createSponsor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const actionType = String(formData.get("action_type") || "link").trim() === "coupon" ? "coupon" : "link";
     const payload = {
       brand_name: String(formData.get("brand_name") || "").trim(),
       affiliate_url: String(formData.get("affiliate_url") || "").trim() || null,
       description: String(formData.get("description") || "").trim() || null,
+      category_name: String(formData.get("category_name") || "").trim() || null,
+      action_type: actionType as "link" | "coupon",
+      action_value: String(formData.get("action_value") || "").trim() || null,
+      cta_label: String(formData.get("cta_label") || "").trim() || null,
     };
     const normalizedCountryCodes = Array.from(
       new Set(
@@ -198,6 +270,10 @@ export function CreatorAdminPanel({
     setCreatingSponsor(true);
     setSponsorError(null);
     try {
+      const nextDisplayOrder = Math.max(
+        0,
+        ...sponsors.map((entry) => (Number.isFinite(Number(entry.display_order)) ? Number(entry.display_order) : 100))
+      ) + 10;
       if (isDemoMode) {
         setSponsors((current) => [
           {
@@ -207,6 +283,11 @@ export function CreatorAdminPanel({
             description: payload.description,
             discount_code: null,
             affiliate_url: payload.affiliate_url,
+            category_name: payload.category_name,
+            action_type: payload.action_type,
+            action_value: payload.action_value,
+            cta_label: payload.cta_label,
+            display_order: nextDisplayOrder,
             country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
             video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
             scope: sponsorScope,
@@ -216,6 +297,7 @@ export function CreatorAdminPanel({
         ]);
         event.currentTarget.reset();
         setSponsorScope("country");
+        setSponsorActionType("link");
         setSelectedCountryCodes([]);
         setSelectedVideoIds([]);
         return;
@@ -231,8 +313,13 @@ export function CreatorAdminPanel({
           logo_url: null,
           website_url: null,
           affiliate_url: payload.affiliate_url,
-          discount_code: null,
+          discount_code: payload.action_type === "coupon" ? payload.action_value : null,
           description: payload.description,
+          category_name: payload.category_name,
+          action_type: payload.action_type,
+          action_value: payload.action_value,
+          cta_label: payload.cta_label,
+          display_order: nextDisplayOrder,
           scope: sponsorScope,
           country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
           video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
@@ -248,8 +335,13 @@ export function CreatorAdminPanel({
           brand_name: payload.brand_name,
           logo_url: null,
           description: payload.description,
-          discount_code: null,
+          discount_code: payload.action_type === "coupon" ? payload.action_value : null,
           affiliate_url: payload.affiliate_url,
+          category_name: payload.category_name,
+          action_type: payload.action_type,
+          action_value: payload.action_value,
+          cta_label: payload.cta_label,
+          display_order: nextDisplayOrder,
           country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
           video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
           scope: sponsorScope,
@@ -258,6 +350,7 @@ export function CreatorAdminPanel({
       ]);
       event.currentTarget.reset();
       setSponsorScope("country");
+      setSponsorActionType("link");
       setSelectedCountryCodes([]);
       setSelectedVideoIds([]);
     } catch (error) {
@@ -569,7 +662,41 @@ export function CreatorAdminPanel({
                 <option value="country">Scope país</option>
                 <option value="video">Scope video</option>
               </select>
-              <input name="affiliate_url" placeholder="URL afiliado" className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none md:col-span-2" />
+              <input
+                name="category_name"
+                list="sponsor-category-options"
+                placeholder="Categoría del servicio (ej: Dónde dormir)"
+                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+              />
+              <datalist id="sponsor-category-options">
+                {sponsorCategoryOptions.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+              <select
+                name="action_type"
+                value={sponsorActionType}
+                onChange={(event) => setSponsorActionType(event.target.value === "coupon" ? "coupon" : "link")}
+                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+              >
+                <option value="link">Redirigir a URL</option>
+                <option value="coupon">Copiar cupón</option>
+              </select>
+              <input
+                name={sponsorActionType === "coupon" ? "action_value" : "affiliate_url"}
+                placeholder={sponsorActionType === "coupon" ? "Código del cupón" : "URL afiliado"}
+                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+              />
+              <input
+                name="cta_label"
+                placeholder="Texto del CTA (ej: Ver oferta)"
+                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+              />
+              <input
+                name={sponsorActionType === "coupon" ? "affiliate_url" : "action_value"}
+                placeholder={sponsorActionType === "coupon" ? "URL destino opcional" : "Acción secundaria (opcional)"}
+                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none md:col-span-2"
+              />
               <input name="description" placeholder="Descripcion corta" className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none md:col-span-2" />
               {sponsorScope === "country" ? (
                 <select
@@ -770,22 +897,45 @@ export function CreatorAdminPanel({
               </div>
             </div>
             <div className="space-y-2">
-              {sponsors.map((sponsor) => (
+              {sortedSponsors.map((sponsor, index) => (
                 <div key={sponsor.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
                   <div className="min-w-0">
                     <p className="truncate text-[13px] font-medium text-[#f5f7fb]">{sponsor.brand_name}</p>
+                    {sponsor.category_name ? <p className="truncate text-[11px] text-[#d8dfe8]">{sponsor.category_name}</p> : null}
                     <p className="truncate text-[11px] text-[#9da5ae]">{formatSponsorCoverage(sponsor, sponsorVideoTitleById)}</p>
                   </div>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="outline"
-                    onClick={() => void removeSponsor(sponsor.id)}
-                    disabled={deletingSponsorId === sponsor.id}
-                    aria-label={`Eliminar sponsor ${sponsor.brand_name}`}
-                  >
-                    {deletingSponsorId === sponsor.id ? <ArrowsClockwise size={14} className="animate-spin" /> : <Trash size={14} />}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => void moveSponsor(sponsor.id, -1)}
+                      disabled={index === 0}
+                      aria-label={`Subir sponsor ${sponsor.brand_name}`}
+                    >
+                      <CaretUp size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => void moveSponsor(sponsor.id, 1)}
+                      disabled={index === sortedSponsors.length - 1}
+                      aria-label={`Bajar sponsor ${sponsor.brand_name}`}
+                    >
+                      <CaretDown size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => void removeSponsor(sponsor.id)}
+                      disabled={deletingSponsorId === sponsor.id}
+                      aria-label={`Eliminar sponsor ${sponsor.brand_name}`}
+                    >
+                      {deletingSponsorId === sponsor.id ? <ArrowsClockwise size={14} className="animate-spin" /> : <Trash size={14} />}
+                    </Button>
+                  </div>
                 </div>
               ))}
               {sponsors.length === 0 ? <p className="text-[12px] text-[#9da5ae]">No hay sponsors cargados.</p> : null}

@@ -37,6 +37,7 @@ import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 import { isDemoChannelId } from "@/lib/demo-data";
 import { getDemoMapPreviewImage } from "@/lib/demo-video-previews";
+import { useSubscription } from "@/lib/use-subscription";
 
 type ContentFilterWindow = "all" | "365" | "90" | "30";
 type ActivityFilter = "all" | "favorites" | "saved" | "watched" | "watch_later" | "incomplete";
@@ -63,6 +64,13 @@ type ExternalYoutubeOpenState = {
   videoId: string;
   title: string;
   openedAtMs: number;
+};
+type ActivePlatformAd = {
+  id: string;
+  title: string;
+  description: string | null;
+  cta_label: string | null;
+  href: string | null;
 };
 
 interface MapExperienceCoreProps {
@@ -209,7 +217,10 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   const [votedCountryCode, setVotedCountryCode] = useState<string | null>(null);
   const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("alphabetical");
   const [hasMounted, setHasMounted] = useState(false);
+  const [activePlatformAd, setActivePlatformAd] = useState<ActivePlatformAd | null>(null);
+  const viewerSubscription = useSubscription({ demo: isDemoMode });
   const isCreatorWorkspace = activeMapMode === "creator";
+  const hidePlatformAds = activeMapMode === "viewer" && viewerSubscription.active;
   const adminPanelHref = useMemo(() => {
     const params = new URLSearchParams();
     if (channel.id) params.set("channelId", channel.id);
@@ -461,6 +472,23 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     return () => query.removeEventListener("change", sync);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/platform-ads/active", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => {
+        if (!active) return;
+        setActivePlatformAd(payload?.ad || null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setActivePlatformAd(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   function flash(message: string) {
     void message;
     // Intentionally quiet: this prototype no longer renders transient toast copy over the map.
@@ -663,13 +691,13 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_18%,rgba(255,90,61,0.08),transparent_35%),linear-gradient(180deg,#04090f,#030508_60%,#010204)] pointer-events-none" />
       
       <div className={cn(
-        "relative grid h-screen overflow-hidden grid-cols-1",
+        "relative grid h-screen min-h-0 overflow-hidden grid-cols-1",
         !isMapFullscreen && "lg:grid-cols-[220px_minmax(0,1fr)_270px] xl:grid-cols-[230px_minmax(0,1fr)_280px] 2xl:grid-cols-[240px_minmax(0,1fr)_300px] 3xl:grid-cols-[250px_minmax(0,1fr)_320px]"
       )}>
         
         {/* Left Sidebar */}
         {!isMapFullscreen ? (
-          <aside className="hidden lg:block">
+          <aside className="hidden min-h-0 lg:block">
             <ProposalSidebar2
               countries={hasMounted ? sortedSidebarCountries : []}
               activeItem={activeSidebarItem}
@@ -704,7 +732,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
             setSearchQuery={setSearchQuery}
             isDemoMode={isDemoMode}
             viewerRegisterHref={viewerRegisterHref}
-            isMenuOpen={menuOpen}
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
             onPreviewViewer={() => setActiveMapMode("viewer")}
             onReturnToCreator={() => setActiveMapMode("creator")}
@@ -712,7 +739,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
             onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
             onOpenAdmin={openAdminPanel}
             lastExtractionAt={channel.last_synced_at || null}
-            onOpenMenu={() => setMenuOpen(true)}
           />
           ) : null}
 
@@ -768,11 +794,13 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
 
               <div className="pointer-events-none absolute inset-x-0 top-[92px] bottom-[92px] z-[80] hidden px-4 lg:block">
                 <div className="flex h-full items-center justify-center">
-                  <div className="pointer-events-auto w-full max-w-[480px]">
+                  <div className="pointer-events-auto w-full max-w-[480px] transition-all duration-500">
                     <DesktopVideoMapCard
                       videos={activeLocationVideos}
                       currentVideo={pinnedVideo}
-                      sponsorNames={resolveVideoSponsorNames(pinnedVideo)}
+                      sponsors={sponsors}
+                      hidePlatformAds={hidePlatformAds}
+                      platformAd={activePlatformAd}
                       activity={videoActivity}
                       onClose={() => requestVideoExit(() => setPinnedVideo(null))}
                       onChangeVideo={(video) => requestVideoExit(() => changeMapVideo(video))}
@@ -1236,10 +1264,10 @@ function ProposalSidebar2({
   ];
 
   return (
-    <aside data-component="ProposalSidebar2" className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
+    <aside data-component="ProposalSidebar2" className="relative z-20 flex min-h-0 flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
       
       {/* Brand Logo Header */}
-      <div className="mb-4 flex items-center justify-between lg:block">
+      <div className="mb-4 flex shrink-0 items-center justify-between lg:block">
         <Link href="/" className="group flex items-center gap-3 text-left">
           <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#ff5a3d]/25 bg-[#ff5a3d]/10 text-[#ff7b4f] transition group-hover:scale-105">
             <svg viewBox="0 0 24 24" className="w-6 h-6 fill-none stroke-current" strokeWidth="2.5">
@@ -1264,8 +1292,8 @@ function ProposalSidebar2({
       </div>
 
       {/* Countries segment (from map data) */}
-      <div className="mt-2 hidden rounded-xl p-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-        <div className="mb-3">
+      <div className="mt-2 hidden rounded-xl p-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
+        <div className="mb-3 shrink-0">
           <div className="flex items-center justify-between gap-2">
             <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#818a93]">Países</p>
             <div className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] p-0.5">
@@ -1294,8 +1322,8 @@ function ProposalSidebar2({
         </div>
         
         {/* Country list */}
-        <div className="space-y-2.5 overflow-y-auto bg-[#03060a] pr-1 [scrollbar-gutter:stable] lg:flex-1">
-          {countries.slice(0, 5).map((country) => (
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-[#03060a] pr-1 [scrollbar-gutter:stable]">
+          {countries.map((country) => (
             (() => {
               const isComplete = country.count > 0 && country.watchedCount >= country.count;
               const isPartial = country.activeCount > 0 && !isComplete;
@@ -1355,7 +1383,7 @@ function ProposalSidebar2({
       </div>
 
       {/* Main navigation menu items */}
-      <nav className="mt-2 hidden lg:block space-y-1 rounded-xl p-2">
+      <nav className="mt-2 hidden shrink-0 space-y-1 rounded-xl p-2 lg:block">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeItem === item.name;
@@ -1394,22 +1422,19 @@ function ProposalTopbar2({
   setSearchQuery,
   isDemoMode,
   viewerRegisterHref,
-  isMenuOpen,
   onCopyUrl,
   onPreviewViewer,
   onReturnToCreator,
   canReturnToCreator,
   onExtractVideos,
   onOpenAdmin,
-  lastExtractionAt,
-  onOpenMenu
+  lastExtractionAt
 }: {
   activeMapMode: ProposalMapMode;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   isDemoMode: boolean;
   viewerRegisterHref: string;
-  isMenuOpen: boolean;
   onCopyUrl: () => void;
   onPreviewViewer: () => void;
   onReturnToCreator: () => void;
@@ -1417,24 +1442,11 @@ function ProposalTopbar2({
   onExtractVideos: () => void;
   onOpenAdmin: () => void;
   lastExtractionAt: string | null;
-  onOpenMenu: () => void;
 }) {
   const lastExtractionLabel = formatStableDateTime(lastExtractionAt);
   const isViewer = activeMapMode === "viewer";
-  const [isSearchExpandedOnCompact, setIsSearchExpandedOnCompact] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
-  const compactSearchInputRef = useRef<HTMLInputElement | null>(null);
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!isSearchExpandedOnCompact) return;
-    compactSearchInputRef.current?.focus();
-    const onResize = () => {
-      if (window.innerWidth >= 1280) setIsSearchExpandedOnCompact(false);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [isSearchExpandedOnCompact]);
 
   useEffect(() => {
     if (!shareMenuOpen) return;
@@ -1484,51 +1496,17 @@ function ProposalTopbar2({
     <header data-component="ProposalTopbar2" className="relative z-[120] grid gap-3 lg:grid-cols-[minmax(0,0.5fr)_auto] items-center">
       {/* Broadened Sleek Search Bar */}
       <div className="relative flex min-w-0 items-center gap-3">
-        {!isMenuOpen ? (
-          <button
-            type="button"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden"
-            onClick={onOpenMenu}
-            aria-label="Abrir menú lateral"
-          >
-            <List size={19} />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#d7dde5] transition hover:border-white/20 hover:bg-white/[0.07] xl:hidden",
-            isSearchExpandedOnCompact && "pointer-events-none opacity-0"
-          )}
-          onClick={() => setIsSearchExpandedOnCompact(true)}
-          aria-label="Abrir busqueda"
-        >
-          <MagnifyingGlass size={17} />
-        </button>
         <label
-          className={cn(
-            "h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all",
-            isSearchExpandedOnCompact ? "absolute inset-x-0 top-0 z-30 flex" : "hidden xl:flex"
-          )}
+          className="flex h-11 min-w-0 w-full items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.035] px-4 text-[#cbd3dc] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] focus-within:border-[#ff5a3d]/40 transition-all"
         >
           <MagnifyingGlass size={17} className="text-[#818b95]" />
           <input
-            ref={compactSearchInputRef}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-[#818b95]"
             placeholder="Buscar destinos, creadores o videos..."
           />
-          {isSearchExpandedOnCompact ? (
-            <button
-              type="button"
-              onClick={() => setIsSearchExpandedOnCompact(false)}
-              aria-label="Cerrar busqueda"
-              className="text-slate-400 hover:text-white"
-            >
-              <X size={15} />
-            </button>
-          ) : searchQuery ? (
+          {searchQuery ? (
             <button type="button" onClick={() => setSearchQuery("")} aria-label="Limpiar busqueda" className="text-slate-400 hover:text-white">
               <X size={15} />
             </button>

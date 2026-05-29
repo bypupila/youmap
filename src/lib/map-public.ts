@@ -5,7 +5,7 @@ import { buildMapFanVoteIdentity, createEmptyFanVoteSummary, loadMapFanVoteSumma
 import { buildRecommendedFanVoteOptions, type FanVoteOptionInput } from "@/lib/fan-vote-options";
 import { loadMapDataByChannelId, type MapDataPayload } from "@/lib/map-data";
 import { buildPollOptionsFromVideos, loadMapPoll, type MapPollRecord } from "@/lib/map-polls";
-import { tableExists } from "@/lib/db-schema";
+import { columnExists, tableExists } from "@/lib/db-schema";
 import { sql } from "@/lib/neon";
 import type { TravelChannel } from "@/lib/types";
 
@@ -25,6 +25,11 @@ export interface MapRailSponsor {
   description: string | null;
   discount_code: string | null;
   affiliate_url: string | null;
+  category_name?: string | null;
+  action_type?: "link" | "coupon" | null;
+  action_value?: string | null;
+  cta_label?: string | null;
+  display_order?: number;
   country_codes: string[];
   video_ids?: string[];
   scope?: "global" | "country" | "video";
@@ -56,7 +61,6 @@ interface PublicChannelRow {
 }
 
 const FALLBACK_SHARE_HOST = "https://travelyourmap.bypupila.com";
-const BY_PUPILA_KEYS = new Set(["bypupila", "by.pupila"]);
 const LOCAL_GLOBAL_MAP_IDS = new Set(["luisito-global-map", "drew-global-map"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -167,12 +171,35 @@ async function resolvePublicChannel(identifier: string): Promise<PublicChannelRo
   return rows[0] || null;
 }
 
-async function loadSponsorsForUser(userId: string, fallbackKey: string | null) {
-  const hasSponsorVideoRules = await tableExists("public", "sponsor_video_rules");
+async function loadSponsorsForUser(userId: string) {
+  const [
+    hasSponsorVideoRules,
+    hasCategoryId,
+    hasActionType,
+    hasActionValue,
+    hasCtaLabel,
+    hasDisplayOrder,
+    hasSponsorCategories,
+  ] = await Promise.all([
+    tableExists("public", "sponsor_video_rules"),
+    columnExists("public", "sponsors", "category_id"),
+    columnExists("public", "sponsors", "action_type"),
+    columnExists("public", "sponsors", "action_value"),
+    columnExists("public", "sponsors", "cta_label"),
+    columnExists("public", "sponsors", "display_order"),
+    tableExists("public", "sponsor_categories"),
+  ]);
   const selectVideoIds = hasSponsorVideoRules
     ? "coalesce(array_remove(array_agg(distinct svr.video_id::text), null), '{}'::text[]) as video_ids"
     : "'{}'::text[] as video_ids";
   const joinVideoRules = hasSponsorVideoRules ? "left join public.sponsor_video_rules svr on svr.sponsor_id = s.id" : "";
+  const selectCategoryName = hasCategoryId && hasSponsorCategories ? "max(sc.name) as category_name" : "null::text as category_name";
+  const selectActionType = hasActionType ? "s.action_type::text as action_type" : "null::text as action_type";
+  const selectActionValue = hasActionValue ? "s.action_value as action_value" : "null::text as action_value";
+  const selectCtaLabel = hasCtaLabel ? "s.cta_label as cta_label" : "null::text as cta_label";
+  const selectDisplayOrder = hasDisplayOrder ? "s.display_order::int as display_order" : "0::int as display_order";
+  const joinCategories = hasCategoryId && hasSponsorCategories ? "left join public.sponsor_categories sc on sc.id = s.category_id" : "";
+  const sponsorOrderBy = hasDisplayOrder ? "order by s.display_order asc, s.created_at desc" : "order by s.created_at desc";
   const normalizeSponsorRow = (sponsor: {
     id: string;
     brand_name: string;
@@ -180,14 +207,31 @@ async function loadSponsorsForUser(userId: string, fallbackKey: string | null) {
     description: string | null;
     discount_code: string | null;
     affiliate_url: string | null;
+    category_name: string | null;
+    action_type: string | null;
+    action_value: string | null;
+    cta_label: string | null;
+    display_order: number | string | null;
     country_codes: string[] | null;
     video_ids: string[] | null;
   }): MapRailSponsor => {
     const countryCodes = sponsor.country_codes || [];
     const videoIds = sponsor.video_ids || [];
     const scope: "global" | "country" | "video" = videoIds.length > 0 ? "video" : countryCodes.length > 0 ? "country" : "global";
+    const actionType = sponsor.action_type === "coupon" ? "coupon" : sponsor.action_type === "link" ? "link" : null;
+    const displayOrder = sponsor.display_order === null ? 0 : Number(sponsor.display_order);
     return {
-      ...sponsor,
+      id: sponsor.id,
+      brand_name: sponsor.brand_name,
+      logo_url: sponsor.logo_url,
+      description: sponsor.description,
+      discount_code: sponsor.discount_code,
+      affiliate_url: sponsor.affiliate_url,
+      category_name: sponsor.category_name,
+      action_type: actionType,
+      action_value: sponsor.action_value,
+      cta_label: sponsor.cta_label,
+      display_order: Number.isFinite(displayOrder) ? displayOrder : 0,
       country_codes: countryCodes,
       video_ids: videoIds,
       scope,
@@ -202,6 +246,11 @@ async function loadSponsorsForUser(userId: string, fallbackKey: string | null) {
       description: string | null;
       discount_code: string | null;
       affiliate_url: string | null;
+      category_name: string | null;
+      action_type: string | null;
+      action_value: string | null;
+      cta_label: string | null;
+      display_order: number | string | null;
       country_codes: string[] | null;
       video_ids: string[] | null;
     }>>(
@@ -213,14 +262,20 @@ async function loadSponsorsForUser(userId: string, fallbackKey: string | null) {
           s.description,
           s.discount_code,
           s.affiliate_url,
+          ${selectCategoryName},
+          ${selectActionType},
+          ${selectActionValue},
+          ${selectCtaLabel},
+          ${selectDisplayOrder},
           array_remove(array_agg(distinct sgr.country_code), null) as country_codes,
           ${selectVideoIds}
         from public.sponsors s
         left join public.sponsor_geo_rules sgr on sgr.sponsor_id = s.id
         ${joinVideoRules}
+        ${joinCategories}
         where s.active = true
         group by s.id
-        order by s.created_at desc
+        ${sponsorOrderBy}
         limit 60
       `
     );
@@ -239,6 +294,11 @@ async function loadSponsorsForUser(userId: string, fallbackKey: string | null) {
     description: string | null;
     discount_code: string | null;
     affiliate_url: string | null;
+    category_name: string | null;
+    action_type: string | null;
+    action_value: string | null;
+    cta_label: string | null;
+    display_order: number | string | null;
     country_codes: string[] | null;
     video_ids: string[] | null;
   }>>(
@@ -250,26 +310,28 @@ async function loadSponsorsForUser(userId: string, fallbackKey: string | null) {
         s.description,
         s.discount_code,
         s.affiliate_url,
+        ${selectCategoryName},
+        ${selectActionType},
+        ${selectActionValue},
+        ${selectCtaLabel},
+        ${selectDisplayOrder},
         array_remove(array_agg(distinct sgr.country_code), null) as country_codes,
         ${selectVideoIds}
       from public.sponsors s
       left join public.sponsor_geo_rules sgr on sgr.sponsor_id = s.id
       ${joinVideoRules}
+      ${joinCategories}
       where s.user_id = $1
         and s.active = true
       group by s.id
-      order by s.created_at desc
-      limit 6
+      ${sponsorOrderBy}
+      limit 60
     `,
     [userId]
   );
 
   if (sponsors.length > 0) {
     return sponsors.map(normalizeSponsorRow);
-  }
-
-  if (fallbackKey && BY_PUPILA_KEYS.has(fallbackKey)) {
-    return EXAMPLE_SPONSORS;
   }
 
   return [];
@@ -389,7 +451,7 @@ async function loadPublicMapPayloadByChannelRef(
       voterFingerprint,
     }),
   });
-  const sponsors = await loadSponsorsForUser(channelRef.user_id, canonicalHandle || normalizeUsername(channelRef.username));
+  const sponsors = await loadSponsorsForUser(channelRef.user_id);
   const publicSummary = isOwner
     ? mapPayload.summary
     : {

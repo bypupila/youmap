@@ -18,6 +18,12 @@ const sponsorPayloadSchema = z.object({
   affiliate_url: z.string().trim().url().optional().nullable().or(z.literal("")),
   discount_code: z.string().trim().max(40).optional().nullable(),
   description: z.string().trim().max(80).optional().nullable(),
+  category_id: z.string().uuid().optional().nullable(),
+  category_name: z.string().trim().max(60).optional().nullable(),
+  action_type: z.enum(["link", "coupon"]).default("link"),
+  action_value: z.string().trim().max(160).optional().nullable(),
+  cta_label: z.string().trim().max(60).optional().nullable(),
+  display_order: z.number().int().min(0).max(1_000_000).optional().nullable(),
   scope: z.enum(["global", "country", "video"]),
   country_codes: z.array(z.string().trim().length(2)).default([]),
   video_ids: z.array(z.string().uuid()).default([]),
@@ -29,6 +35,20 @@ const sponsorPayloadSchema = z.object({
 
 function cleanUrl(value: string | null | undefined) {
   return value && value.trim() ? value.trim() : null;
+}
+
+function cleanText(value: string | null | undefined) {
+  return value && value.trim() ? value.trim() : null;
+}
+
+function normalizeCategorySlug(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 function normalizeSponsorPayload(payload: z.infer<typeof sponsorPayloadSchema>) {
@@ -45,24 +65,84 @@ function normalizeSponsorPayload(payload: z.infer<typeof sponsorPayloadSchema>) 
     logo_url: cleanUrl(payload.logo_url),
     website_url: cleanUrl(payload.website_url),
     affiliate_url: cleanUrl(payload.affiliate_url),
+    category_name: cleanText(payload.category_name),
+    action_value: cleanText(payload.action_value),
+    cta_label: cleanText(payload.cta_label),
     country_codes: payload.scope === "country" ? countryCodes : [],
     video_ids: payload.scope === "video" ? videoIds : [],
   };
 }
 
 async function getSponsorSchemaFeatures() {
-  const [hasSponsorVideoRules, hasStartDate, hasEndDate, hasInternalNotes] = await Promise.all([
+  const [
+    hasSponsorVideoRules,
+    hasStartDate,
+    hasEndDate,
+    hasInternalNotes,
+    hasCategoryId,
+    hasActionType,
+    hasActionValue,
+    hasCtaLabel,
+    hasDisplayOrder,
+    hasSponsorCategories,
+  ] = await Promise.all([
     tableExists("public", "sponsor_video_rules"),
     columnExists("public", "sponsors", "start_date"),
     columnExists("public", "sponsors", "end_date"),
     columnExists("public", "sponsors", "internal_notes"),
+    columnExists("public", "sponsors", "category_id"),
+    columnExists("public", "sponsors", "action_type"),
+    columnExists("public", "sponsors", "action_value"),
+    columnExists("public", "sponsors", "cta_label"),
+    columnExists("public", "sponsors", "display_order"),
+    tableExists("public", "sponsor_categories"),
   ]);
 
   return {
     hasSponsorVideoRules,
     hasDates: hasStartDate && hasEndDate,
     hasInternalNotes,
+    hasCategoryId,
+    hasActionType,
+    hasActionValue,
+    hasCtaLabel,
+    hasDisplayOrder,
+    hasSponsorCategories,
   };
+}
+
+async function resolveSponsorCategoryId(
+  payload: ReturnType<typeof normalizeSponsorPayload>,
+  ownerUserId: string,
+  schema: Awaited<ReturnType<typeof getSponsorSchemaFeatures>>
+) {
+  if (!schema.hasCategoryId || !schema.hasSponsorCategories) return null;
+
+  if (payload.category_name) {
+    const normalizedSlug = normalizeCategorySlug(payload.category_name);
+    if (!normalizedSlug) throw new Error("La categoría personalizada no es válida.");
+    const rows = await sql<Array<{ id: string }>>`
+      insert into public.sponsor_categories (user_id, name, slug)
+      values (${ownerUserId}, ${payload.category_name}, ${normalizedSlug})
+      on conflict (user_id, slug)
+      do update set name = excluded.name, updated_at = now()
+      returning id
+    `;
+    return rows[0]?.id || null;
+  }
+
+  if (!payload.category_id) return null;
+  const rows = await sql<Array<{ id: string }>>`
+    select id
+    from public.sponsor_categories
+    where id = ${payload.category_id}
+      and user_id = ${ownerUserId}
+    limit 1
+  `;
+  if (!rows[0]?.id) {
+    throw new Error("La categoría seleccionada no pertenece a este perfil.");
+  }
+  return rows[0].id;
 }
 
 export async function POST(request: Request) {
@@ -77,6 +157,7 @@ export async function POST(request: Request) {
     const access = await requireCreatorChannelAccess(payload.channelId, sessionUser.id);
     if (!access?.ownerUserId) return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });
     const schema = await getSponsorSchemaFeatures();
+    const resolvedCategoryId = await resolveSponsorCategoryId(payload, access.ownerUserId, schema);
 
     const duplicateRows = await sql<Array<{ id: string }>>`
       select id
@@ -118,6 +199,26 @@ export async function POST(request: Request) {
       insertColumns.push("internal_notes");
       insertValues.push(payload.internal_notes || null);
     }
+    if (schema.hasCategoryId) {
+      insertColumns.push("category_id");
+      insertValues.push(resolvedCategoryId);
+    }
+    if (schema.hasActionType) {
+      insertColumns.push("action_type");
+      insertValues.push(payload.action_type);
+    }
+    if (schema.hasActionValue) {
+      insertColumns.push("action_value");
+      insertValues.push(payload.action_value || null);
+    }
+    if (schema.hasCtaLabel) {
+      insertColumns.push("cta_label");
+      insertValues.push(payload.cta_label || null);
+    }
+    if (schema.hasDisplayOrder) {
+      insertColumns.push("display_order");
+      insertValues.push(payload.display_order ?? 100);
+    }
     const valuePlaceholders = insertValues.map((_, index) => `$${index + 1}`).join(", ");
     const rows = await sql.query<Array<{ id: string }>>(
       `insert into public.sponsors (${insertColumns.join(", ")})
@@ -139,7 +240,7 @@ export async function POST(request: Request) {
       entityType: "sponsor",
       entityId: sponsorId,
       description: `${sessionUser.username} creo el sponsor "${payload.brand_name}"`,
-      metadata: { scope: payload.scope },
+      metadata: { scope: payload.scope, action_type: payload.action_type, category_id: resolvedCategoryId },
     });
 
     return NextResponse.json({ ok: true, id: sponsorId });
@@ -164,6 +265,7 @@ export async function PATCH(request: Request) {
     const access = await requireCreatorChannelAccess(payload.channelId, sessionUser.id);
     if (!access?.ownerUserId) return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });
     const schema = await getSponsorSchemaFeatures();
+    const resolvedCategoryId = await resolveSponsorCategoryId(payload, access.ownerUserId, schema);
 
     const setClauses = [
       "brand_name = $1",
@@ -193,6 +295,26 @@ export async function PATCH(request: Request) {
       setClauses.push(`internal_notes = $${updateValues.length + 1}`);
       updateValues.push(payload.internal_notes || null);
     }
+    if (schema.hasCategoryId) {
+      setClauses.push(`category_id = $${updateValues.length + 1}`);
+      updateValues.push(resolvedCategoryId);
+    }
+    if (schema.hasActionType) {
+      setClauses.push(`action_type = $${updateValues.length + 1}`);
+      updateValues.push(payload.action_type);
+    }
+    if (schema.hasActionValue) {
+      setClauses.push(`action_value = $${updateValues.length + 1}`);
+      updateValues.push(payload.action_value || null);
+    }
+    if (schema.hasCtaLabel) {
+      setClauses.push(`cta_label = $${updateValues.length + 1}`);
+      updateValues.push(payload.cta_label || null);
+    }
+    if (schema.hasDisplayOrder && typeof payload.display_order === "number") {
+      setClauses.push(`display_order = $${updateValues.length + 1}`);
+      updateValues.push(payload.display_order);
+    }
     updateValues.push(payload.sponsorId, access.ownerUserId);
     const rows = await sql.query<Array<{ id: string }>>(
       `update public.sponsors
@@ -216,7 +338,7 @@ export async function PATCH(request: Request) {
       entityType: "sponsor",
       entityId: sponsorId,
       description: `${sessionUser.username} actualizo el sponsor "${payload.brand_name}"`,
-      metadata: { scope: payload.scope },
+      metadata: { scope: payload.scope, action_type: payload.action_type, category_id: resolvedCategoryId },
     });
 
     return NextResponse.json({ ok: true, id: sponsorId });
