@@ -1861,7 +1861,7 @@ function MobileMapMenu({
               />
               <MobileMenuButton icon={UsersThree} label="Sponsors" count={sponsors.length || undefined} onClick={() => goToTab("community")} />
               {viewer.isOwner ? <MobileMenuButton icon={GearSix} label="Ajustes" count={pendingManual.length || undefined} onClick={() => { setMissingVideosOpen(true); closeMenu(); }} /> : null}
-              {creatorPanelHref && canUseAdminPanels ? <MobileMenuButton icon={ChartBar} label="Panel" href={creatorPanelHref} /> : null}
+              {creatorPanelHref && canUseAdminPanels ? <MobileMenuButton icon={ChartBar} label="Panel" href={creatorPanelHref} prefetch={false} /> : null}
             </nav>
 
             <div className="mt-auto space-y-2">
@@ -1871,7 +1871,7 @@ function MobileMapMenu({
                   Abrir en YouTube
                 </a>
               ) : null}
-              <Link href={mapUrl} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]">
+              <Link prefetch={false} href={mapUrl} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[12px] font-medium text-[#dbe1e7]">
                 <MapPin size={15} />
                 Abrir mapa publico
               </Link>
@@ -1893,12 +1893,14 @@ function MobileMenuButton({
   href,
   onClick,
   count,
+  prefetch = true,
 }: {
   icon: Icon;
   label: string;
   href?: string;
   onClick?: () => void;
   count?: number;
+  prefetch?: boolean;
 }) {
   const content = (
     <>
@@ -1912,7 +1914,7 @@ function MobileMenuButton({
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link prefetch={prefetch} href={href} className={className}>
         {content}
       </Link>
     );
@@ -2558,7 +2560,7 @@ function MapTopBar({
         <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
           {canUseAdminPanels && creatorPanelHref ? (
             <Button asChild type="button" size="sm" className="shrink-0 bg-[#c91f18] text-white hover:bg-[#e03128]">
-              <Link href={`${creatorPanelHref}&tab=ops&focus=missing-videos`}>
+              <Link prefetch={false} href={`${creatorPanelHref}&tab=ops&focus=missing-videos`}>
                 <WarningCircle size={14} />
                 Videos faltantes
               </Link>
@@ -2566,7 +2568,7 @@ function MapTopBar({
           ) : null}
           {canUseAdminPanels && creatorPanelHref ? (
             <Button asChild size="sm" variant="outline" className="shrink-0">
-              <Link href={creatorPanelHref}>
+              <Link prefetch={false} href={creatorPanelHref}>
                 <GearSix size={14} />
                 Panel
               </Link>

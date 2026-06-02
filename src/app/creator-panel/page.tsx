@@ -78,7 +78,7 @@ export default async function CreatorPanelPage({ searchParams }: CreatorPanelPag
               <p className="text-[11px] uppercase tracking-[0.14em] text-[#9da5ae]">{isDemoMode ? "Demo Creator" : "Creator Real"}</p>
               <h1 className="text-[20px] font-semibold tracking-tight text-[#f5f7fb]">Panel</h1>
             </div>
-            <Link href={mapUrl} className="inline-flex h-9 items-center rounded-lg border border-white/10 px-3 text-[12px] text-[#d8dee6] hover:bg-white/[0.06]">
+            <Link prefetch={false} href={mapUrl} className="inline-flex h-9 items-center rounded-lg border border-white/10 px-3 text-[12px] text-[#d8dee6] hover:bg-white/[0.06]">
               Volver al mapa
             </Link>
           </div>

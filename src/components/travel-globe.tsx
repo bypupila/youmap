@@ -33,6 +33,7 @@ type HoverCountryPreview = {
   countryCode: string;
   countryName: string;
   totalVideos: number;
+  activeVideos: number;
   watchedVideos: number;
   startedVideos?: number;
   ratio: number;
@@ -226,14 +227,14 @@ export function TravelGlobe({
     () => (pointMode === "country" ? getTopArcs(pointsData.filter((point) => point.video_count > 0)) : []),
     [pointMode, pointsData]
   );
-  const progressSourceVideos = allVideoLocationsForProgress || videoLocations;
+  const progressSourceVideos = minimalOverlay ? videoLocations : (allVideoLocationsForProgress || videoLocations);
   const watchedCountryProgress = useMemo(() => {
-    const progress = new Map<string, { total: number; watched: number; started: number; ratio: number }>();
+    const progress = new Map<string, { total: number; watched: number; started: number; active: number; ratio: number }>();
 
     for (const video of progressSourceVideos) {
       const countryCode = String(video.country_code || "").toUpperCase().trim();
       if (!countryCode) continue;
-      const current = progress.get(countryCode) || { total: 0, watched: 0, started: 0, ratio: 0 };
+      const current = progress.get(countryCode) || { total: 0, watched: 0, started: 0, active: 0, ratio: 0 };
       current.total += 1;
       if (isVideoComplete(video.youtube_video_id, watchedVideoIds, videoWatchStatusById)) {
         current.watched += 1;
@@ -241,7 +242,8 @@ export function TravelGlobe({
       if (isVideoStartedButIncomplete(video.youtube_video_id, watchedVideoIds, videoWatchStatusById)) {
         current.started += 1;
       }
-      current.ratio = current.total > 0 ? current.watched / current.total : 0;
+      current.active = current.watched + current.started;
+      current.ratio = current.total > 0 ? current.active / current.total : 0;
       progress.set(countryCode, current);
     }
 
@@ -253,7 +255,7 @@ export function TravelGlobe({
   const selectedCountrySummary = useMemo(() => {
     const normalizedCode = String(selectedCountryCode || "").toUpperCase().trim();
     if (!normalizedCode) return null;
-    const stats = watchedCountryProgress.get(normalizedCode) || { total: 0, watched: 0, started: 0, ratio: 0 };
+    const stats = watchedCountryProgress.get(normalizedCode) || { total: 0, watched: 0, started: 0, active: 0, ratio: 0 };
     const matchedVideo = videoLocations.find((video) => String(video.country_code || "").toUpperCase().trim() === normalizedCode);
     const matchedPoint = pointsData.find((point) => point.country_code.toUpperCase() === normalizedCode);
     const countryName = getCountryNameInSpanish(
@@ -264,6 +266,7 @@ export function TravelGlobe({
       countryCode: normalizedCode,
       countryName,
       totalVideos: stats.total,
+      activeVideos: stats.active,
       watchedVideos: stats.watched,
       startedVideos: stats.started,
       ratio: stats.ratio,
@@ -275,28 +278,31 @@ export function TravelGlobe({
         acc.total += stats.total;
         acc.watched += stats.watched;
         acc.started += stats.started;
+        acc.active += stats.active;
         return acc;
       },
-      { total: 0, watched: 0, started: 0 }
+      { total: 0, watched: 0, started: 0, active: 0 }
     );
 
     return {
       countryCode: "__WORLD__",
       countryName: "Mundo",
       totalVideos: totals.total,
+      activeVideos: totals.active,
       watchedVideos: totals.watched,
       startedVideos: totals.started,
-      ratio: totals.total > 0 ? totals.watched / totals.total : 0,
+      ratio: totals.total > 0 ? totals.active / totals.total : 0,
     };
   }, [watchedCountryProgress]);
   const activePointCountryProgress = activePoint
-    ? watchedCountryProgress.get(activePoint.country_code.toUpperCase()) || { total: activePoint.video_count, watched: 0, started: 0, ratio: 0 }
+    ? watchedCountryProgress.get(activePoint.country_code.toUpperCase()) || { total: activePoint.video_count, watched: 0, started: 0, active: 0, ratio: 0 }
     : null;
   const summaryCountry = hoveredCountryPreview || (activePoint
     ? {
         countryCode: activePoint.country_code,
         countryName: activePoint.country_name,
         totalVideos: activePointCountryProgress?.total || activePoint.video_count,
+        activeVideos: activePointCountryProgress?.active || 0,
         watchedVideos: activePointCountryProgress?.watched || 0,
         startedVideos: activePointCountryProgress?.started || 0,
         ratio: activePointCountryProgress?.ratio || 0,
@@ -304,14 +310,13 @@ export function TravelGlobe({
     : selectedCountrySummary || (minimalOverlay ? worldSummary : null));
   const panelCountryCode = summaryCountry?.countryCode || activePoint?.country_code || "";
   const panelCountryName = summaryCountry?.countryName || activePoint?.country_name || "";
-  const panelWatchedVideos = summaryCountry?.watchedVideos ?? activePointCountryProgress?.watched ?? 0;
-  const panelStartedVideos = summaryCountry?.startedVideos ?? activePointCountryProgress?.started ?? 0;
+  const panelActiveVideos = summaryCountry?.activeVideos ?? activePointCountryProgress?.active ?? 0;
   const panelTotalVideos = summaryCountry?.totalVideos ?? activePointCountryProgress?.total ?? activePoint?.video_count ?? 0;
   const panelRatio = summaryCountry?.ratio ?? activePointCountryProgress?.ratio ?? 0;
   const panelPointId = activePoint?.point_id || panelCountryCode || "country";
   const panelPercent = Math.max(0, Math.min(100, Math.round(panelRatio * 100)));
-  const panelProgressComplete = panelPercent >= 100 && panelTotalVideos > 0;
-  const panelProgressZero = panelWatchedVideos <= 0 && panelStartedVideos <= 0;
+  const panelProgressComplete = panelActiveVideos >= panelTotalVideos && panelTotalVideos > 0;
+  const panelProgressZero = panelActiveVideos <= 0;
   const panelProgressTone = panelProgressZero ? "gray" : panelProgressComplete ? "green" : "yellow";
   const panelFlag = panelCountryCode === "__WORLD__" ? "🌍" : countryCodeToFlag(panelCountryCode);
 
@@ -321,12 +326,14 @@ export function TravelGlobe({
       hoverClearTimeoutRef.current = null;
     }
     setHoveredPoint(point);
-    const progress = watchedCountryProgress.get(point.country_code.toUpperCase()) || { total: point.video_count, watched: 0, ratio: 0 };
+    const progress = watchedCountryProgress.get(point.country_code.toUpperCase()) || { total: point.video_count, watched: 0, started: 0, active: 0, ratio: 0 };
     setHoveredCountryPreview({
       countryCode: point.country_code,
       countryName: point.country_name,
       totalVideos: progress.total || point.video_count,
+      activeVideos: progress.active,
       watchedVideos: progress.watched,
+      startedVideos: progress.started,
       ratio: progress.ratio,
     });
   }, [watchedCountryProgress]);
@@ -674,12 +681,14 @@ export function TravelGlobe({
                     onCountryHoverChange?.(null);
                     return;
                   }
-                  const stats = watchedCountryProgress.get(code.toUpperCase()) || { total: 0, watched: 0, started: 0, ratio: 0 };
+                  const stats = watchedCountryProgress.get(code.toUpperCase()) || { total: 0, watched: 0, started: 0, active: 0, ratio: 0 };
                   setHoveredCountryPreview({
                     countryCode: code,
                     countryName: fullCountryName,
                     totalVideos: stats.total,
+                    activeVideos: stats.active,
                     watchedVideos: stats.watched,
+                    startedVideos: stats.started,
                     ratio: stats.ratio,
                   });
                   scheduleHoverPointClear();
@@ -828,11 +837,27 @@ export function TravelGlobe({
               }
             >
               {isMobileViewport ? (
-                <div className="flex min-w-0 items-center justify-center gap-2 text-center">
-                  <span className="shrink-0 text-lg leading-none">{panelFlag}</span>
-                  <h2 className="min-w-0 break-words text-[12px] font-semibold leading-tight tracking-[0.02em] text-[#d5dde6]">
-                    {panelCountryName}
-                  </h2>
+                <div className="flex min-w-0 flex-col items-center justify-center gap-1 text-center">
+                  <div className="flex min-w-0 items-center justify-center gap-2">
+                    <span className="shrink-0 text-lg leading-none">{panelFlag}</span>
+                    <h2 className="min-w-0 break-words text-[12px] font-semibold leading-tight tracking-[0.02em] text-[#d5dde6]">
+                      {panelCountryName}
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={panelProgressTone === "green" ? "text-[9px] font-mono text-emerald-300" : panelProgressTone === "yellow" ? "text-[9px] font-mono text-yellow-300" : "text-[9px] font-mono text-slate-400"}>
+                      {panelActiveVideos}/{panelTotalVideos}
+                    </span>
+                    <span className={panelProgressTone === "green" ? "h-0.5 w-8 overflow-hidden rounded-full bg-emerald-500/25" : panelProgressTone === "yellow" ? "h-0.5 w-8 overflow-hidden rounded-full bg-yellow-500/25" : "h-0.5 w-8 overflow-hidden rounded-full bg-slate-500/25"}>
+                      <span
+                        className={panelProgressTone === "green" ? "block h-full rounded-full bg-emerald-400/90" : panelProgressTone === "yellow" ? "block h-full rounded-full bg-yellow-300/90" : "block h-full rounded-full bg-slate-400/90"}
+                        style={{ width: `${panelPercent}%` }}
+                      />
+                    </span>
+                    <span className={panelProgressTone === "green" ? "w-7 text-right font-mono text-[10px] font-bold text-emerald-300" : panelProgressTone === "yellow" ? "w-7 text-right font-mono text-[10px] font-bold text-yellow-300" : "w-7 text-right font-mono text-[10px] font-bold text-slate-400"}>
+                      {panelPercent}%
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -842,7 +867,7 @@ export function TravelGlobe({
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className={panelProgressTone === "green" ? "text-[10px] font-mono text-emerald-300" : panelProgressTone === "yellow" ? "text-[10px] font-mono text-yellow-300" : "text-[10px] font-mono text-slate-400"}>
-                      {panelWatchedVideos}/{panelTotalVideos}
+                      {panelActiveVideos}/{panelTotalVideos}
                     </span>
                     <span className={panelProgressTone === "green" ? "h-0.5 w-10 overflow-hidden rounded-full bg-emerald-500/25" : panelProgressTone === "yellow" ? "h-0.5 w-10 overflow-hidden rounded-full bg-yellow-500/25" : "h-0.5 w-10 overflow-hidden rounded-full bg-slate-500/25"}>
                       <span

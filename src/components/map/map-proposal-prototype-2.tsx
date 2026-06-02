@@ -247,7 +247,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
   const [localFanVotes, setLocalFanVotes] = useState<Record<string, number>>({});
   const [votePrompt, setVotePrompt] = useState<LocalVotePrompt | null>(null);
   const [votedCountryCode, setVotedCountryCode] = useState<string | null>(null);
-  const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("alphabetical");
+  const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("seen");
   const [hasMounted, setHasMounted] = useState(false);
   const isCreatorWorkspace = activeMapMode === "creator";
   const adminPanelHref = useMemo(() => {
@@ -296,7 +296,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
     }
 
     const countryPriority = (country: SidebarCountryItem) => {
-      const isComplete = country.count > 0 && country.watchedCount >= country.count;
+      const isComplete = country.count > 0 && country.activeCount >= country.count;
       const isPartial = country.activeCount > 0 && !isComplete;
       if (isPartial) return 0; // amarillo primero
       if (!isComplete) return 1; // gris segundo
@@ -656,13 +656,13 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_18%,rgba(255,90,61,0.08),transparent_35%),linear-gradient(180deg,#04090f,#030508_60%,#010204)] pointer-events-none" />
       
       <div className={cn(
-        "relative grid h-screen overflow-hidden grid-cols-1",
+        "relative grid h-screen min-h-0 overflow-hidden grid-cols-1",
         !isMapFullscreen && "lg:grid-cols-[220px_minmax(0,1fr)_270px] xl:grid-cols-[230px_minmax(0,1fr)_280px] 2xl:grid-cols-[240px_minmax(0,1fr)_300px] 3xl:grid-cols-[250px_minmax(0,1fr)_320px]"
       )}>
         
         {/* Left Sidebar */}
         {!isMapFullscreen ? (
-          <aside className="hidden lg:block">
+          <aside className="hidden min-h-0 lg:block">
             <ProposalSidebar2
               countries={hasMounted ? sortedSidebarCountries : []}
               activeItem={activeSidebarItem}
@@ -1212,10 +1212,10 @@ function ProposalSidebar2({
   ];
 
   return (
-    <aside className="relative z-20 flex flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
+    <aside className="relative z-20 flex min-h-0 flex-col border-b border-white/[0.07] bg-[#03060a] px-4 py-4 lg:h-full lg:overflow-hidden lg:border-b-0 lg:border-r">
       
       {/* Brand Logo Header */}
-      <div className="mb-4 flex items-center justify-between lg:block">
+      <div className="mb-4 flex shrink-0 items-center justify-between lg:block">
         <Link href="/" className="group flex items-center gap-3 text-left">
           <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#ff5a3d]/25 bg-[#ff5a3d]/10 text-[#ff7b4f] transition group-hover:scale-105">
             <svg viewBox="0 0 24 24" className="w-6 h-6 fill-none stroke-current" strokeWidth="2.5">
@@ -1240,10 +1240,9 @@ function ProposalSidebar2({
       </div>
 
       {/* Countries segment (from map data) */}
-      <div className="mt-2 hidden rounded-xl p-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-        <div className="mb-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#818a93]">Países</p>
+      <div className="mt-2 hidden rounded-xl p-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
+        <div className="mb-3 shrink-0">
+          <div className="flex items-center justify-start gap-2">
             <div className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] p-0.5">
               <button
                 type="button"
@@ -1270,10 +1269,10 @@ function ProposalSidebar2({
         </div>
         
         {/* Country list */}
-        <div className="space-y-2.5 overflow-y-auto bg-[#03060a] pr-1 [scrollbar-gutter:stable] lg:flex-1">
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-[#03060a] pr-1 [scrollbar-gutter:stable]">
           {countries.map((country) => (
             (() => {
-              const isComplete = country.count > 0 && country.watchedCount >= country.count;
+              const isComplete = country.count > 0 && country.activeCount >= country.count;
               const isPartial = country.activeCount > 0 && !isComplete;
               const toneClasses = isComplete
                 ? {
@@ -1331,7 +1330,7 @@ function ProposalSidebar2({
       </div>
 
       {/* Main navigation menu items */}
-      <nav className="mt-2 hidden lg:block space-y-1 rounded-xl p-2">
+      <nav className="mt-2 hidden shrink-0 space-y-1 rounded-xl p-2 lg:block">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeItem === item.name;

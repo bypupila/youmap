@@ -215,7 +215,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   const [localFanVotes, setLocalFanVotes] = useState<Record<string, number>>({});
   const [votePrompt, setVotePrompt] = useState<LocalVotePrompt | null>(null);
   const [votedCountryCode, setVotedCountryCode] = useState<string | null>(null);
-  const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("alphabetical");
+  const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("seen");
   const [hasMounted, setHasMounted] = useState(false);
   const [activePlatformAd, setActivePlatformAd] = useState<ActivePlatformAd | null>(null);
   const viewerSubscription = useSubscription({ demo: isDemoMode });
@@ -276,7 +276,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     }
 
     const countryPriority = (country: SidebarCountryItem) => {
-      const isComplete = country.count > 0 && country.watchedCount >= country.count;
+      const isComplete = country.count > 0 && country.activeCount >= country.count;
       const isPartial = country.activeCount > 0 && !isComplete;
       if (isPartial) return 0; // amarillo primero
       if (!isComplete) return 1; // gris segundo
@@ -1294,8 +1294,7 @@ function ProposalSidebar2({
       {/* Countries segment (from map data) */}
       <div className="mt-2 hidden rounded-xl p-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
         <div className="mb-3 shrink-0">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#818a93]">Países</p>
+          <div className="flex items-center justify-start gap-2">
             <div className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] p-0.5">
               <button
                 type="button"
@@ -1325,7 +1324,7 @@ function ProposalSidebar2({
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-[#03060a] pr-1 [scrollbar-gutter:stable]">
           {countries.map((country) => (
             (() => {
-              const isComplete = country.count > 0 && country.watchedCount >= country.count;
+              const isComplete = country.count > 0 && country.activeCount >= country.count;
               const isPartial = country.activeCount > 0 && !isComplete;
               const toneClasses = isComplete
                 ? {
