@@ -46,7 +46,8 @@ import { MissingVideosDialog } from "@/components/map/missing-videos-dialog";
 import { useLocalVideoActivity } from "@/components/map/video-activity";
 import type { VideoActivityController, VideoActivityTab, VideoWatchStatus } from "@/components/map/video-activity";
 import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
-import { countryCodeToFlag, getVideoCityLabel } from "@/components/map/video-viewer-utils";
+import { getVideoCityLabel } from "@/components/map/video-viewer-utils";
+import { CountryFlag } from "@/components/ui/country-flag";
 import { getDemoSponsorByCountry } from "@/lib/demo-data";
 import { TravelGlobe } from "@/components/travel-globe";
 import { Badge } from "@/components/ui/badge";
@@ -429,7 +430,10 @@ export function MapExperience({
   const [videoPlaybackCommand, setVideoPlaybackCommand] = useState<{ id: number; action: "pause" | "play" } | null>(null);
   const demoSponsorsBaselineRef = useRef<MapRailSponsor[]>(sponsors);
   const [isDesktopViewport, setIsDesktopViewport] = useState(false);
-  const videoActivity = useLocalVideoActivity();
+  const videoActivity = useLocalVideoActivity({
+    channelId: channelId || channel.id,
+    persistToProfile: Boolean(viewer.isAuthenticated && !viewer.isOwner && viewMode !== "demo"),
+  });
   const rootRef = useRef<HTMLDivElement | null>(null);
   const videosRailRef = useRef<HTMLDivElement | null>(null);
   const votesRailRef = useRef<HTMLDivElement | null>(null);
@@ -2959,7 +2963,10 @@ function MapCenterStage({
             <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.74))]" />
             <div className="absolute inset-x-0 bottom-0 p-3">
               <p className="line-clamp-2 text-[12px] font-semibold leading-5 text-[#f5f7fb]">{hoverPreviewVideo.title}</p>
-              <p className="mt-1 text-[10px] text-[#c7d0d9]">{countryCodeToFlag(hoverPreviewVideo.country_code)} {formatPlace(hoverPreviewVideo)}</p>
+              <p className="mt-1 text-[10px] text-[#c7d0d9]">
+                <CountryFlag code={hoverPreviewVideo.country_code} size={12} className="mr-1 align-[-1px]" />
+                {formatPlace(hoverPreviewVideo)}
+              </p>
             </div>
           </div>
         </button>
@@ -2972,7 +2979,7 @@ function MapCenterStage({
             hoverPreviewVideo ? "top-[13.5rem]" : "top-16"
           )}
         >
-          <span aria-hidden="true" className="text-[14px] leading-none">{countryCodeToFlag(hoveredCountryPin.countryCode)}</span>
+          <CountryFlag code={hoveredCountryPin.countryCode} size={14} className="align-[-1px]" />
           <span className="max-w-[220px] truncate">{hoveredCountryPin.countryName}</span>
         </div>
       ) : null}
@@ -3010,7 +3017,8 @@ function MapCenterStage({
                   <p className="min-w-0 text-[12px] leading-5">
                     ¿Quieres votar por{" "}
                     <span className="font-semibold text-[#f5f7fb]">
-                      {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}
+                      <CountryFlag code={mapVotePrompt.countryCode} size={14} className="mr-1 align-[-1px]" />
+                      {mapVotePrompt.countryName}
                     </span>
                     ?
                   </p>
@@ -3036,7 +3044,7 @@ function MapCenterStage({
               ) : mapVotePrompt.status === "cooldown" ? (
                 <div className="flex items-center justify-between gap-3">
                   <p className="min-w-0 text-[12px] leading-5 text-[#ffd7d2]">
-                    Ya votaste esta semana para {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}.
+                    Ya votaste esta semana para <CountryFlag code={mapVotePrompt.countryCode} size={14} className="mr-1 align-[-1px]" /> {mapVotePrompt.countryName}.
                     <span className="block">
                       Podrás votar de nuevo en{" "}
                       <span className="font-semibold text-[#ffd7d2]">{formatRemainingCountdown(mapVotePromptRemainingMs)}</span>.
@@ -3054,7 +3062,7 @@ function MapCenterStage({
               ) : (
                 <div className="flex items-center justify-between gap-3">
                   <p className="min-w-0 text-[12px] leading-5 text-[#ffd7d2]">
-                    Hay una votación live activa para {countryCodeToFlag(mapVotePrompt.countryCode)} {mapVotePrompt.countryName}. Vota desde el panel de Fan Vote.
+                    Hay una votación live activa para <CountryFlag code={mapVotePrompt.countryCode} size={14} className="mr-1 align-[-1px]" /> {mapVotePrompt.countryName}. Vota desde el panel de Fan Vote.
                   </p>
                   <button
                     type="button"
@@ -3085,7 +3093,8 @@ function MapCenterStage({
         <DialogContent className="tm-surface-strong max-w-[min(620px,calc(100%-1.5rem))] justify-items-center border-white/10 bg-[#050a12]/96 text-center text-[#f1f1f1]">
           <DialogHeader className="items-center text-center">
             <DialogTitle className="text-[#f5f7fb]">
-              Votar destino: {votePromptCountryCode ? `${countryCodeToFlag(votePromptCountryCode)} ` : ""}{votePromptCountryName || "País"}
+              Votar destino: {votePromptCountryCode ? <CountryFlag code={votePromptCountryCode} size={14} className="mr-1 align-[-1px]" /> : null}
+              {votePromptCountryName || "País"}
             </DialogTitle>
             <DialogDescription className="text-[#aab2bc]">
               Decide si quieres votar el país completo o una ciudad específica.
@@ -4276,8 +4285,8 @@ function VideoThumb({ video, className }: { video: TravelVideoLocation; classNam
 
 function CountryCodeMark({ code, compact = false }: { code?: string | null; compact?: boolean }) {
   return (
-    <span className={cn("flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white text-[#07101a] font-bold", compact ? "h-7 w-7 text-[12px]" : "h-11 w-11 text-[18px]")}>
-      {countryCodeToFlag(code)}
+    <span className={cn("flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white text-[#07101a] font-bold", compact ? "h-7 w-7" : "h-11 w-11")}>
+      <CountryFlag code={code} size={compact ? 18 : 28} className="rounded-[3px]" />
     </span>
   );
 }

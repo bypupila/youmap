@@ -4,6 +4,7 @@ import { z } from "zod";
 import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
 import { verifyPassword } from "@/lib/auth-password";
 import { setSessionCookie } from "@/lib/auth-session";
+import { normalizeAttributionChannelId, upsertCreatorViewerSubscription } from "@/lib/creator-viewer-subscriptions";
 import { normalizeAppUserRole } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 import { getPostHogClient } from "@/lib/posthog-server";
@@ -11,6 +12,10 @@ import { getPostHogClient } from "@/lib/posthog-server";
 const payloadSchema = z.object({
   identifier: z.string().min(3),
   password: z.string().min(1),
+  registrationChannelId: z.string().trim().optional().nullable(),
+  utmSource: z.string().trim().max(120).optional().nullable(),
+  utmMedium: z.string().trim().max(120).optional().nullable(),
+  utmCampaign: z.string().trim().max(160).optional().nullable(),
 });
 
 export const runtime = "nodejs";
@@ -171,6 +176,19 @@ export async function POST(request: Request) {
     }
 
     await clearRecentFailedAttempts(identifierHash, ipHash);
+    const normalizedRole = normalizeAppUserRole(user.role);
+    const registrationChannelId = normalizeAttributionChannelId(payload.registrationChannelId);
+    const creatorSubscriptionId =
+      normalizedRole === "viewer"
+        ? await upsertCreatorViewerSubscription({
+            channelId: registrationChannelId,
+            viewerUserId: user.id,
+            source: "viewer_login",
+            utmSource: payload.utmSource,
+            utmMedium: payload.utmMedium,
+            utmCampaign: payload.utmCampaign,
+          })
+        : null;
 
     const posthog = getPostHogClient();
     posthog.identify({
@@ -197,8 +215,9 @@ export async function POST(request: Request) {
         email: user.email,
         username: user.username,
         display_name: user.display_name,
-        role: normalizeAppUserRole(user.role),
+        role: normalizedRole,
       },
+      creator_subscription_id: creatorSubscriptionId,
     });
     setSessionCookie(response, user.id, request.headers.get("host"));
     return response;

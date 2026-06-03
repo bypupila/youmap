@@ -1,6 +1,7 @@
 import { access } from "fs/promises";
 import path from "path";
 import { columnExists, tableExists } from "@/lib/db-schema";
+import { sql } from "@/lib/neon";
 import { loadPublicStatus } from "@/lib/public-status";
 
 export type ReleaseCheckStatus = "pass" | "fail" | "warn" | "manual";
@@ -43,6 +44,8 @@ export async function loadReleaseReadiness(): Promise<ReleaseReadinessPayload> {
     hasImportRuns,
     hasViewerProfiles,
     hasUserConsents,
+    hasCreatorViewerSubscriptions,
+    hasViewerVideoActivity,
     hasSponsors,
     hasSponsorVideoRules,
     hasCreatorActivityLog,
@@ -62,6 +65,8 @@ export async function loadReleaseReadiness(): Promise<ReleaseReadinessPayload> {
     tableExists("public", "channel_import_runs"),
     tableExists("public", "viewer_profiles"),
     tableExists("public", "user_consents"),
+    tableExists("public", "creator_viewer_subscriptions"),
+    tableExists("public", "viewer_video_activity"),
     tableExists("public", "sponsors"),
     tableExists("public", "sponsor_video_rules"),
     tableExists("public", "creator_activity_log"),
@@ -74,6 +79,14 @@ export async function loadReleaseReadiness(): Promise<ReleaseReadinessPayload> {
   ]);
 
   const checks: ReleaseCheckItem[] = [];
+  const checkoutPlanRows = await sql<Array<{ checkout_ready: number }>>`
+    select count(*)::int as checkout_ready
+    from public.subscription_plans
+    where is_active = true
+      and slug in ('starter', 'pro', 'creator_plus')
+      and polar_price_id is not null
+  `.catch(() => [{ checkout_ready: 0 }]);
+  const checkoutReadyCount = Number(checkoutPlanRows[0]?.checkout_ready || 0);
 
   const coreTables = [hasUsers, hasChannels, hasVideos, hasVideoLocations, hasMapPolls, hasMapEvents];
   checks.push({
@@ -95,6 +108,26 @@ export async function loadReleaseReadiness(): Promise<ReleaseReadinessPayload> {
       hasViewerProfiles && hasUserConsents
         ? "viewer_profiles y user_consents disponibles."
         : "Faltan tablas de registro viewer o consentimiento.",
+  });
+
+  checks.push({
+    id: "db_viewer_acquisition",
+    group: "Base de datos",
+    label: "Suscripción viewer-creador",
+    status: hasCreatorViewerSubscriptions ? "pass" : "fail",
+    detail: hasCreatorViewerSubscriptions
+      ? "creator_viewer_subscriptions disponible para atribución y ranking de creadores."
+      : "Falta creator_viewer_subscriptions para atribuir registros viewer al creador.",
+  });
+
+  checks.push({
+    id: "db_viewer_video_activity",
+    group: "Base de datos",
+    label: "Actividad de video del viewer",
+    status: hasViewerVideoActivity ? "pass" : "fail",
+    detail: hasViewerVideoActivity
+      ? "viewer_video_activity disponible para favoritos, guardados y estado de reproducción."
+      : "Falta viewer_video_activity; las acciones clave no persisten en perfil.",
   });
 
   checks.push({
@@ -152,6 +185,28 @@ export async function loadReleaseReadiness(): Promise<ReleaseReadinessPayload> {
           ? "warn"
           : "pass",
     detail: `Estado actual: ${publicStatus.overall_status}.`,
+  });
+
+  checks.push({
+    id: "billing_polar_checkout",
+    group: "Billing",
+    label: "Planes Polar activos para checkout",
+    status: checkoutReadyCount >= 3 ? "pass" : "fail",
+    detail:
+      checkoutReadyCount >= 3
+        ? "starter, pro y creator_plus tienen price activo en subscription_plans."
+        : `Solo ${checkoutReadyCount}/3 planes checkout tienen polar_price_id. Ejecutar bootstrap/sync de Polar antes de lanzar.`,
+  });
+
+  checks.push({
+    id: "release_no_payment_bypass",
+    group: "Release",
+    label: "Bypass sin pago bloqueado",
+    status: process.env.NODE_ENV === "production" && process.env.ENABLE_TEST_NO_PAYMENT === "1" ? "fail" : "pass",
+    detail:
+      process.env.NODE_ENV === "production" && process.env.ENABLE_TEST_NO_PAYMENT === "1"
+        ? "ENABLE_TEST_NO_PAYMENT no puede estar activo en producción."
+        : "La activación sin pago requiere flag server explícita y queda bloqueada para producción.",
   });
 
   checks.push({

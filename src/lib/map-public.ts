@@ -163,8 +163,11 @@ async function resolvePublicChannel(identifier: string): Promise<PublicChannelRo
       c.last_synced_at
     from public.channels c
     inner join public.users u on u.id = c.user_id
-    where u.username = ${normalized}
-       or ltrim(lower(coalesce(c.channel_handle, '')), '@') = ${normalized}
+    where c.is_public = true
+      and (
+        u.username = ${normalized}
+        or ltrim(lower(coalesce(c.channel_handle, '')), '@') = ${normalized}
+      )
     limit 1
   `;
 
@@ -417,6 +420,10 @@ export async function loadPublicMapPayloadByChannelId({
     from public.channels c
     inner join public.users u on u.id = c.user_id
     where c.id = ${channelId}
+      and (
+        c.is_public = true
+        or c.user_id = ${viewerUserId || null}
+      )
     limit 1
   `;
 

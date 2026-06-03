@@ -230,6 +230,15 @@ Si quieres proteger el cron de cierre de votaciones:
 - `GET /api/map/polls/:pollId/results` resultados con payload segun audiencia
 - `GET|POST /api/map/polls/close-expired` cierre batch de encuestas vencidas
 
+## Viewer acquisition y perfil
+
+- Los viewers que se registran desde un mapa público crean sesión HTTP-only y quedan atribuidos al canal de origen en `creator_viewer_subscriptions`.
+- `viewer_profiles.registration_channel_id` conserva el canal de adquisición original; `creator_viewer_subscriptions` modela la suscripción gratuita viewer-creador para ranking interno y segmentación futura.
+- Favoritos, guardados y estado de reproducción se persisten en `viewer_video_activity` cuando el viewer está autenticado; en demo/anónimo siguen como mejora local no persistente.
+- La segmentación de marketing interna debe respetar `platform_promotions`; email marketing futuro de creadores debe respetar `creator_promotions`.
+- Segmentación interna superadmin: `GET /api/admin/marketing/segments/creator-viewers?consent=platform|creator&days=90`.
+- El PR de lanzamiento no habilita envíos masivos de email ni checkout de productos digitales de creadores; esas capacidades usan estos contratos como base.
+
 ## Siguiente fase recomendada
 
 1. Aplicar `neon/migrations/0001_initial.sql` en todos los entornos Neon no inicializados.

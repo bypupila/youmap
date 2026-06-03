@@ -9,6 +9,7 @@ import { feature } from "topojson-client";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { SponsorBanner } from "@/components/sponsors/sponsor-banner";
+import { createCountryFlagElement, getCountryFlagClassName } from "@/lib/country-flags";
 import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 
 type PointKind = "country" | "video";
@@ -318,7 +319,12 @@ export function TravelGlobe({
   const panelProgressComplete = panelActiveVideos >= panelTotalVideos && panelTotalVideos > 0;
   const panelProgressZero = panelActiveVideos <= 0;
   const panelProgressTone = panelProgressZero ? "gray" : panelProgressComplete ? "green" : "yellow";
-  const panelFlag = panelCountryCode === "__WORLD__" ? "🌍" : countryCodeToFlag(panelCountryCode);
+  const panelFlag =
+    panelCountryCode === "__WORLD__" ? (
+      "🌍"
+    ) : (
+      <span className={`${getCountryFlagClassName(panelCountryCode)} inline-block h-[12px] w-[16px] rounded-[2px]`} />
+    );
 
   const showHoverPoint = useCallback((point: GlobePoint) => {
     if (hoverClearTimeoutRef.current) {
@@ -824,7 +830,7 @@ export function TravelGlobe({
         <aside
           className={`absolute z-30 text-white backdrop-blur-xl ${
             minimalOverlay
-              ? pointPanelClassName || "left-1/2 top-4 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2"
+              ? pointPanelClassName || "left-1/2 top-4 w-[min(280px,calc(100vw-2rem))] -translate-x-1/2"
               : "right-0 top-0 h-full w-full max-w-[380px] border-l border-white/10 bg-black/85 p-4 sm:p-5"
           }`}
         >
@@ -839,7 +845,7 @@ export function TravelGlobe({
               {isMobileViewport ? (
                 <div className="flex min-w-0 flex-col items-center justify-center gap-1 text-center">
                   <div className="flex min-w-0 items-center justify-center gap-2">
-                    <span className="shrink-0 text-lg leading-none">{panelFlag}</span>
+                    <span className="shrink-0 leading-none">{panelFlag}</span>
                     <h2 className="min-w-0 break-words text-[12px] font-semibold leading-tight tracking-[0.02em] text-[#d5dde6]">
                       {panelCountryName}
                     </h2>
@@ -862,7 +868,7 @@ export function TravelGlobe({
               ) : (
                 <>
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="shrink-0 text-lg leading-none">{panelFlag}</span>
+                    <span className="shrink-0 leading-none">{panelFlag}</span>
                     <h2 className="truncate text-xs font-semibold tracking-[0.02em] text-[#d5dde6]">{panelCountryName}</h2>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -888,7 +894,7 @@ export function TravelGlobe({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-sm">
-                      {countryCodeToFlag(panelCountryCode)}
+                      {panelFlag}
                     </span>
                     <div>
                       <h2 className="text-lg font-semibold">{panelCountryName}</h2>
@@ -978,7 +984,10 @@ export function TravelGlobe({
           </div>
           <div className="border-t border-white/[0.08] px-3 py-2">
             <p className="line-clamp-2 text-[11px] font-bold text-white">{hoveredPoint.videos[0].title}</p>
-            <p className="mt-1 text-[10px] text-[#a9b4c0]">{countryCodeToFlag(hoveredPoint.country_code)} {getCountryNameInSpanish(hoveredPoint.country_code, hoveredPoint.country_name)}</p>
+            <p className="mt-1 text-[10px] text-[#a9b4c0]">
+              <span className={`${getCountryFlagClassName(hoveredPoint.country_code)} mr-1 inline-block h-[10px] w-[14px] rounded-[2px] align-[-1px]`} />
+              {getCountryNameInSpanish(hoveredPoint.country_code, hoveredPoint.country_name)}
+            </p>
           </div>
         </button>
       ) : null}
@@ -1742,9 +1751,7 @@ function createFlagPinElement(
   }
 
   if (denseCluster) {
-    const flag = document.createElement("span");
-    flag.textContent = countryCodeToFlag(point.country_code);
-    flag.style.lineHeight = "1";
+    const flag = createCountryFlagElement(point.country_code, 16);
     flag.style.position = "relative";
     flag.style.zIndex = "2";
 
@@ -1774,11 +1781,9 @@ function createFlagPinElement(
 
     marker.append(flag, count);
   } else {
-    const flag = document.createElement("span");
-    flag.textContent = countryCodeToFlag(point.country_code);
+    const flag = createCountryFlagElement(point.country_code, 16);
     flag.style.position = "relative";
     flag.style.zIndex = "2";
-    flag.style.lineHeight = "1";
     marker.append(flag);
   }
 
@@ -2194,13 +2199,4 @@ function escapeHtml(raw: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
-
-function countryCodeToFlag(countryCode?: string | null) {
-  const code = String(countryCode || "").toUpperCase();
-  if (code.length !== 2) return "TM";
-  const first = code.charCodeAt(0) - 65;
-  const second = code.charCodeAt(1) - 65;
-  if (first < 0 || first > 25 || second < 0 || second > 25) return "TM";
-  return String.fromCodePoint(0x1f1e6 + first, 0x1f1e6 + second);
 }

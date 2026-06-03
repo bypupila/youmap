@@ -31,6 +31,12 @@ import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { TravelGlobe } from "@/components/travel-globe";
 import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
+import {
+  PollEditorFields,
+  buildPollEditorCountriesFromVideos,
+  buildPollEditorFormState,
+  type PollEditorFormState,
+} from "@/components/map/poll-editor-form";
 import { useLocalVideoActivity, type VideoActivityController } from "@/components/map/video-activity";
 import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
@@ -249,6 +255,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
   const [votedCountryCode, setVotedCountryCode] = useState<string | null>(null);
   const [countrySortMode, setCountrySortMode] = useState<CountrySortMode>("seen");
   const [hasMounted, setHasMounted] = useState(false);
+  const [pollForm, setPollForm] = useState<PollEditorFormState>(() => buildPollEditorFormState(null, []));
   const isCreatorWorkspace = activeMapMode === "creator";
   const adminPanelHref = useMemo(() => {
     const params = new URLSearchParams();
@@ -257,6 +264,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
     const query = params.toString();
     return `/creator-panel${query ? `?${query}` : ""}`;
   }, [channel.id, isDemoMode]);
+  const pollEditorOptions = useMemo(() => buildPollEditorCountriesFromVideos(videoLocations), [videoLocations]);
   const sidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     const bucket = new Map<string, SidebarCountryItem>();
     for (const video of videoLocations) {
@@ -290,6 +298,10 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
     }
     return Array.from(bucket.values());
   }, [videoActivity.seenIds, videoActivity.watchStatusById, videoLocations]);
+  useEffect(() => {
+    if (!showPollModal) return;
+    setPollForm(buildPollEditorFormState(null, pollEditorOptions));
+  }, [pollEditorOptions, showPollModal]);
   const sortedSidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     if (countrySortMode === "alphabetical") {
       return [...sidebarCountries].sort((a, b) => stableTextCompare(a.name, b.name));
@@ -727,7 +739,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
                 pointMode="video"
                 showSummaryCard={false}
                 showPointPanel
-                pointPanelClassName="left-1/2 top-4 w-[clamp(180px,38vw,320px)] -translate-x-1/2"
+                pointPanelClassName="left-1/2 top-4 w-[min(280px,calc(100vw-2rem))] -translate-x-1/2 sm:w-[min(300px,calc(100vw-3rem))]"
                 openVideoOnCountrySelect={false}
                 selectedCountryCode={selectedCountryCode}
                 watchedVideoIds={videoActivity.seenIds}
@@ -858,20 +870,6 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
               </>
               ) : null}
 
-              {!isVideoFocusMode && !isCreatorWorkspace ? (
-                <MapVotePanel2
-                  candidates={hasMounted ? voteCandidates : []}
-                  prompt={votePrompt}
-                  votedCountryCode={votedCountryCode}
-                  onSelectCountry={(countryCode) => {
-                    setSelectedCountryCode(countryCode);
-                    openVotePrompt(countryCode);
-                  }}
-                  onConfirmVote={confirmVote}
-                  onCancelVote={() => setVotePrompt(null)}
-                />
-              ) : null}
-
               <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 pointer-events-auto">
                 {!isMapFullscreen ? (
                   <button
@@ -910,6 +908,23 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
                 }}
               />
             ) : null}
+
+            {!isVideoFocusMode && !isCreatorWorkspace ? (
+              <div className="lg:hidden">
+                <MapVotePanel2
+                  candidates={hasMounted ? voteCandidates : []}
+                  prompt={votePrompt}
+                  votedCountryCode={votedCountryCode}
+                  variant="overlay"
+                  onSelectCountry={(countryCode) => {
+                    setSelectedCountryCode(countryCode);
+                    openVotePrompt(countryCode);
+                  }}
+                  onConfirmVote={confirmVote}
+                  onCancelVote={() => setVotePrompt(null)}
+                />
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -918,7 +933,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
           <aside className="hidden lg:flex flex-col gap-3 h-full overflow-hidden px-4 py-3 border-l border-white/[0.06] bg-[#04080d]/40 backdrop-blur-3xl">
             <ProposalRightRail2
               channel={channel}
-              onBecomePatron={() => setShowCheckoutModal(true)}
+              onBecomePatron={() => window.location.assign("/onboarding")}
               onManageSponsors={() => setShowSponsorModal(true)}
               onCreatePoll={() => setShowPollModal(true)}
               onExtractVideos={() => flash("Extraccion de videos iniciada (simulada).")}
@@ -926,6 +941,22 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
               onAction={flash}
               analytics={proposalAnalytics}
               mapMode={activeMapMode}
+              isDemoMode={isDemoMode}
+              votePanel={
+                !isVideoFocusMode && !isCreatorWorkspace
+                  ? {
+                      candidates: hasMounted ? voteCandidates : [],
+                      prompt: votePrompt,
+                      votedCountryCode,
+                      onSelectCountry: (countryCode) => {
+                        setSelectedCountryCode(countryCode);
+                        openVotePrompt(countryCode);
+                      },
+                      onConfirmVote: confirmVote,
+                      onCancelVote: () => setVotePrompt(null),
+                    }
+                  : null
+              }
             />
           </aside>
         ) : null}
@@ -976,7 +1007,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
 
       {/* Playlist modal */}
       {showPlaylistModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#081017] p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-white">Nueva playlist de viaje</h3>
@@ -1004,45 +1035,42 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
       )}
 
       {showPollModal ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#081017] p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">Crear votacion</h3>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-xl max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#081017] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">Crear votacion</h3>
+                <p className="mt-1 text-xs leading-5 text-[#8e9cae]">
+                  Define el proximo destino que la audiencia puede votar. En creator esto es gestion; en viewer no aparece.
+                </p>
+              </div>
               <button type="button" onClick={() => setShowPollModal(false)} className="text-slate-400 hover:text-white" aria-label="Cerrar votacion">
                 <X size={20} />
               </button>
             </div>
-            <p className="mb-4 text-xs leading-5 text-[#8e9cae]">
-              Define el proximo destino que la audiencia puede votar. En creator esto es gestion; en viewer no aparece.
-            </p>
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Titulo: Proximo viaje del canal"
-                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-[#ff5a3d]"
-              />
-              <input
-                type="text"
-                placeholder="Opciones: Mexico, Japon, Italia"
-                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-[#ff5a3d]"
-              />
+
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <PollEditorFields form={pollForm} setForm={setPollForm} availableOptions={pollEditorOptions} />
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowPollModal(false);
-                flash("Votacion creada (simulada).");
-              }}
-              className="mt-5 h-10 w-full rounded-lg bg-[#ff5a3d] text-sm font-bold text-white transition hover:bg-[#ff6f54]"
-            >
-              Publicar votacion
-            </button>
+
+            <div className="border-t border-white/10 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPollModal(false);
+                  flash("Votacion creada (simulada).");
+                }}
+                className="h-11 w-full rounded-2xl bg-[#ff5a3d] text-sm font-bold text-white transition hover:bg-[#ff6f54]"
+              >
+                Publicar votacion
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
 
       {showAllVideosModal ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/82 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/82 p-4 backdrop-blur-sm">
           <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#081017] shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
               <h3 className="text-base font-black text-white">Todos los videos</h3>
@@ -1090,7 +1118,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
 
       {/* Sponsor modal */}
       {showSponsorModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#081017] p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-white">Añadir patrocinador</h3>
@@ -1127,7 +1155,7 @@ export function MapProposalPrototype2({ channel, videoLocations, viewMode = "vie
 
       {/* Support / Patronage Checkout modal */}
       {showCheckoutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#081017] p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[#ff9e58] flex items-center gap-2">
@@ -1560,6 +1588,7 @@ function MapVotePanel2({
   candidates,
   prompt,
   votedCountryCode,
+  variant = "overlay",
   onSelectCountry,
   onConfirmVote,
   onCancelVote,
@@ -1567,6 +1596,7 @@ function MapVotePanel2({
   candidates: Array<{ code: string; name: string; count: number; votes: number }>;
   prompt: LocalVotePrompt | null;
   votedCountryCode: string | null;
+  variant?: "overlay" | "sidebar";
   onSelectCountry: (countryCode: string) => void;
   onConfirmVote: (countryCode: string) => void;
   onCancelVote: () => void;
@@ -1575,7 +1605,13 @@ function MapVotePanel2({
   const [isMinimized, setIsMinimized] = useState(false);
 
   return (
-    <div className="pointer-events-none absolute left-4 top-4 z-[70] w-[min(190px,calc(100%-2rem))]">
+    <div
+      className={
+        variant === "sidebar"
+          ? "w-full"
+          : "pointer-events-none absolute left-4 top-4 z-[95] w-[min(190px,calc(100%-2rem))]"
+      }
+    >
       <section className="pointer-events-auto rounded-xl border border-white/[0.08] bg-[#050b10]/82 p-3 text-white shadow-2xl backdrop-blur-xl">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -1864,7 +1900,9 @@ function ProposalRightRail2({
   onOpenAdmin,
   onAction,
   analytics,
-  mapMode
+  mapMode,
+  isDemoMode,
+  votePanel,
 }: {
   channel: TravelChannel;
   onBecomePatron: () => void;
@@ -1875,22 +1913,37 @@ function ProposalRightRail2({
   onAction: (m: string) => void;
   analytics: ProposalAnalytics;
   mapMode: ProposalMapMode;
+  isDemoMode: boolean;
+  votePanel: {
+    candidates: Array<{ code: string; name: string; count: number; votes: number }>;
+    prompt: LocalVotePrompt | null;
+    votedCountryCode: string | null;
+    onSelectCountry: (countryCode: string) => void;
+    onConfirmVote: (countryCode: string) => void;
+    onCancelVote: () => void;
+  } | null;
 }) {
   const channelAvatarSrc = channel.thumbnail_url || "/creators/luisito-comunica.png";
   const channelName = channel.channel_name || "Canal";
   const isCreatorWorkspace = mapMode === "creator";
+  const showCreatorAvatar = isCreatorWorkspace && !isDemoMode;
 
   return (
     <div className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm">
         <div className="flex items-center justify-center gap-3 text-center">
-          <span className="relative h-12 w-12 overflow-hidden rounded-full border border-white/15 bg-white/[0.06]">
-            <Image src={channelAvatarSrc} alt={channelName} fill sizes="48px" className="object-cover" />
-          </span>
+          {showCreatorAvatar ? (
+            <span className="relative h-12 w-12 overflow-hidden rounded-full border border-white/15 bg-white/[0.06]">
+              <Image src={channelAvatarSrc} alt={channelName} fill sizes="48px" className="object-cover" />
+            </span>
+          ) : (
+            <span className="flex h-12 w-12 items-center justify-center rounded-full border border-[#ff5a3d]/35 bg-[#ff5a3d]/12">
+              <CheckCircle size={26} weight="fill" className="text-[#ff5a3d]" />
+            </span>
+          )}
           <div className="min-w-0">
             <div className="flex items-center justify-center gap-1.5">
               <p className="truncate text-[14px] font-black leading-tight text-white">{channelName}</p>
-              <CheckCircle size={15} weight="fill" className="shrink-0 text-[#ff5a3d]" />
             </div>
           </div>
         </div>
@@ -1905,6 +1958,18 @@ function ProposalRightRail2({
           </div>
         </div>
       </section>
+
+      {!isCreatorWorkspace && votePanel ? (
+        <MapVotePanel2
+          candidates={votePanel.candidates}
+          prompt={votePanel.prompt}
+          votedCountryCode={votePanel.votedCountryCode}
+          variant="sidebar"
+          onSelectCountry={votePanel.onSelectCountry}
+          onConfirmVote={votePanel.onConfirmVote}
+          onCancelVote={votePanel.onCancelVote}
+        />
+      ) : null}
       
       {/* 1. Trip metrics box */}
       <section className="rounded-xl border border-white/[0.06] bg-[#050b10]/60 p-4 shadow-sm flex flex-col">
@@ -2047,12 +2112,12 @@ function ProposalRightRail2({
 
       {/* 3. Support Patronage banner */}
       {!isCreatorWorkspace ? (
-      <section className="rounded-xl border border-[#ff5a3d]/15 bg-[radial-gradient(ellipse_at_top_right,rgba(255,90,61,0.06),transparent_60%)] bg-[#050b10]/60 p-4 shadow-sm">
+      <section className="sticky bottom-0 z-10 mt-auto rounded-xl border border-[#ff5a3d]/15 bg-[radial-gradient(ellipse_at_top_right,rgba(255,90,61,0.06),transparent_60%)] bg-[#050b10]/88 p-4 shadow-[0_-18px_40px_-26px_rgba(0,0,0,0.85)] backdrop-blur-xl">
         <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ff937d]">
-          Apoya mi contenido
+          Crea tu mapa
         </h2>
-        <p className="mt-2 truncate whitespace-nowrap text-[11px] leading-relaxed text-[#c4cdd6] font-medium">
-          Tu apoyo me permite seguir explorando nuevos rincones de este maravilloso planeta.
+        <p className="mt-2 truncate whitespace-nowrap text-[11px] leading-relaxed font-medium text-[#c4cdd6]">
+          Muestra tu ruta, tus videos y tus países visitados en una experiencia premium.
         </p>
 
         {/* Overlapping subscriber profile avatars */}
@@ -2085,8 +2150,8 @@ function ProposalRightRail2({
           className="mt-[18px] flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#ff6d4e_0%,#e03d1a_100%)] text-[12px] font-black text-white shadow-[0_12px_24px_-8px_rgba(224,61,26,0.3)] hover:scale-[1.01] active:scale-[0.99] transition-all"
           onClick={onBecomePatron}
         >
-          <Heart size={15} weight="fill" className="animate-pulse" />
-          Hazte patrocinador
+          <Compass size={15} weight="fill" className="animate-pulse" />
+          Crear mi mapa
         </button>
       </section>
       ) : null}

@@ -52,6 +52,11 @@ function buildChannelInput(payload: z.infer<typeof payloadSchema>) {
   return null;
 }
 
+function allowTestActivationWithoutPayment() {
+  if (process.env.ENABLE_TEST_NO_PAYMENT === "1") return true;
+  return process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_TEST_NO_PAYMENT === "1";
+}
+
 async function upsertTrialSubscription(args: { userId: string; selectedPlan: string }) {
   const now = new Date();
   const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -123,6 +128,13 @@ export async function POST(request: Request) {
     }
 
     const payload = payloadSchema.parse(await request.json());
+    if (payload.activateWithoutPayment && !allowTestActivationWithoutPayment()) {
+      return NextResponse.json(
+        { error: "La activación sin pago no está habilitada en este entorno." },
+        { status: 403 }
+      );
+    }
+
     const username = normalizeUsername(payload.username);
     const email = normalizeEmail(payload.email);
     const displayName = payload.displayName.trim();

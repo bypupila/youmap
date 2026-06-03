@@ -18,7 +18,6 @@ import posthog from "posthog-js";
 import type { VideoActivityController } from "@/components/map/video-activity";
 import {
   buildCountryVideoSections,
-  countryCodeToFlag,
   formatCompactNumber,
   formatVideoDate,
   formatVideoPlace,
@@ -29,6 +28,7 @@ import {
 } from "@/components/map/video-viewer-utils";
 import { DemoVideoEmbedPreview } from "@/components/map/demo-video-embed-preview";
 import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
+import { CountryFlag } from "@/components/ui/country-flag";
 import type { TravelVideoLocation } from "@/lib/types";
 import type { MapRailSponsor } from "@/lib/map-public";
 import { cn } from "@/lib/utils";
@@ -287,10 +287,11 @@ export function DesktopVideoMapCard({
       title: "Descuento del 15%",
       description: "En tu primer mapa como creador, disfrutando de todas las herramientas que Travel Your Map te ofrece.",
       cta_label: "Ver promoción",
-      href: "#",
+      href: null,
     };
-    const promoTitle = "Descuento del 15%";
-    const promoDescription = "En tu primer mapa como creador, disfrutando de todas las herramientas que Travel Your Map te ofrece.";
+    const promoTitle = ad.title;
+    const promoDescription = ad.description || "Promoción activa para viewers y creadores de Travel Your Map.";
+    const hasAdHref = Boolean(ad.href);
     return (
       <section className="group relative w-full overflow-hidden rounded-xl border border-red-500/35 bg-[radial-gradient(ellipse_at_top_left,rgba(255,90,61,0.12),transparent_58%)] bg-[#050b10]/70 px-4 py-2.5 text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)] transition-all duration-300 hover:border-red-500/45">
         <div className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,143,120,0.06),transparent_60%)] transition-all duration-300 group-hover:scale-125" />
@@ -308,13 +309,17 @@ export function DesktopVideoMapCard({
           </div>
 
           <a
-            href={ad.href || "#"}
+            href={ad.href || undefined}
+            aria-disabled={!hasAdHref}
             onClick={(event) => {
-              if (ad.href === "#" || !ad.href) {
+              if (!hasAdHref) {
                 event.preventDefault();
               }
             }}
-            className="inline-flex h-7 items-center justify-center gap-1 rounded-lg bg-gradient-to-r from-[#ff5a3d] to-[#ff7259] hover:from-[#ff7259] hover:to-[#ff8a72] px-3 text-[10px] font-black text-white shadow-md shadow-[#ff5a3d]/25 transition-all duration-300 active:scale-95 shrink-0"
+            className={cn(
+              "inline-flex h-7 items-center justify-center gap-1 rounded-lg bg-gradient-to-r from-[#ff5a3d] to-[#ff7259] px-3 text-[10px] font-black text-white shadow-md shadow-[#ff5a3d]/25 transition-all duration-300 active:scale-95 shrink-0",
+              hasAdHref ? "hover:from-[#ff7259] hover:to-[#ff8a72]" : "cursor-not-allowed opacity-70"
+            )}
           >
             <span>{ad.cta_label || "Ver"}</span>
             <ArrowSquareOut size={10} weight="bold" />
@@ -362,7 +367,8 @@ export function DesktopVideoMapCard({
               <div className="mt-1.5 flex items-center justify-between gap-2">
                 <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold text-zinc-500">
                   <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white">
-                    {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName}
+                    <CountryFlag code={selectedVideo.country_code} size={12} className="mr-1 align-[-1px]" />
+                    {selectedCountryName}
                   </span>
                   <span>•</span>
                   <span className="text-[#ff5a3d]">Video {currentIndex + 1} de {Math.max(1, orderedVideos.length)}</span>
@@ -531,13 +537,15 @@ export function DesktopVideoMapCard({
                 <h2 className="truncate text-[12px] font-extrabold text-white">{selectedVideo.title}</h2>
               </div>
               <p className="mt-1 truncate text-[11px] text-zinc-400">
-                {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName} · Video {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
+                <CountryFlag code={selectedVideo.country_code} size={12} className="mr-1 align-[-1px]" />
+                {selectedCountryName} · Video {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
               </p>
             </>
           ) : (
             <>
               <p className="mt-0.5 truncate text-[12px] text-[#d8dee6]">
-              {countryCodeToFlag(selectedVideo.country_code)} {selectedCountryName} · {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
+                <CountryFlag code={selectedVideo.country_code} size={12} className="mr-1 align-[-1px]" />
+                {selectedCountryName} · {currentIndex + 1} de {Math.max(1, orderedVideos.length)}
               </p>
             </>
           )}

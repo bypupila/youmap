@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,10 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [authIntent, setAuthIntent] = useState<"viewer" | "creator">("creator");
   const [safeNext, setSafeNext] = useState("");
+  const [registrationChannelId, setRegistrationChannelId] = useState<string | null>(null);
+  const [utmSource, setUtmSource] = useState<string | null>(null);
+  const [utmMedium, setUtmMedium] = useState<string | null>(null);
+  const [utmCampaign, setUtmCampaign] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -24,7 +28,22 @@ export default function AuthPage() {
     const next = String(params.get("next") || "");
     setAuthIntent(intent);
     setSafeNext(next.startsWith("/") ? next : "");
+    setRegistrationChannelId(String(params.get("channelId") || "").trim() || null);
+    setUtmSource(String(params.get("utm_source") || "").trim() || null);
+    setUtmMedium(String(params.get("utm_medium") || "").trim() || null);
+    setUtmCampaign(String(params.get("utm_campaign") || "").trim() || null);
   }, []);
+
+  const viewerRegisterHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (registrationChannelId) params.set("channelId", registrationChannelId);
+    if (safeNext) params.set("next", safeNext);
+    if (utmSource) params.set("utm_source", utmSource);
+    if (utmMedium) params.set("utm_medium", utmMedium);
+    if (utmCampaign) params.set("utm_campaign", utmCampaign);
+    const query = params.toString();
+    return `/auth/viewer-register${query ? `?${query}` : ""}`;
+  }, [registrationChannelId, safeNext, utmCampaign, utmMedium, utmSource]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,6 +57,10 @@ export default function AuthPage() {
         body: JSON.stringify({
           identifier,
           password,
+          registrationChannelId,
+          utmSource,
+          utmMedium,
+          utmCampaign,
         }),
       });
       const loginPayload = (await loginResponse.json().catch(() => null)) as
@@ -133,7 +156,7 @@ export default function AuthPage() {
           ) : (
             <p className="mt-5 text-sm text-muted-foreground">
               Este acceso es para viewers del mapa público.{" "}
-              <Link href="/auth/viewer-register" className="text-foreground underline underline-offset-4">
+              <Link href={viewerRegisterHref} className="text-foreground underline underline-offset-4">
                 Crear cuenta viewer gratuita
               </Link>
               . El alta de creator se gestiona por onboarding y checkout. Puedes gestionar consentimientos en{" "}

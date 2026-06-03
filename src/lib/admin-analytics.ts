@@ -22,6 +22,7 @@ export interface AdminOverviewMetrics {
     channel_name: string;
     owner_username: string;
     videos_count: number;
+    subscribed_viewers: number;
     map_views_30d: number;
     votes_30d: number;
   }>;
@@ -50,6 +51,7 @@ export async function loadAdminOverviewMetrics(input?: { windowDays?: number }):
     sponsorRulesTable,
     sponsorClicksTable,
     viewerProfilesTable,
+    creatorViewerSubscriptionsTable,
     fanVotesTable,
   ] = await Promise.all([
     tableExists("public", "users"),
@@ -61,6 +63,7 @@ export async function loadAdminOverviewMetrics(input?: { windowDays?: number }):
     tableExists("public", "sponsor_video_rules"),
     tableExists("public", "sponsor_clicks"),
     tableExists("public", "viewer_profiles"),
+    tableExists("public", "creator_viewer_subscriptions"),
     tableExists("public", "map_fan_votes"),
   ]);
 
@@ -144,6 +147,7 @@ export async function loadAdminOverviewMetrics(input?: { windowDays?: number }):
           videos_count: number;
           map_views_30d: number;
           votes_30d: number;
+          subscribed_viewers: number;
         }>>`
           select
             c.id as channel_id,
@@ -154,6 +158,11 @@ export async function loadAdminOverviewMetrics(input?: { windowDays?: number }):
                 ? sql`count(distinct v.id)::int`
                 : sql`0::int`
             } as videos_count,
+            ${
+              creatorViewerSubscriptionsTable
+                ? sql`count(distinct cvs.viewer_user_id) filter (where cvs.unsubscribed_at is null)::int`
+                : sql`0::int`
+            } as subscribed_viewers,
             ${
               mapEventsTable
                 ? sql`count(me.*) filter (where me.event_type = 'map_view' and me.created_at >= now() - make_interval(days => ${windowDays}))::int`
@@ -168,8 +177,9 @@ export async function loadAdminOverviewMetrics(input?: { windowDays?: number }):
           inner join public.users u on u.id = c.user_id
           ${videosTable ? sql`left join public.videos v on v.channel_id = c.id` : sql``}
           ${mapEventsTable ? sql`left join public.map_events me on me.channel_id = c.id` : sql``}
+          ${creatorViewerSubscriptionsTable ? sql`left join public.creator_viewer_subscriptions cvs on cvs.channel_id = c.id` : sql``}
           group by c.id, c.channel_name, u.username
-          order by map_views_30d desc, videos_count desc, c.channel_name asc
+          order by subscribed_viewers desc, map_views_30d desc, videos_count desc, c.channel_name asc
           limit 10
         `
       : Promise.resolve([]);

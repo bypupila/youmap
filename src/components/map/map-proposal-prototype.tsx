@@ -736,8 +736,8 @@ function ProposalRightRail({
       </section>
 
       <section className="rounded-lg border border-white/10 bg-[#07121b]/82 p-4 shadow-[0_28px_80px_-48px_rgba(0,0,0,0.92)] backdrop-blur-2xl">
-        <h2 className="text-[12px] font-black uppercase tracking-[0.1em] text-[#ff9a4d]">{isCreatorMode ? "Monetiza tu mapa" : "Apoya mi contenido"}</h2>
-        <p className="mt-3 text-[12px] leading-5 text-[#aeb7c2]">{isCreatorMode ? "Preview del bloque comercial para validar sponsors y CTA." : "Tu apoyo me permite seguir explorando."}</p>
+        <h2 className="text-[12px] font-black uppercase tracking-[0.1em] text-[#ff9a4d]">{isCreatorMode ? "Monetiza tu mapa" : "Crea tu mapa"}</h2>
+        <p className="mt-3 text-[12px] leading-5 text-[#aeb7c2]">{isCreatorMode ? "Preview del bloque comercial para validar sponsors y CTA." : "Muestra tu ruta, tus videos y tus países visitados en una experiencia premium."}</p>
         <div className="mt-5 flex items-center">
           {["MX", "JP", "MA", "IT", "US", "AR"].map((code) => (
             <span key={code} className="-ml-2 flex h-10 w-10 first:ml-0 items-center justify-center rounded-full border-2 border-[#07121b] bg-white text-[18px]">
@@ -746,9 +746,9 @@ function ProposalRightRail({
           ))}
           <span className="ml-3 rounded-full border border-white/10 px-3 py-2 text-[12px] font-bold text-[#dfe6ee]">+245</span>
         </div>
-        <button type="button" className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#ff5a3d] text-[13px] font-black text-white transition hover:bg-[#ff6b52]" onClick={() => onAction(isCreatorMode ? "Preview de CTA validado." : "Flujo de patrocinio abierto.")}>
-          <Heart size={17} />
-          {isCreatorMode ? "Previsualizar CTA" : "Hazte patrocinador"}
+        <button type="button" className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#ff5a3d] text-[13px] font-black text-white transition hover:bg-[#ff6b52]" onClick={() => onAction(isCreatorMode ? "Preview de CTA validado." : "Ir a onboarding para crear mapa.")}>
+          <Compass size={17} />
+          {isCreatorMode ? "Previsualizar CTA" : "Crear mi mapa"}
         </button>
       </section>
     </div>

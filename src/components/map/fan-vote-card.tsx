@@ -1,44 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle, Copy, GearSix, MapPin, RocketLaunch, XCircle } from "@phosphor-icons/react";
+import { Copy, GearSix, MapPin, RocketLaunch } from "@phosphor-icons/react";
 import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import {
+  PollEditorFields,
+  buildPollEditorFormState,
+  type PollEditorCountryOption,
+  type PollEditorFormState,
+} from "@/components/map/poll-editor-form";
 import type { MapFanVoteSummary } from "@/lib/map-fan-votes";
-import type { MapPollMode, MapPollRecord } from "@/lib/map-polls";
+import type { MapPollRecord } from "@/lib/map-polls";
 import type { MapViewerContext } from "@/lib/map-public";
-
-interface PollOptionInput {
-  country_code: string;
-  country_name: string;
-  sort_order: number;
-  cities: Array<{ city: string; sort_order: number }>;
-}
 
 interface FanVoteCardProps {
   channelId: string;
   viewer: MapViewerContext;
   poll: MapPollRecord | null;
   fanVotes?: MapFanVoteSummary | null;
-  availableOptions: PollOptionInput[];
+  availableOptions: PollEditorCountryOption[];
   isDemoMode?: boolean;
   viewerInteraction?: "live" | "simulated" | "disabled";
   onPollChange?: (poll: MapPollRecord | null) => void;
 }
-
-type PollFormState = {
-  pollId: string | null;
-  title: string;
-  prompt: string;
-  pollMode: MapPollMode;
-  showPopup: boolean;
-  closesAtLocal: string;
-  countryOptions: PollOptionInput[];
-};
 
 type RankedCity = {
   country_code: string;
@@ -70,10 +58,8 @@ export function FanVoteCard({
   const [voteError, setVoteError] = useState<string | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string>(poll?.country_options[0]?.country_code || "");
   const [selectedCity, setSelectedCity] = useState<string>(poll?.country_options[0]?.cities[0]?.city || "");
-  const [form, setForm] = useState<PollFormState>(() => buildFormState(poll, availableOptions));
+  const [form, setForm] = useState<PollEditorFormState>(() => buildPollEditorFormState(poll, availableOptions));
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [dragCountryIndex, setDragCountryIndex] = useState<number | null>(null);
-  const [dragCitySource, setDragCitySource] = useState<{ countryCode: string; index: number } | null>(null);
   const expiredHandledRef = useRef(false);
 
   const countryNameMap = useMemo(
@@ -148,7 +134,7 @@ export function FanVoteCard({
   const voteCities = currentPollCountries.find((country) => country.country_code === selectedCountry)?.cities || [];
 
   useEffect(() => {
-    setForm(buildFormState(poll, availableOptions));
+    setForm(buildPollEditorFormState(poll, availableOptions));
     setSelectedCountry(poll?.country_options[0]?.country_code || availableOptions[0]?.country_code || "");
     setSelectedCity(poll?.country_options[0]?.cities[0]?.city || availableOptions[0]?.cities[0]?.city || "");
     setError(null);
@@ -203,7 +189,14 @@ export function FanVoteCard({
   function goToViewerLogin() {
     if (typeof window === "undefined") return;
     const nextPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    window.location.href = `/auth?intent=viewer&next=${encodeURIComponent(nextPath)}`;
+    const params = new URLSearchParams();
+    params.set("intent", "viewer");
+    params.set("next", nextPath);
+    if (channelId) params.set("channelId", channelId);
+    params.set("utm_source", "creator_map");
+    params.set("utm_medium", "map_interaction");
+    params.set("utm_campaign", "viewer_registration");
+    window.location.href = `/auth?${params.toString()}`;
   }
 
   function computeClosesAtIso() {
@@ -453,86 +446,10 @@ export function FanVoteCard({
     }
   }
 
-  function toggleCountry(country: PollOptionInput) {
-    setForm((current) => {
-      const exists = current.countryOptions.some((item) => item.country_code === country.country_code);
-      if (exists) {
-        return {
-          ...current,
-          countryOptions: current.countryOptions.filter((item) => item.country_code !== country.country_code).map((item, idx) => ({
-            ...item,
-            sort_order: idx,
-          })),
-        };
-      }
-
-      const nextCountry: PollOptionInput = {
-        ...country,
-        sort_order: current.countryOptions.length,
-        cities: country.cities.slice(0, Math.min(3, country.cities.length)).map((city, idx) => ({ ...city, sort_order: idx })),
-      };
-
-      return {
-        ...current,
-        countryOptions: [...current.countryOptions, nextCountry],
-      };
-    });
-  }
-
-  function toggleCity(countryCode: string, city: { city: string; sort_order: number }) {
-    setForm((current) => ({
-      ...current,
-      countryOptions: current.countryOptions.map((country) => {
-        if (country.country_code !== countryCode) return country;
-
-        const exists = country.cities.some((entry) => entry.city === city.city);
-        const nextCities = exists
-          ? country.cities.filter((entry) => entry.city !== city.city)
-          : [...country.cities, city];
-
-        return {
-          ...country,
-          cities: nextCities.map((entry, idx) => ({ ...entry, sort_order: idx })),
-        };
-      }),
-    }));
-  }
-
-  function reorderCountries(from: number, to: number) {
-    setForm((current) => {
-      if (from === to || from < 0 || to < 0) return current;
-      const next = current.countryOptions.slice();
-      const [moved] = next.splice(from, 1);
-      if (!moved) return current;
-      next.splice(to, 0, moved);
-      return {
-        ...current,
-        countryOptions: next.map((country, idx) => ({ ...country, sort_order: idx })),
-      };
-    });
-  }
-
-  function reorderCities(countryCode: string, from: number, to: number) {
-    setForm((current) => ({
-      ...current,
-      countryOptions: current.countryOptions.map((country) => {
-        if (country.country_code !== countryCode) return country;
-        const cities = country.cities.slice();
-        const [moved] = cities.splice(from, 1);
-        if (!moved) return country;
-        cities.splice(to, 0, moved);
-        return {
-          ...country,
-          cities: cities.map((city, idx) => ({ ...city, sort_order: idx })),
-        };
-      }),
-    }));
-  }
-
   function resetDemoPoll() {
     if (!isDemoMode) return;
     onPollChange?.(null);
-    setForm(buildFormState(null, availableOptions));
+    setForm(buildPollEditorFormState(null, availableOptions));
     setEditorOpen(false);
   }
 
@@ -688,189 +605,22 @@ export function FanVoteCard({
       </Card>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="tm-surface-strong max-w-[min(920px,calc(100%-2rem))]">
+        <DialogContent className="tm-surface-strong flex max-w-[min(920px,calc(100%-2rem))] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-0">
           <DialogHeader>
-            <DialogTitle className="text-[#f1f1f1]">Configurar votacion</DialogTitle>
-            <DialogDescription className="text-[#aaaaaa]">
-              Publica una sola votacion activa usando solo paises y ciudades que ya existen en el mapa.
-            </DialogDescription>
+            <div className="border-b border-white/10 px-5 py-4">
+              <DialogTitle className="text-[#f1f1f1]">Configurar votacion</DialogTitle>
+              <DialogDescription className="text-[#aaaaaa]">
+                Publica una sola votacion activa usando solo paises y ciudades que ya existen en el mapa.
+              </DialogDescription>
+            </div>
           </DialogHeader>
 
-          <div className="grid gap-4 lg:grid-cols-[0.75fr_1.25fr]">
-            <div className="space-y-3">
-              <label className="block space-y-2">
-                <span className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Titulo</span>
-                <input
-                  value={form.title}
-                  onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm text-[#f1f1f1] outline-none"
-                />
-              </label>
-
-              <label className="block space-y-2">
-                <span className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Prompt</span>
-                <textarea
-                  value={form.prompt}
-                  onChange={(event) => setForm((current) => ({ ...current, prompt: event.target.value }))}
-                  className="min-h-[112px] w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-[#f1f1f1] outline-none"
-                />
-              </label>
-
-              <div className="space-y-2">
-                <span className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Modo de votacion</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setForm((current) => ({ ...current, pollMode: "country" }))}
-                    className={cn(
-                      "rounded-xl border px-3 py-2 text-[12px]",
-                      form.pollMode === "country"
-                        ? "border-[rgba(255, 90, 61,0.34)] bg-[rgba(255, 90, 61,0.14)] text-[#f1f1f1]"
-                        : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
-                    )}
-                  >
-                    Solo pais
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm((current) => ({ ...current, pollMode: "country_city" }))}
-                    className={cn(
-                      "rounded-xl border px-3 py-2 text-[12px]",
-                      form.pollMode === "country_city"
-                        ? "border-[rgba(255, 90, 61,0.34)] bg-[rgba(255, 90, 61,0.14)] text-[#f1f1f1]"
-                        : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
-                    )}
-                  >
-                    Pais + ciudad
-                  </button>
-                </div>
-              </div>
-
-              <label className="block space-y-2">
-                <span className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Cierre automatico (opcional)</span>
-                <input
-                  type="datetime-local"
-                  value={form.closesAtLocal}
-                  onChange={(event) => setForm((current) => ({ ...current, closesAtLocal: event.target.value }))}
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm text-[#f1f1f1] outline-none"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={() => setForm((current) => ({ ...current, showPopup: !current.showPopup }))}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-colors",
-                  form.showPopup ? "border-[rgba(255, 90, 61,0.28)] bg-[rgba(255, 90, 61,0.12)] text-[#f1f1f1]" : "border-white/10 bg-white/[0.03] text-[#aaaaaa]"
-                )}
-              >
-                <span>Mostrar popup al entrar</span>
-                {form.showPopup ? <CheckCircle size={16} /> : <XCircle size={16} />}
-              </button>
-
-              {error ? <p className="text-[12px] text-[#ff9d9d]">{error}</p> : null}
-            </div>
-
-            <ScrollArea className="h-[58dvh] rounded-2xl border border-white/10 bg-white/[0.02] p-4" data-map-scroll="true">
-              <div className="space-y-4 pr-3">
-                {availableOptions.map((country) => {
-                  const selected = form.countryOptions.find((entry) => entry.country_code === country.country_code) || null;
-                  return (
-                    <div key={country.country_code} className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[14px] font-medium text-[#f1f1f1]">{country.country_name}</p>
-                          <p className="text-[12px] text-[#aaaaaa]">{country.cities.length} ciudades disponibles</p>
-                        </div>
-                        <Button type="button" size="sm" variant={selected ? "default" : "outline"} onClick={() => toggleCountry(country)}>
-                          {selected ? "Incluido" : "Agregar"}
-                        </Button>
-                      </div>
-
-                      {selected && form.pollMode === "country_city" ? (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {country.cities.map((city) => {
-                            const active = selected.cities.some((entry) => entry.city === city.city);
-                            return (
-                              <button
-                                key={city.city}
-                                type="button"
-                                onClick={() => toggleCity(country.country_code, city)}
-                                className={cn(
-                                  "rounded-full border px-3 py-1.5 text-[12px] transition-colors",
-                                  active
-                                    ? "border-[rgba(255, 90, 61,0.34)] bg-[rgba(255, 90, 61,0.14)] text-[#f1f1f1]"
-                                    : "border-white/10 bg-white/[0.02] text-[#aaaaaa]"
-                                )}
-                              >
-                                {city.city}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-
-                {form.countryOptions.length ? (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-[12px] uppercase tracking-[0.14em] text-[#aaaaaa]">Prioridad (drag and drop)</p>
-                    <div className="mt-3 space-y-2">
-                      {form.countryOptions
-                        .slice()
-                        .sort((a, b) => a.sort_order - b.sort_order)
-                        .map((country, index) => {
-                          const countryLabel = countryNameMap.get(country.country_code) || country.country_name || country.country_code;
-                          return (
-                            <div
-                              key={country.country_code}
-                              draggable
-                              onDragStart={() => setDragCountryIndex(index)}
-                              onDragOver={(event) => event.preventDefault()}
-                              onDrop={() => {
-                                if (dragCountryIndex === null) return;
-                                reorderCountries(dragCountryIndex, index);
-                                setDragCountryIndex(null);
-                              }}
-                              className="rounded-xl border border-white/10 bg-black/20 p-2"
-                            >
-                              <p className="text-[12px] text-[#f1f1f1]">{index + 1}. {countryLabel}</p>
-
-                              {form.pollMode === "country_city" && country.cities.length ? (
-                                <div className="mt-2 space-y-1">
-                                  {country.cities
-                                    .slice()
-                                    .sort((a, b) => a.sort_order - b.sort_order)
-                                    .map((city, cityIndex) => (
-                                      <div
-                                        key={`${country.country_code}:${city.city}`}
-                                        draggable
-                                        onDragStart={() => setDragCitySource({ countryCode: country.country_code, index: cityIndex })}
-                                        onDragOver={(event) => event.preventDefault()}
-                                        onDrop={() => {
-                                          if (!dragCitySource || dragCitySource.countryCode !== country.country_code) return;
-                                          reorderCities(country.country_code, dragCitySource.index, cityIndex);
-                                          setDragCitySource(null);
-                                        }}
-                                        className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 text-[11px] text-[#d5d5d5]"
-                                      >
-                                        {cityIndex + 1}. {city.city}
-                                      </div>
-                                    ))}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </ScrollArea>
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <PollEditorFields form={form} setForm={setForm} availableOptions={availableOptions} />
+            {error ? <p className="mt-4 text-[12px] text-[#ff9d9d]">{error}</p> : null}
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 pt-4">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 px-5 py-4">
             {isDemoMode ? (
               <Button type="button" variant="ghost" onClick={resetDemoPoll}>
                 Reset demo
@@ -1097,53 +847,4 @@ function formatCountdown(remainingMs: number) {
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${Math.max(1, minutes)}m`;
-}
-
-function toLocalDatetimeInput(value: string | null | undefined) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
-
-function buildFormState(poll: MapPollRecord | null, availableOptions: PollOptionInput[]): PollFormState {
-  if (poll) {
-    return {
-      pollId: poll.id,
-      title: poll.title,
-      prompt: poll.prompt,
-      pollMode: poll.poll_mode || "country_city",
-      showPopup: poll.show_popup,
-      closesAtLocal: toLocalDatetimeInput(poll.closes_at),
-      countryOptions: poll.country_options.map((country, index) => ({
-        country_code: country.country_code,
-        country_name: country.country_name,
-        sort_order: Number.isFinite(Number(country.sort_order)) ? Number(country.sort_order) : index,
-        cities: country.cities.map((city, cityIndex) => ({
-          city: city.city,
-          sort_order: Number.isFinite(Number(city.sort_order)) ? Number(city.sort_order) : cityIndex,
-        })),
-      })),
-    };
-  }
-
-  return {
-    pollId: null,
-    title: "¿A dónde debería viajar después?",
-    prompt: "Vota un país y una ciudad para priorizar el próximo destino del mapa.",
-    pollMode: "country_city",
-    showPopup: true,
-    closesAtLocal: "",
-    countryOptions: availableOptions.slice(0, 3).map((country, index) => ({
-      country_code: country.country_code,
-      country_name: country.country_name,
-      sort_order: index,
-      cities: country.cities.slice(0, Math.min(2, country.cities.length)).map((city, cityIndex) => ({
-        city: city.city,
-        sort_order: cityIndex,
-      })),
-    })),
-  };
 }

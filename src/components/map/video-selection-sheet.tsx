@@ -6,10 +6,10 @@ import { BatteryCharging, CaretLeft, CaretRight, ChatCircle, CheckCircle, Clock,
 import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { CountryFlag } from "@/components/ui/country-flag";
 import type { VideoActivityController } from "@/components/map/video-activity";
 import {
   buildCountryVideoSections,
-  countryCodeToFlag,
   formatCompactNumber,
   formatVideoDate,
   formatVideoDuration,
@@ -131,7 +131,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
               <div className="flex h-full min-h-0 flex-col">
                 <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/35 p-2 shadow-[0_24px_70px_-38px_rgba(0,0,0,0.92)]">
                   <div className="absolute left-4 top-4 z-[2] inline-flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full border border-white/10 bg-black/65 px-3 py-1.5 text-[12px] text-white backdrop-blur-md">
-                    <span>{countryCodeToFlag(currentVideo?.country_code)}</span>
+                    <CountryFlag code={currentVideo?.country_code} size={12} />
                     <span className="truncate font-medium">{currentVideo?.country_name || currentVideo?.country_code || "Destino"}</span>
                     <span className="text-white/45">/</span>
                     <span>{currentIndex + 1} de {Math.max(1, orderedVideos.length)}</span>
@@ -223,7 +223,14 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
               <div className="shrink-0 border-b border-white/10 px-4 py-3 lg:px-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8f98a3]">Videos relacionados</p>
                 <p className="mt-1 text-[13px] text-[#d8dee6]">
-                  {currentSection ? `${countryCodeToFlag(currentSection.country_code)} ${currentSection.country_name} primero` : "Lista del mapa"}
+                  {currentSection ? (
+                    <>
+                      <CountryFlag code={currentSection.country_code} size={12} className="mr-1 align-[-1px]" />
+                      {currentSection.country_name} primero
+                    </>
+                  ) : (
+                    "Lista del mapa"
+                  )}
                 </p>
               </div>
 
@@ -234,7 +241,8 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
                       <section key={section.country_code} className="space-y-2">
                         <div className="flex items-center justify-between gap-3 px-1">
                           <h4 className="truncate text-[12px] font-semibold text-[#f4f7fb]">
-                            {countryCodeToFlag(section.country_code)} {section.country_name}
+                            <CountryFlag code={section.country_code} size={12} className="mr-1 align-[-1px]" />
+                            {section.country_name}
                           </h4>
                           <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#aab2bc]">
                             {section.videos.length}

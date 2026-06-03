@@ -4,6 +4,7 @@ import { z } from "zod";
 import { hashPassword } from "@/lib/auth-password";
 import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
 import { setSessionCookie } from "@/lib/auth-session";
+import { normalizeAttributionChannelId, upsertCreatorViewerSubscription } from "@/lib/creator-viewer-subscriptions";
 import { sql } from "@/lib/neon";
 import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 
@@ -24,7 +25,7 @@ const payloadSchema = z
     consentCreatorPromotions: z.boolean().optional().default(false),
     consentVersion: z.string().trim().min(1).default("v1"),
     registrationSource: z.enum(["platform", "creator_map"]).optional().default("platform"),
-    registrationChannelId: z.string().uuid().optional().nullable(),
+    registrationChannelId: z.string().trim().optional().nullable(),
     utmSource: z.string().trim().max(120).optional().nullable(),
     utmMedium: z.string().trim().max(120).optional().nullable(),
     utmCampaign: z.string().trim().max(160).optional().nullable(),
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
     const email = normalizeEmail(payload.email);
     const countryCode = payload.countryCode.toUpperCase();
     const city = payload.city.trim();
+    const registrationChannelId = normalizeAttributionChannelId(payload.registrationChannelId);
 
     const existingRows = await sql<Array<{ id: string; username: string }>>`
       select id, username
@@ -131,8 +133,8 @@ export async function POST(request: Request) {
         ${city},
         ${payload.hasYouTubeTravelChannel},
         ${String(payload.youtubeChannelUrl || "").trim() || null},
-        ${payload.registrationSource},
-        ${payload.registrationChannelId || null},
+        ${registrationChannelId ? payload.registrationSource : "platform"},
+        ${registrationChannelId},
         ${payload.utmSource || null},
         ${payload.utmMedium || null},
         ${payload.utmCampaign || null},
@@ -156,10 +158,19 @@ export async function POST(request: Request) {
     await sql`
       insert into public.user_consents (user_id, consent_type, accepted, consent_version, accepted_at, metadata, created_at, updated_at)
       values
-        (${userId}, 'account_operation', true, ${payload.consentVersion}, ${now}, ${JSON.stringify({ source: payload.registrationSource })}::jsonb, ${now}, ${now}),
+        (${userId}, 'account_operation', true, ${payload.consentVersion}, ${now}, ${JSON.stringify({ source: payload.registrationSource, channelId: registrationChannelId })}::jsonb, ${now}, ${now}),
         (${userId}, 'platform_promotions', ${payload.consentPlatformPromotions}, ${payload.consentVersion}, ${now}, '{}'::jsonb, ${now}, ${now}),
         (${userId}, 'creator_promotions', ${payload.consentCreatorPromotions}, ${payload.consentVersion}, ${now}, '{}'::jsonb, ${now}, ${now})
     `;
+
+    const creatorSubscriptionId = await upsertCreatorViewerSubscription({
+      channelId: registrationChannelId,
+      viewerUserId: userId,
+      source: "viewer_register",
+      utmSource: payload.utmSource,
+      utmMedium: payload.utmMedium,
+      utmCampaign: payload.utmCampaign,
+    });
 
     const response = NextResponse.json({
       ok: true,
@@ -168,6 +179,7 @@ export async function POST(request: Request) {
       role: "viewer",
       country_code: countryCode,
       city,
+      creator_subscription_id: creatorSubscriptionId,
     });
     setSessionCookie(response, userId, request.headers.get("host"));
     return response;

@@ -57,9 +57,19 @@ Ultima actualizacion: 2026-05-25
 
 - [ ] Registro viewer obligatorio para votar (`/api/map/fan-votes/vote` y `/api/map/polls/[pollId]/vote` devuelven `401` sin sesión).
 - [ ] Registro viewer exige país y ciudad.
+- [ ] Registro/login viewer desde mapa crea sesión, vuelve al mapa original y crea `creator_viewer_subscriptions`.
+- [ ] Favoritos, guardados y estado de reproducción autenticados persisten en `viewer_video_activity`.
 - [ ] Consentimiento de funcionamiento persiste con versión legal.
 - [ ] Revocación de consentimientos promocionales operativa.
 - [ ] Eliminación de cuenta viewer (`DELETE /api/auth/viewer-account`) deja trazabilidad en `viewer_account_deletions`.
+
+## 8.1) Segmentación y marketing
+
+- [ ] Ranking interno de creadores por viewers suscritos visible para superadmin.
+- [ ] Segmentación BY PUPILA solo incluye viewers con `platform_promotions=true`.
+- [ ] Segmentación futura de creadores solo incluye viewers con `creator_promotions=true`.
+- [ ] Endpoint interno de segmentación queda protegido por superadmin.
+- [ ] No hay envío masivo de email habilitado para creadores en beta.
 
 ## 9) Votaciones país -> ciudades
 

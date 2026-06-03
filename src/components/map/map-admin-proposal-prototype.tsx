@@ -332,7 +332,7 @@ export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminP
 
       {/* Drawer menus / Modals */}
       {showPlaylistModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#081017] p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-white">Nueva playlist de viaje</h3>
@@ -348,7 +348,7 @@ export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminP
       )}
 
       {showSponsorModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#081017] p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-white">Añadir Sponsor Comercial</h3>
@@ -372,7 +372,7 @@ export function MapAdminProposalPrototype({ channel, videoLocations }: MapAdminP
       )}
 
       {showPatronModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#081017] p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[#ff9c54] flex items-center gap-2">

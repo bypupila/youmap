@@ -15,6 +15,7 @@ export default function ViewerRegisterPage() {
   const [utmSource, setUtmSource] = useState<string | null>(null);
   const [utmMedium, setUtmMedium] = useState<string | null>(null);
   const [utmCampaign, setUtmCampaign] = useState<string | null>(null);
+  const [safeNext, setSafeNext] = useState("");
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -36,6 +37,8 @@ export default function ViewerRegisterPage() {
     setUtmSource(String(params.get("utm_source") || "").trim() || null);
     setUtmMedium(String(params.get("utm_medium") || "").trim() || null);
     setUtmCampaign(String(params.get("utm_campaign") || "").trim() || null);
+    const next = String(params.get("next") || "");
+    setSafeNext(next.startsWith("/") ? next : "");
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -67,7 +70,7 @@ export default function ViewerRegisterPage() {
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(payload?.error || "No se pudo crear la cuenta viewer.");
-      router.push("/");
+      router.push(safeNext || "/");
       router.refresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "No se pudo crear la cuenta viewer.");

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GlobeMethods } from "react-globe.gl";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { createCountryFlagElement } from "@/lib/country-flags";
 
 type GlobeComponent = typeof import("react-globe.gl").default;
 type MiniMapPoint = { countryCode: string; lat: number; lng: number; count: number; label: string };
@@ -146,17 +147,6 @@ export function MiniMapModel({
   );
 }
 
-function countryCodeToFlagEmoji(countryCode: string): string {
-  const code = String(countryCode).toUpperCase();
-  if (code.length !== 2) return code;
-  const codePoints = code.split("").map((char) => 127397 + char.charCodeAt(0));
-  try {
-    return String.fromCodePoint(...codePoints);
-  } catch {
-    return code;
-  }
-}
-
 function createMiniFlagPin(point: MiniMapPoint) {
   const marker = document.createElement("div");
   marker.style.transform = "translate(-50%, -50%)";
@@ -170,18 +160,11 @@ function createMiniFlagPin(point: MiniMapPoint) {
   marker.style.border = "1px solid rgba(255,255,255,0.22)";
   marker.style.boxShadow = "0 6px 12px rgba(2,6,23,0.45)";
 
-  const flag = document.createElement("span");
-  flag.textContent = countryCodeToFlagEmoji(point.countryCode || point.label);
+  const flag = createCountryFlagElement(point.countryCode || point.label, 14);
   flag.style.position = "absolute";
   flag.style.left = "50%";
   flag.style.top = "50%";
   flag.style.transform = "translate(-50%, -50%)";
-  flag.style.display = "block";
-  flag.style.width = "100%";
-  flag.style.textAlign = "center";
-  flag.style.fontSize = "13px";
-  flag.style.lineHeight = "1";
-  flag.style.fontFamily = "Apple Color Emoji, Segoe UI Emoji, Roboto Emoji, sans-serif";
   marker.appendChild(flag);
 
   return marker;
