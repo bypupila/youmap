@@ -18,8 +18,7 @@ TravelYourMap debe sentirse como una herramienta propia para creadores de viaje:
 
 No usar como marca propia:
 
-- `YOUMAP`
-- `YouMap`
+- variantes que mezclen `You` + `Map`
 - `TravelMap`
 - `MapTuber`
 - cualquier nombre que sugiera afiliacion con YouTube o Google
@@ -153,7 +152,7 @@ La migracion no debe cortar sesiones, votos, actividad local ni runs de onboardi
 Antes de publicar cambios de marca o UI, ejecutar:
 
 ```bash
-rg "YOUMAP|YouMap|TravelMap|MapTuber|YouTube Studio|inspirada en YouTube|for YouTube Creators" src docs README.md Design.MD
+rg "TravelMap|MapTuber|YouTube Studio|inspirada en YouTube|for YouTube Creators" src docs README.md Design.MD
 rg "YoutubeLogo" src
 rg "#ff0000|#cc0000|rgba\\(255,\\s*0,\\s*0|bg-red-500|text-red-|border-red-" src docs Design.MD
 npm run lint

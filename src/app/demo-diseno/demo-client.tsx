@@ -2630,7 +2630,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
                   <div className="flex items-center gap-1.5 mb-3">
                     <Handshake size={13} className="text-orange-400" />
                     <span className="text-[9px] font-black tracking-widest text-zinc-300 uppercase">
-                      Reserva Exclusiva YouMap
+                      Reserva Exclusiva TravelYourMap
                     </span>
                   </div>
 

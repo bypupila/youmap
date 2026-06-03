@@ -1,11 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAMES } from "@/lib/auth-session";
 
+const CANONICAL_HOST = "travelyourmap.bypupila.com";
+const LEGACY_HOST_BASENAME = ["you", "map.bypupila.com"].join("");
+const LEGACY_HOSTS = new Set([
+  LEGACY_HOST_BASENAME,
+  `www.${LEGACY_HOST_BASENAME}`,
+]);
 const VANITY_HOSTS = new Set([
-  "travelyourmap.bypupila.com",
+  CANONICAL_HOST,
   "www.travelyourmap.bypupila.com",
-  "youmap.bypupila.com",
-  "www.youmap.bypupila.com",
 ]);
 const RESERVED_PATHS = new Set(["", "admin", "auth", "dashboard", "creator-panel", "onboarding", "pricing", "explore", "map", "api", "u", "_next", "monitoring"]);
 const LOCAL_ONLY_ROUTES = new Set([
@@ -21,6 +25,13 @@ export async function proxy(request: NextRequest) {
   const host = String(request.headers.get("host") || "").split(":")[0].toLowerCase();
   const pathname = request.nextUrl.pathname;
   const firstSegment = pathname.replace(/^\//, "").split("/")[0] || "";
+
+  if (LEGACY_HOSTS.has(host)) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.host = CANONICAL_HOST;
+    redirectUrl.protocol = "https";
+    return NextResponse.redirect(redirectUrl, 308);
+  }
 
   if (process.env.NODE_ENV === "production" && LOCAL_ONLY_ROUTES.has(pathname)) {
     const notFoundUrl = request.nextUrl.clone();

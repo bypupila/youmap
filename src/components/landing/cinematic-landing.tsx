@@ -418,7 +418,7 @@ function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] })
           ))}
         </div>
         <div className="mt-8 flex items-center justify-between rounded-[12px] border border-white/12 bg-white/[0.035] px-5 py-4 text-[14px] text-white/72">
-          travelyourmap.bypupila.com/u/by.pupila <Copy size={20} />
+          TravelYourMap.bypupila.com/u/by.pupila <Copy size={20} />
         </div>
       </div>
     </section>

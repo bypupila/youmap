@@ -187,7 +187,7 @@ En Vercel, `Project Settings > Environment Variables`, configura las mismas clav
 - `GOOGLE_GENAI_API_KEY` (o `GEMINI_API_KEY` / `GOOGLE_API_KEY`)
 - `NOMINATIM_USER_AGENT`
 - `NOMINATIM_EMAIL`
-- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_APP_URL` (`https://travelyourmap.bypupila.com` en producción)
 
 Si quieres proteger el cron de cierre de votaciones:
 
