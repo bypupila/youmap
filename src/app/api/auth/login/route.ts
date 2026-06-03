@@ -200,7 +200,7 @@ export async function POST(request: Request) {
         role: normalizeAppUserRole(user.role),
       },
     });
-    setSessionCookie(response, user.id);
+    setSessionCookie(response, user.id, request.headers.get("host"));
     return response;
   } catch (error) {
     console.error("[api/auth/login]", error);

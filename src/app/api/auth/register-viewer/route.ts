@@ -169,7 +169,7 @@ export async function POST(request: Request) {
       country_code: countryCode,
       city,
     });
-    setSessionCookie(response, userId);
+    setSessionCookie(response, userId, request.headers.get("host"));
     return response;
   } catch (error) {
     console.error("[api/auth/register-viewer POST]", error);

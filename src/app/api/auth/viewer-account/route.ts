@@ -105,7 +105,7 @@ export async function DELETE(request: Request) {
     await revokeUserSessions(user.id, "viewer_account_deleted");
 
     const response = NextResponse.json({ ok: true, deleted: true });
-    clearSessionCookie(response);
+    clearSessionCookie(response, request.headers.get("host"));
     return response;
   } catch (error) {
     console.error("[api/auth/viewer-account DELETE]", error);

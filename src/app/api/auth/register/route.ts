@@ -307,7 +307,7 @@ export async function POST(request: Request) {
       activation_mode: payload.activateWithoutPayment ? "test_no_payment" : "payment_required",
       request_id: randomUUID(),
     });
-    setSessionCookie(response, userId);
+    setSessionCookie(response, userId, request.headers.get("host"));
     return response;
   } catch (error) {
     if (error instanceof z.ZodError) {

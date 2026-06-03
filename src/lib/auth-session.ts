@@ -7,6 +7,16 @@ export const LEGACY_SESSION_COOKIE_NAME = "travelmap_session";
 export const SESSION_COOKIE_NAMES = [SESSION_COOKIE_NAME, LEGACY_SESSION_COOKIE_NAME] as const;
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
+function getCookieDomain(hostHeader: string | null | undefined) {
+  const host = String(hostHeader || "").split(":")[0].trim().toLowerCase();
+  if (!host) return undefined;
+  if (host === "localhost" || host.endsWith(".localhost")) return undefined;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return undefined;
+  if (host === "::1") return undefined;
+  const canonicalHost = host.startsWith("www.") ? host.slice(4) : host;
+  return canonicalHost ? `.${canonicalHost}` : undefined;
+}
+
 function encodeBase64Url(input: Buffer | string) {
   return Buffer.from(input)
     .toString("base64")
@@ -131,27 +141,33 @@ export function getSessionUserIdFromCookieHeader(cookieHeader: string | null) {
   return getSessionUserIdFromToken(getSessionTokenFromCookieHeader(cookieHeader));
 }
 
-export function setSessionCookie(response: NextResponse, userId: string) {
+export function setSessionCookie(response: NextResponse, userId: string, hostHeader?: string | null) {
   const token = createSessionToken(userId);
+  const domain = getCookieDomain(hostHeader);
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: DEFAULT_SESSION_TTL_SECONDS,
+    ...(domain ? { domain } : {}),
+  };
   for (const cookieName of SESSION_COOKIE_NAMES) {
-    response.cookies.set(cookieName, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: DEFAULT_SESSION_TTL_SECONDS,
-    });
+    response.cookies.set(cookieName, token, cookieOptions);
   }
 }
 
-export function clearSessionCookie(response: NextResponse) {
+export function clearSessionCookie(response: NextResponse, hostHeader?: string | null) {
+  const domain = getCookieDomain(hostHeader);
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 0,
+    ...(domain ? { domain } : {}),
+  };
   for (const cookieName of SESSION_COOKIE_NAMES) {
-    response.cookies.set(cookieName, "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
+    response.cookies.set(cookieName, "", cookieOptions);
   }
 }
