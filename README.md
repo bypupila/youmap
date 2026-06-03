@@ -76,6 +76,21 @@ Con `DATABASE_URL` configurado en `.env.local`, ejecuta:
 
 Ese script delega en `scripts/bootstrap-neon.mjs` y aplica migraciones + seed sobre Neon.
 
+Para staging o producción no uses bootstrap porque también aplica seed. Usa el flujo de migraciones sin seed:
+
+```bash
+npm run db:migrations:status
+npm run db:migrate -- --dry-run
+```
+
+Si el entorno ya fue inicializado antes de existir `public.schema_migrations`, primero registra el baseline verificado y aplica solo la migración nueva:
+
+```bash
+npm run db:migrate -- --baseline-through=0015 --only=0016
+```
+
+Regla operativa: `--baseline-through` solo se usa después de verificar que el esquema remoto ya tiene las tablas/columnas de esas migraciones; no ejecuta SQL de producto, solo registra checksums.
+
 ## Variables de entorno
 
 Revisa `.env.example` para los valores obligatorios.
@@ -112,6 +127,14 @@ Verificacion rapida local:
 ```bash
 npm run validate:env
 ```
+
+Gate de lanzamiento contra el entorno configurado:
+
+```bash
+npm run release:gate
+```
+
+`release:check` valida calidad estática y seguridad del repo; `release:gate` valida dependencias reales de lanzamiento como migraciones aplicadas, tablas de viewer acquisition, checkout Polar y flags peligrosos de producción.
 
 ## Supply Chain Security
 

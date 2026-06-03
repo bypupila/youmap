@@ -8,6 +8,8 @@ Ultima actualizacion: 2026-05-25
 - [ ] `npm run lint` en verde.
 - [ ] `npm run build` en verde.
 - [ ] `npm run validate:env` en verde en entorno objetivo.
+- [ ] `npm run db:migrations:status` sin migraciones pendientes en el entorno objetivo.
+- [ ] `npm run release:gate` en verde en el entorno objetivo.
 - [ ] Sin errores críticos de runtime en `/`, `/onboarding`, `/onboarding/processing`, `/map`, `/explore`, `/u/demo`.
 
 ## 2) Flujo de onboarding e import
@@ -57,6 +59,7 @@ Ultima actualizacion: 2026-05-25
 
 - [ ] Registro viewer obligatorio para votar (`/api/map/fan-votes/vote` y `/api/map/polls/[pollId]/vote` devuelven `401` sin sesión).
 - [ ] Registro viewer exige país y ciudad.
+- [ ] Migración `0016_creator_viewers_and_video_activity.sql` aplicada en el entorno objetivo.
 - [ ] Registro/login viewer desde mapa crea sesión, vuelve al mapa original y crea `creator_viewer_subscriptions`.
 - [ ] Favoritos, guardados y estado de reproducción autenticados persisten en `viewer_video_activity`.
 - [ ] Consentimiento de funcionamiento persiste con versión legal.

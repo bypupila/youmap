@@ -1,49 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  buildViewerRegisterHref,
+  readViewerAuthAttribution,
+  readViewerAuthAttributionFromLocation,
+} from "@/lib/viewer-auth-attribution";
 
-export default function AuthPage() {
+function AuthPageFallback() {
+  return (
+    <main className="relative grid min-h-[100dvh] place-items-center overflow-hidden px-4 text-foreground">
+      <div className="platform-grid-glow pointer-events-none absolute inset-0" />
+      <section className="tm-surface-strong relative z-10 w-full max-w-[32rem] rounded-[2rem] p-6 text-center">
+        <p className="tym-overline">Cuenta TravelYourMap</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em]">Cargando acceso...</h1>
+      </section>
+    </main>
+  );
+}
+
+function AuthPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [authIntent, setAuthIntent] = useState<"viewer" | "creator">("creator");
-  const [safeNext, setSafeNext] = useState("");
-  const [registrationChannelId, setRegistrationChannelId] = useState<string | null>(null);
-  const [utmSource, setUtmSource] = useState<string | null>(null);
-  const [utmMedium, setUtmMedium] = useState<string | null>(null);
-  const [utmCampaign, setUtmCampaign] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const intent = params.get("intent") === "viewer" ? "viewer" : "creator";
-    const next = String(params.get("next") || "");
-    setAuthIntent(intent);
-    setSafeNext(next.startsWith("/") ? next : "");
-    setRegistrationChannelId(String(params.get("channelId") || "").trim() || null);
-    setUtmSource(String(params.get("utm_source") || "").trim() || null);
-    setUtmMedium(String(params.get("utm_medium") || "").trim() || null);
-    setUtmCampaign(String(params.get("utm_campaign") || "").trim() || null);
-  }, []);
+  const attribution = useMemo(() => {
+    return readViewerAuthAttribution(searchParams);
+  }, [searchParams]);
 
   const viewerRegisterHref = useMemo(() => {
-    const params = new URLSearchParams();
-    if (registrationChannelId) params.set("channelId", registrationChannelId);
-    if (safeNext) params.set("next", safeNext);
-    if (utmSource) params.set("utm_source", utmSource);
-    if (utmMedium) params.set("utm_medium", utmMedium);
-    if (utmCampaign) params.set("utm_campaign", utmCampaign);
-    const query = params.toString();
-    return `/auth/viewer-register${query ? `?${query}` : ""}`;
-  }, [registrationChannelId, safeNext, utmCampaign, utmMedium, utmSource]);
+    return buildViewerRegisterHref(attribution);
+  }, [attribution]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,16 +47,17 @@ export default function AuthPage() {
     setError(null);
 
     try {
+      const submitAttribution = readViewerAuthAttributionFromLocation(searchParams);
       const loginResponse = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           identifier,
           password,
-          registrationChannelId,
-          utmSource,
-          utmMedium,
-          utmCampaign,
+          registrationChannelId: submitAttribution.registrationChannelId,
+          utmSource: submitAttribution.utmSource,
+          utmMedium: submitAttribution.utmMedium,
+          utmCampaign: submitAttribution.utmCampaign,
         }),
       });
       const loginPayload = (await loginResponse.json().catch(() => null)) as
@@ -70,8 +67,8 @@ export default function AuthPage() {
         throw new Error(loginPayload?.error || "No se pudo iniciar sesión.");
       }
 
-      const defaultPath = authIntent === "viewer" ? "/" : "/dashboard";
-      router.push(safeNext || defaultPath);
+      const defaultPath = submitAttribution.authIntent === "viewer" ? "/" : "/dashboard";
+      router.push(submitAttribution.safeNext || defaultPath);
       router.refresh();
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "No se pudo iniciar sesión.");
@@ -87,12 +84,12 @@ export default function AuthPage() {
       <div className="relative z-10 mx-auto grid min-h-[100dvh] max-w-[1400px] items-center gap-8 px-4 py-10 lg:grid-cols-[0.92fr_1.08fr] lg:px-6">
         <section className="order-2 lg:order-1">
           <div className="max-w-[38rem]">
-            <Badge variant="outline">{authIntent === "viewer" ? "Viewer access" : "Creator access"}</Badge>
+            <Badge variant="outline">{attribution.authIntent === "viewer" ? "Viewer access" : "Creator access"}</Badge>
             <h1 className="mt-5 max-w-[12ch] text-4xl font-semibold tracking-[-0.06em] text-foreground md:text-6xl md:leading-none">
-              {authIntent === "viewer" ? "Inicia sesión para votar, guardar y seguir mapas." : "Entra, activa tu mapa y publica una presencia propia."}
+              {attribution.authIntent === "viewer" ? "Inicia sesión para votar, guardar y seguir mapas." : "Entra, activa tu mapa y publica una presencia propia."}
             </h1>
             <p className="mt-5 max-w-[60ch] text-base leading-7 text-muted-foreground">
-              {authIntent === "viewer"
+              {attribution.authIntent === "viewer"
                 ? "Accede como viewer para participar en votaciones y desbloquear estadísticas avanzadas en los mapas públicos."
                 : "TravelYourMap convierte el catálogo del canal en una experiencia editorial: rutas, países, sponsors y una URL pública lista para ventas o discovery."}
             </p>
@@ -108,7 +105,7 @@ export default function AuthPage() {
         <section className="order-1 tm-surface-strong rounded-[2rem] p-6 sm:p-8 lg:order-2 lg:ml-auto lg:w-full lg:max-w-[38rem]">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <p className="tym-overline">{authIntent === "viewer" ? "Cuenta Viewer" : "Cuenta TravelYourMap"}</p>
+              <p className="tym-overline">{attribution.authIntent === "viewer" ? "Cuenta Viewer" : "Cuenta TravelYourMap"}</p>
               <h2 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-foreground">Acceso de cuenta</h2>
             </div>
             <Badge variant="secondary">Login</Badge>
@@ -125,7 +122,7 @@ export default function AuthPage() {
               <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Email o usuario</span>
               <Input value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="tu@email.com o tu_usuario" />
               <p className="text-xs text-muted-foreground">
-                {authIntent === "viewer"
+                {attribution.authIntent === "viewer"
                   ? "Usa tu email o usuario para entrar como viewer."
                   : "Puedes entrar usando el email de facturación o tu identificador público."}
               </p>
@@ -134,7 +131,7 @@ export default function AuthPage() {
               <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Contraseña</span>
               <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Tu contraseña" />
               <p className="text-xs text-muted-foreground">
-                {authIntent === "viewer"
+                {attribution.authIntent === "viewer"
                   ? "Tu cuenta de viewer te permite participar y guardar contenido en mapas."
                   : "Mantén una clave única para tu operación editorial y comercial."}
               </p>
@@ -145,7 +142,7 @@ export default function AuthPage() {
           </form>
 
           {error ? <p className="mt-4 text-sm text-[#ffb0a7]">{error}</p> : null}
-          {authIntent === "creator" ? (
+          {attribution.authIntent === "creator" ? (
             <p className="mt-5 text-sm text-muted-foreground">
               Si todavía no tienes cuenta y vas a activar canal + importación, entra por{" "}
               <Link href="/onboarding" className="text-foreground underline underline-offset-4">
@@ -180,5 +177,13 @@ export default function AuthPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<AuthPageFallback />}>
+      <AuthPageContent />
+    </Suspense>
   );
 }

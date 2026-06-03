@@ -56,6 +56,9 @@ export async function POST(request: Request) {
       channelId: payload.channelId,
       changes: payload.changes,
     });
+    if (result.updated < 1) {
+      return NextResponse.json({ error: "No valid viewer video activity changes were saved" }, { status: 400 });
+    }
 
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {

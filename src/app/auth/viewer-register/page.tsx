@@ -1,21 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { readViewerAuthAttributionFromLocation } from "@/lib/viewer-auth-attribution";
 
-export default function ViewerRegisterPage() {
+function ViewerRegisterFallback() {
+  return (
+    <main className="relative grid min-h-[100dvh] place-items-center overflow-hidden px-4 text-foreground">
+      <div className="platform-grid-glow pointer-events-none absolute inset-0" />
+      <section className="tm-surface-strong relative z-10 w-full max-w-[32rem] rounded-[2rem] p-6 text-center">
+        <p className="tym-overline">Cuenta Viewer</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em]">Cargando registro...</h1>
+      </section>
+    </main>
+  );
+}
+
+function ViewerRegisterContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [registrationSource, setRegistrationSource] = useState<"platform" | "creator_map">("platform");
-  const [registrationChannelId, setRegistrationChannelId] = useState<string | null>(null);
-  const [utmSource, setUtmSource] = useState<string | null>(null);
-  const [utmMedium, setUtmMedium] = useState<string | null>(null);
-  const [utmCampaign, setUtmCampaign] = useState<string | null>(null);
-  const [safeNext, setSafeNext] = useState("");
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -28,24 +36,12 @@ export default function ViewerRegisterPage() {
   const [consentPlatformPromotions, setConsentPlatformPromotions] = useState(false);
   const [consentCreatorPromotions, setConsentCreatorPromotions] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const channelId = String(params.get("channelId") || "").trim();
-    setRegistrationChannelId(channelId || null);
-    setRegistrationSource(channelId ? "creator_map" : "platform");
-    setUtmSource(String(params.get("utm_source") || "").trim() || null);
-    setUtmMedium(String(params.get("utm_medium") || "").trim() || null);
-    setUtmCampaign(String(params.get("utm_campaign") || "").trim() || null);
-    const next = String(params.get("next") || "");
-    setSafeNext(next.startsWith("/") ? next : "");
-  }, []);
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
     try {
+      const submitAttribution = readViewerAuthAttributionFromLocation(searchParams);
       const response = await fetch("/api/auth/register-viewer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -61,16 +57,16 @@ export default function ViewerRegisterPage() {
           consentPlatformPromotions,
           consentCreatorPromotions,
           consentVersion: "v1",
-          registrationSource,
-          registrationChannelId,
-          utmSource,
-          utmMedium,
-          utmCampaign,
+          registrationSource: submitAttribution.registrationSource,
+          registrationChannelId: submitAttribution.registrationChannelId,
+          utmSource: submitAttribution.utmSource,
+          utmMedium: submitAttribution.utmMedium,
+          utmCampaign: submitAttribution.utmCampaign,
         }),
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(payload?.error || "No se pudo crear la cuenta viewer.");
-      router.push(safeNext || "/");
+      router.push(submitAttribution.safeNext || "/");
       router.refresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "No se pudo crear la cuenta viewer.");
@@ -183,5 +179,13 @@ export default function ViewerRegisterPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function ViewerRegisterPage() {
+  return (
+    <Suspense fallback={<ViewerRegisterFallback />}>
+      <ViewerRegisterContent />
+    </Suspense>
   );
 }
