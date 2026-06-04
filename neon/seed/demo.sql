@@ -1,3 +1,58 @@
+-- Demo acquisition channel used by demo map CTAs and viewer registration.
+insert into public.users (id, email, username, display_name, role, updated_at)
+values (
+  '00000000-0000-4000-8000-000000000001',
+  'demo@travelyourmap.local',
+  'demo',
+  'Pupila Nomad',
+  'creator',
+  now()
+)
+on conflict (id) do update set
+  email = excluded.email,
+  username = excluded.username,
+  display_name = excluded.display_name,
+  role = excluded.role,
+  updated_at = excluded.updated_at;
+
+insert into public.channels (
+  id,
+  user_id,
+  channel_name,
+  channel_handle,
+  thumbnail_url,
+  subscriber_count,
+  youtube_channel_id,
+  is_public,
+  published_at,
+  last_synced_at,
+  updated_at
+)
+values (
+  '11111111-1111-4111-8111-111111111111',
+  '00000000-0000-4000-8000-000000000001',
+  'Pupila Nomad',
+  '@pupila.nomad',
+  null,
+  128400,
+  null,
+  true,
+  now(),
+  now(),
+  now()
+)
+on conflict (id) do update set
+  user_id = excluded.user_id,
+  channel_name = excluded.channel_name,
+  channel_handle = excluded.channel_handle,
+  thumbnail_url = excluded.thumbnail_url,
+  subscriber_count = excluded.subscriber_count,
+  youtube_channel_id = excluded.youtube_channel_id,
+  is_public = excluded.is_public,
+  published_at = excluded.published_at,
+  last_synced_at = excluded.last_synced_at,
+  updated_at = excluded.updated_at;
+
 -- Polar launch catalog snapshot: output/polar-travel-bootstrap-2026-04-19.json
 -- Keep these IDs in sync with the canonical Polar products used for checkout.
 insert into public.subscription_plans (slug, name, price_usd, polar_product_id, polar_price_id, max_videos, max_sponsors, features, is_active)
