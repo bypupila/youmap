@@ -114,13 +114,13 @@ Opcionales para operacion de votaciones:
 
 - `MAP_POLLS_CRON_TOKEN` (si se define, habilita auth por query/header para ejecuciones manuales)
 
-Bootstrap recomendado para este proyecto (crea productos nuevos y sincroniza IDs en Neon):
+Bootstrap recomendado para este proyecto (la seed ya incluye el snapshot de lanzamiento para `starter`, `pro` y `creator_plus`; `npm run polar:bootstrap` se usa para refrescar el catalogo cuando tengas credenciales validas):
 
 ```bash
 npm run polar:bootstrap
 ```
 
-Regla operativa: en esta cuenta de Polar, este proyecto nunca debe modificar productos existentes de otros proyectos; siempre debe crear productos nuevos dedicados para TravelYourMap.
+Regla operativa: en esta cuenta de Polar, este proyecto nunca debe modificar productos existentes de otros proyectos; si hay que refrescar el catalogo, se crean productos nuevos dedicados para TravelYourMap y luego se sincronizan los IDs en Neon.
 
 Verificacion rapida local:
 
