@@ -42,7 +42,7 @@ Use the demo route to inspect the product without external credentials:
 6. (Optional tuning) set `YOUTUBE_IMPORT_CONCURRENCY` and `YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN`.
 7. (Required in production for Vercel cron GET auth) set `CRON_SECRET`.
 8. (Optional for manual/external poll close calls) set `MAP_POLLS_CRON_TOKEN`.
-9. Load real Polar product and price IDs into `subscription_plans.polar_product_id` and `subscription_plans.polar_price_id`.
+9. `neon/seed/demo.sql` ya carga los Polar product/price IDs del snapshot de lanzamiento para `starter`, `pro` y `creator_plus`. Si el catálogo de Polar cambia, refrescalos con `npm run polar:bootstrap` usando credenciales validas antes de volver a ejecutar el seed.
 
 No external CLI or linked project is required for local bootstrap anymore.
 

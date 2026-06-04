@@ -26,7 +26,7 @@ export async function GET() {
           title: rows[0].title,
           description: rows[0].description,
           cta_label: rows[0].cta_label || "Ver promoción",
-          href: rows[0].href || "#",
+          href: rows[0].href || null,
         }
       : null;
 

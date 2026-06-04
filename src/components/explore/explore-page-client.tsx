@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { FloatingTopBar, MetricPill } from "@/components/design-system/chrome";
 import { Button } from "@/components/ui/button";
+import { CountryFlag } from "@/components/ui/country-flag";
 import { DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { cn } from "@/lib/utils";
@@ -133,11 +134,11 @@ export function ExplorePageClient() {
 
                 <div className={cn("grid gap-3", index === 0 ? "lg:grid-cols-[auto_1fr]" : "grid-cols-[auto_1fr]")}>
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-medium">
-                    {countryCodeToFlag(video.country_code)}
+                    <CountryFlag code={video.country_code} size={14} />
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="platform-country-code">{countryCodeToFlag(video.country_code)}</span>
+                      <CountryFlag code={video.country_code} size={14} className="platform-country-code" />
                       <span className="text-[12px] text-muted-foreground">{video.country_name || video.country_code}</span>
                     </div>
                     <h2 className="mt-2 line-clamp-2 text-[18px] leading-[1.25] font-medium text-foreground">{video.title}</h2>
@@ -162,11 +163,6 @@ function normalizeSearchText(input: string) {
     .replace(/\p{Diacritic}/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function countryCodeToFlag(countryCode?: string | null) {
-  const code = String(countryCode || "").toUpperCase();
-  return /^[A-Z]{2}$/.test(code) ? code : "GL";
 }
 
 function formatViews(value: number) {

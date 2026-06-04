@@ -70,6 +70,7 @@ export function MapExperienceV2({
       sponsors={sponsors}
       viewMode={resolvedViewMode}
       isDemoMode={isDemoMode}
+      viewer={viewer}
     />
   );
 }

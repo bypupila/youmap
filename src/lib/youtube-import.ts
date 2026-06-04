@@ -637,7 +637,7 @@ export async function importYoutubeChannel({
         ${source.thumbnail_url},
         ${source.subscriber_count},
         ${source.description},
-        true,
+        false,
         ${source.published_at},
         ${new Date().toISOString()}
       )
@@ -870,6 +870,21 @@ export async function importYoutubeChannel({
         finished_at = ${extractionRecordedAt},
         updated_at = ${extractionRecordedAt}
       where id = ${importRunId}
+    `;
+
+    await sql`
+      update public.channels
+      set
+        is_public = true,
+        updated_at = ${extractionRecordedAt}
+      where id = ${uploadChannel.id}
+        and exists (
+          select 1
+          from public.video_locations vl
+          inner join public.videos v on v.id = vl.video_id
+          where v.channel_id = ${uploadChannel.id}
+          limit 1
+        )
     `;
 
     await sql`

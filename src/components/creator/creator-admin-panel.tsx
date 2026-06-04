@@ -52,6 +52,7 @@ const SPONSOR_CATEGORY_PRESETS = [
   "Transporte",
   "Conectividad",
   "Equipamiento",
+  "Producto digital",
 ];
 
 export function CreatorAdminPanel({

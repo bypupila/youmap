@@ -76,6 +76,21 @@ Con `DATABASE_URL` configurado en `.env.local`, ejecuta:
 
 Ese script delega en `scripts/bootstrap-neon.mjs` y aplica migraciones + seed sobre Neon.
 
+Para staging o producción no uses bootstrap porque también aplica seed. Usa el flujo de migraciones sin seed:
+
+```bash
+npm run db:migrations:status
+npm run db:migrate -- --dry-run
+```
+
+Si el entorno ya fue inicializado antes de existir `public.schema_migrations`, primero registra el baseline verificado y aplica solo la migración nueva:
+
+```bash
+npm run db:migrate -- --baseline-through=0015 --only=0016
+```
+
+Regla operativa: `--baseline-through` solo se usa después de verificar que el esquema remoto ya tiene las tablas/columnas de esas migraciones; no ejecuta SQL de producto, solo registra checksums.
+
 ## Variables de entorno
 
 Revisa `.env.example` para los valores obligatorios.
@@ -99,19 +114,27 @@ Opcionales para operacion de votaciones:
 
 - `MAP_POLLS_CRON_TOKEN` (si se define, habilita auth por query/header para ejecuciones manuales)
 
-Bootstrap recomendado para este proyecto (crea productos nuevos y sincroniza IDs en Neon):
+Bootstrap recomendado para este proyecto (la seed ya incluye el snapshot de lanzamiento para `starter`, `pro` y `creator_plus`; `npm run polar:bootstrap` se usa para refrescar el catalogo cuando tengas credenciales validas):
 
 ```bash
 npm run polar:bootstrap
 ```
 
-Regla operativa: en esta cuenta de Polar, este proyecto nunca debe modificar productos existentes de otros proyectos; siempre debe crear productos nuevos dedicados para TravelYourMap.
+Regla operativa: en esta cuenta de Polar, este proyecto nunca debe modificar productos existentes de otros proyectos; si hay que refrescar el catalogo, se crean productos nuevos dedicados para TravelYourMap y luego se sincronizan los IDs en Neon.
 
 Verificacion rapida local:
 
 ```bash
 npm run validate:env
 ```
+
+Gate de lanzamiento contra el entorno configurado:
+
+```bash
+npm run release:gate
+```
+
+`release:check` valida calidad estática y seguridad del repo; `release:gate` valida dependencias reales de lanzamiento como migraciones aplicadas, tablas de viewer acquisition, checkout Polar y flags peligrosos de producción.
 
 ## Supply Chain Security
 
@@ -229,6 +252,15 @@ Si quieres proteger el cron de cierre de votaciones:
 - `POST /api/map/polls/:pollId/vote` voto irreversible con rate-limit anonimo
 - `GET /api/map/polls/:pollId/results` resultados con payload segun audiencia
 - `GET|POST /api/map/polls/close-expired` cierre batch de encuestas vencidas
+
+## Viewer acquisition y perfil
+
+- Los viewers que se registran desde un mapa público crean sesión HTTP-only y quedan atribuidos al canal de origen en `creator_viewer_subscriptions`.
+- `viewer_profiles.registration_channel_id` conserva el canal de adquisición original; `creator_viewer_subscriptions` modela la suscripción gratuita viewer-creador para ranking interno y segmentación futura.
+- Favoritos, guardados y estado de reproducción se persisten en `viewer_video_activity` cuando el viewer está autenticado; en demo/anónimo siguen como mejora local no persistente.
+- La segmentación de marketing interna debe respetar `platform_promotions`; email marketing futuro de creadores debe respetar `creator_promotions`.
+- Segmentación interna superadmin: `GET /api/admin/marketing/segments/creator-viewers?consent=platform|creator&days=90`.
+- El PR de lanzamiento no habilita envíos masivos de email ni checkout de productos digitales de creadores; esas capacidades usan estos contratos como base.
 
 ## Siguiente fase recomendada
 

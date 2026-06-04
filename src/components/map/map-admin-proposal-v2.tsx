@@ -32,6 +32,12 @@ import type {
   CreatorAdminUiStatus,
   CreatorAdminVideo,
 } from "@/lib/creator-admin-data";
+import {
+  PollEditorFields,
+  buildPollEditorCountriesFromVideos,
+  buildPollEditorFormState,
+  type PollEditorFormState,
+} from "@/components/map/poll-editor-form";
 import { cn } from "@/lib/utils";
 
 type InitialFilters = {
@@ -979,24 +985,23 @@ function NewVoteModal({
   onClose: () => void;
   mutate: (url: string, init: RequestInit, success: string) => Promise<boolean>;
 }) {
+  const pollEditorOptions = useMemo(() => buildPollEditorCountriesFromVideos(payload.videos), [payload.videos]);
+  const [form, setForm] = useState<PollEditorFormState>(() => buildPollEditorFormState(null, pollEditorOptions));
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const countryCodes = formData.getAll("country_codes").map(String).slice(0, 6);
-    const countryOptions = countryCodes.map((countryCode, index) => {
-      const country = payload.countries.find((entry) => entry.country_code === countryCode);
-      return { country_code: countryCode, country_name: country?.country_name || countryCode, sort_order: index, cities: [] };
-    });
     const body = {
       action: "save",
       channelId: payload.channel.id,
-      title: String(formData.get("title") || "").trim(),
-      prompt: String(formData.get("prompt") || "").trim(),
-      pollMode: "country",
+      title: form.title.trim(),
+      prompt: form.prompt.trim(),
+      pollMode: form.pollMode,
       status: String(formData.get("status") || "live"),
       visibility: String(formData.get("visibility") || "public"),
-      showPopup: formData.get("showPopup") === "on",
-      countryOptions,
+      showPopup: form.showPopup,
+      closesAt: form.closesAtLocal ? new Date(form.closesAtLocal).toISOString() : null,
+      countryOptions: form.countryOptions,
       sponsorUrl: String(formData.get("sponsor_url") || "").trim() || null,
     };
     const ok = await mutate("/api/map-admin/polls", { method: "POST", body: JSON.stringify(body) }, "Votacion guardada.");
@@ -1005,18 +1010,12 @@ function NewVoteModal({
   return (
     <BaseModal title="Nueva votacion" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Titulo" name="title" placeholder="A donde voy en julio" required />
-        <TextArea label="Descripcion para audiencia" name="prompt" defaultValue="Vota el proximo destino del mapa." required />
+        <PollEditorFields form={form} setForm={setForm} availableOptions={pollEditorOptions} />
         <div className="grid gap-3 md:grid-cols-2">
           <SelectField label="Estado" name="status" options={[{ value: "live", label: "Abierta" }, { value: "draft", label: "Borrador" }]} />
           <SelectField label="Visibilidad" name="visibility" options={[{ value: "public", label: "Publica en el mapa" }, { value: "link_only", label: "Solo link directo" }]} />
         </div>
-        <CheckboxGrid name="country_codes" options={payload.countries.map((country) => ({ value: country.country_code, label: country.country_name }))} defaultValues={payload.countries.slice(0, 2).map((country) => country.country_code)} />
         <Field label="URL sponsor del destino" name="sponsor_url" type="url" />
-        <label className="flex items-center gap-2 text-[12px] font-bold text-white">
-          <input type="checkbox" name="showPopup" className="h-4 w-4 accent-[#ff5a3d]" />
-          Mostrar popup en mapa publico
-        </label>
         <ModalFooter onClose={onClose} submitLabel="Guardar votacion" />
       </form>
     </BaseModal>
@@ -1116,7 +1115,7 @@ function RankList({ rows, empty }: { rows: Array<{ label: string; value: number 
 
 function BaseModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm md:items-center md:p-4">
+    <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm md:items-center md:p-4">
       <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Cerrar modal" />
       <div className="relative max-h-[92dvh] w-full overflow-y-auto rounded-t-xl border border-white/10 bg-[#0d1118] p-4 shadow-2xl md:max-w-2xl md:rounded-xl md:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">

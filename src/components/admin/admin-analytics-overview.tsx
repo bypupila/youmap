@@ -23,6 +23,7 @@ type OverviewPayload = {
     channel_name: string;
     owner_username: string;
     videos_count: number;
+    subscribed_viewers: number;
     map_views_30d: number;
     votes_30d: number;
   }>;
@@ -106,8 +107,15 @@ export function AdminAnalyticsOverview() {
           <div className="grid gap-4 xl:grid-cols-2">
             <SimpleTable
               title={`Top creadores (${data.window_days}d)`}
-              headers={["Canal", "Owner", "Videos", "Views mapa", "Votos"]}
-              rows={data.creators.map((item) => [item.channel_name, item.owner_username, n(item.videos_count), n(item.map_views_30d), n(item.votes_30d)])}
+              headers={["Canal", "Owner", "Suscriptores", "Videos", "Views mapa", "Votos"]}
+              rows={data.creators.map((item) => [
+                item.channel_name,
+                item.owner_username,
+                n(item.subscribed_viewers),
+                n(item.videos_count),
+                n(item.map_views_30d),
+                n(item.votes_30d),
+              ])}
             />
             <SimpleTable
               title={`Top sponsors (${data.window_days}d)`}

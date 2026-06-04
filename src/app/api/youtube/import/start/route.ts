@@ -84,7 +84,7 @@ export async function POST(request: Request) {
         null,
         null,
         null,
-        true,
+        false,
         null,
         ${nowIso}
       )

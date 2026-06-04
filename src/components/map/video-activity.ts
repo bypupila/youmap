@@ -34,6 +34,17 @@ export type VideoActivityController = {
 };
 
 type StorageKey = (typeof VIDEO_ACTIVITY_STORAGE_KEYS)[keyof typeof VIDEO_ACTIVITY_STORAGE_KEYS];
+type UseVideoActivityOptions = {
+  channelId?: string | null;
+  persistToProfile?: boolean;
+};
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+
+function normalizePersistedChannelId(value?: string | null) {
+  const normalized = String(value || "").trim();
+  return UUID_PATTERN.test(normalized) ? normalized : null;
+}
 
 function parseStoredIds(raw: string) {
   const parsed = JSON.parse(raw) as unknown;
@@ -122,12 +133,53 @@ function writeWatchStatusById(value: Record<string, VideoWatchStatus>) {
   }
 }
 
-export function useLocalVideoActivity(): VideoActivityController {
+function syncViewerVideoActivity(
+  channelId: string | null,
+  changes: Array<{
+    youtubeVideoId: string;
+    saved?: boolean;
+    favorite?: boolean;
+    watchStatus?: VideoWatchStatus;
+    markSeen?: boolean;
+    markOpened?: boolean;
+    markStarted?: boolean;
+  }>
+) {
+  if (!channelId || changes.length === 0) return;
+  void fetch("/api/viewer/video-activity", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channelId, changes }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
+function buildLocalProfileSyncChanges() {
+  const savedIds = readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.saved, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.saved);
+  const favoriteIds = readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.featured, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.featured);
+  const watchStatusById = readWatchStatusById();
+  const videoIds = new Set<string>([
+    ...Array.from(savedIds),
+    ...Array.from(favoriteIds),
+    ...Object.keys(watchStatusById),
+  ]);
+
+  return Array.from(videoIds).map((youtubeVideoId) => ({
+    youtubeVideoId,
+    saved: savedIds.has(youtubeVideoId),
+    favorite: favoriteIds.has(youtubeVideoId),
+    watchStatus: watchStatusById[youtubeVideoId] || "not_started",
+  }));
+}
+
+export function useLocalVideoActivity(options: UseVideoActivityOptions = {}): VideoActivityController {
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [openedIds, setOpenedIds] = useState<Set<string>>(new Set());
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
   const [watchStatusById, setWatchStatusById] = useState<Record<string, VideoWatchStatus>>({});
+  const persistedChannelId = normalizePersistedChannelId(options.channelId);
+  const shouldPersistToProfile = Boolean(options.persistToProfile && persistedChannelId);
 
   useEffect(() => {
     setSeenIds(readStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.seen, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.seen));
@@ -137,7 +189,53 @@ export function useLocalVideoActivity(): VideoActivityController {
     setWatchStatusById(readWatchStatusById());
   }, []);
 
+  useEffect(() => {
+    if (!shouldPersistToProfile || !persistedChannelId) return;
+    let active = true;
+
+    fetch(`/api/viewer/video-activity?channelId=${encodeURIComponent(persistedChannelId)}`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!active || !payload || !Array.isArray(payload.items)) return;
+        const serverSaved = new Set<string>();
+        const serverFeatured = new Set<string>();
+        const serverWatchStatus: Record<string, VideoWatchStatus> = {};
+
+        for (const item of payload.items as Array<{ youtubeVideoId?: string; saved?: boolean; favorite?: boolean; watchStatus?: VideoWatchStatus }>) {
+          const videoId = String(item.youtubeVideoId || "").trim();
+          if (!videoId) continue;
+          if (item.saved) serverSaved.add(videoId);
+          if (item.favorite) serverFeatured.add(videoId);
+          if (item.watchStatus) serverWatchStatus[videoId] = item.watchStatus;
+        }
+
+        setSavedIds((current) => {
+          const next = new Set([...Array.from(serverSaved), ...Array.from(current)]);
+          writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.saved, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.saved, next);
+          return next;
+        });
+        setFeaturedIds((current) => {
+          const next = new Set([...Array.from(serverFeatured), ...Array.from(current)]);
+          writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.featured, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.featured, next);
+          return next;
+        });
+        setWatchStatusById((current) => {
+          const next = { ...serverWatchStatus, ...current };
+          writeWatchStatusById(next);
+          return next;
+        });
+
+        syncViewerVideoActivity(persistedChannelId, buildLocalProfileSyncChanges());
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [persistedChannelId, shouldPersistToProfile]);
+
   const markVideoStarted = useCallback((videoId: string | null | undefined) => {
+    const normalized = String(videoId || "").trim();
     setSeenIds((current) => {
       const next = addId(current, videoId);
       if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.seen, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.seen, next);
@@ -148,7 +246,6 @@ export function useLocalVideoActivity(): VideoActivityController {
       if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.opened, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.opened, next);
       return next;
     });
-    const normalized = String(videoId || "").trim();
     if (!normalized) return;
     setWatchStatusById((current) => {
       if (current[normalized] === "watched") return current;
@@ -157,9 +254,19 @@ export function useLocalVideoActivity(): VideoActivityController {
       writeWatchStatusById(next);
       return next;
     });
-  }, []);
+    if (shouldPersistToProfile) {
+      syncViewerVideoActivity(persistedChannelId, [{
+        youtubeVideoId: normalized,
+        watchStatus: "not_finished",
+        markSeen: true,
+        markOpened: true,
+        markStarted: true,
+      }]);
+    }
+  }, [persistedChannelId, shouldPersistToProfile]);
 
   const markVideoOpened = useCallback((videoId: string | null | undefined) => {
+    const normalized = String(videoId || "").trim();
     setSeenIds((current) => {
       const next = addId(current, videoId);
       if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.seen, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.seen, next);
@@ -170,7 +277,6 @@ export function useLocalVideoActivity(): VideoActivityController {
       if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.opened, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.opened, next);
       return next;
     });
-    const normalized = String(videoId || "").trim();
     if (normalized) {
       setWatchStatusById((current) => {
         if (current[normalized] === "watched") return current;
@@ -179,18 +285,31 @@ export function useLocalVideoActivity(): VideoActivityController {
         writeWatchStatusById(next);
         return next;
       });
+      if (shouldPersistToProfile) {
+        syncViewerVideoActivity(persistedChannelId, [{
+          youtubeVideoId: normalized,
+          watchStatus: "not_finished",
+          markSeen: true,
+          markOpened: true,
+        }]);
+      }
     }
-  }, []);
+  }, [persistedChannelId, shouldPersistToProfile]);
 
   const toggleVideoSaved = useCallback((videoId: string | null | undefined) => {
+    const normalized = String(videoId || "").trim();
     setSavedIds((current) => {
       const next = toggleId(current, videoId);
       if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.saved, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.saved, next);
+      if (normalized && next !== current && shouldPersistToProfile) {
+        syncViewerVideoActivity(persistedChannelId, [{ youtubeVideoId: normalized, saved: next.has(normalized) }]);
+      }
       return next;
     });
-  }, []);
+  }, [persistedChannelId, shouldPersistToProfile]);
 
   const toggleVideoFeatured = useCallback((videoId: string | null | undefined) => {
+    const normalized = String(videoId || "").trim();
     setFeaturedIds((current) => {
       const next = toggleId(current, videoId);
       if (next !== current) writeStoredIds(
@@ -198,9 +317,12 @@ export function useLocalVideoActivity(): VideoActivityController {
         LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.featured,
         next
       );
+      if (normalized && next !== current && shouldPersistToProfile) {
+        syncViewerVideoActivity(persistedChannelId, [{ youtubeVideoId: normalized, favorite: next.has(normalized) }]);
+      }
       return next;
     });
-  }, []);
+  }, [persistedChannelId, shouldPersistToProfile]);
 
   const setVideoWatchStatus = useCallback((videoId: string | null | undefined, status: VideoWatchStatus) => {
     const normalized = String(videoId || "").trim();
@@ -211,7 +333,14 @@ export function useLocalVideoActivity(): VideoActivityController {
       writeWatchStatusById(next);
       return next;
     });
-  }, []);
+    if (shouldPersistToProfile) {
+      syncViewerVideoActivity(persistedChannelId, [{
+        youtubeVideoId: normalized,
+        watchStatus: status,
+        markSeen: status !== "not_started",
+      }]);
+    }
+  }, [persistedChannelId, shouldPersistToProfile]);
 
   return {
     seenIds,
