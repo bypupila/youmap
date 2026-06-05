@@ -140,7 +140,7 @@ export function getVideoWatchStateLabel(input: {
   if (input.watchStatus === "watched") return "COMPLETADO";
   if (input.watchStatus === "watch_later") return "POR TERMINAR";
   if (input.watchStatus === "not_started") return "SIN INICIAR";
-  if (input.watchStatus === "not_finished" || input.openedInYoutube) return "INICIADO";
+  if (input.watchStatus === "not_finished" || input.openedInYoutube) return "INCOMPLETO";
   return "SIN INICIAR";
 }
 

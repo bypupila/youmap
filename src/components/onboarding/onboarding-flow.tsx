@@ -7,7 +7,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FloatingTopBar } from "@/components/design-system/chrome";
-import { MapExperienceV2 } from "@/components/map/map-experience-v2";
 import { YoutubeImportStep, type ChannelDraft } from "@/components/onboarding/youtube-import-step";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -441,8 +440,6 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   const didHydrateQueryState = useRef(false);
 
   const copy = onboardingCopy[locale];
-  const previewChannel = DEMO_CHANNEL;
-  const previewLocations = DEMO_VIDEO_LOCATIONS;
   const analytics = DEMO_ANALYTICS as ChannelAnalytics;
   const demoMapPath = "/map?channelId=demo-channel";
 
@@ -786,21 +783,8 @@ export function OnboardingFlow({ isDemoMode, locale }: { isDemoMode: boolean; lo
   );
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden text-[#f1f1f1]">
-      <div className="pointer-events-none absolute inset-0 [&_*]:pointer-events-none">
-        <MapExperienceV2 channel={previewChannel}
-          videoLocations={previewLocations}
-          interactive={false}
-          allowRefresh={false}
-          showLegend={false}
-          showOperationsPanel={false}
-          showActiveVideoCard={false}
-          showHeader={false}
-        />
-      </div>
-
-      <div className="platform-grid-glow pointer-events-none absolute inset-0" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(17,20,22,0.96),rgba(17,20,22,0.74)_22%,rgba(17,20,22,0.4)_42%,rgba(17,20,22,0.92))]" />
+    <main className="relative min-h-[100dvh] overflow-hidden bg-black text-[#f1f1f1]">
+      <div className="pointer-events-none absolute inset-0 bg-black" />
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-40 px-4 py-3">
         <FloatingTopBar

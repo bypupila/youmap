@@ -1,0 +1,235 @@
+import Image from "next/image";
+import type { TravelVideoLocation } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { getDemoMapPreviewImage } from "@/lib/demo-video-previews";
+import { resolveSponsorCardVariant } from "@/lib/sponsor-card-style";
+import { formatVideoDuration, getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
+
+type WatchStatus = "not_started" | "not_finished" | "watched" | "watch_later";
+
+export type MapVideoCardActivity = {
+  seenIds?: Set<string>;
+  featuredIds?: Set<string>;
+  watchStatusById?: Record<string, WatchStatus>;
+};
+
+type MapVideoCardProps = {
+  video: TravelVideoLocation;
+  activity?: MapVideoCardActivity;
+  sponsorNames?: string[];
+  highlightedVideoId?: string | null;
+  isDemoMode?: boolean;
+  className?: string;
+  imagePriority?: boolean;
+  onSelect?: (video: TravelVideoLocation) => void;
+};
+
+export function MapVideoCard({
+  video,
+  activity,
+  sponsorNames = [],
+  highlightedVideoId = null,
+  isDemoMode = false,
+  className,
+  imagePriority = false,
+  onSelect,
+}: MapVideoCardProps) {
+  const videoId = String(video.youtube_video_id || "").trim();
+  const countryCode = String(video.country_code || "").toUpperCase();
+  const countryName = getCountryNameInSpanish(video.country_code, video.country_name);
+  const videoViews = Number(video.view_count || 0);
+  const durationLabel = formatVideoDuration(video.duration_seconds);
+  const explicitWatchStatus = videoId ? activity?.watchStatusById?.[videoId] : undefined;
+  const isWatched = explicitWatchStatus === "watched";
+  const isStarted =
+    explicitWatchStatus === "not_finished" ||
+    (!explicitWatchStatus && Boolean(videoId && activity?.seenIds?.has(videoId)));
+  const isWatchLater = explicitWatchStatus === "watch_later";
+  const isFeatured = Boolean(videoId && activity?.featuredIds?.has(videoId));
+  const isHighlighted = Boolean(videoId) && videoId === String(highlightedVideoId || "").trim();
+  const sponsorVariant = resolveSponsorCardVariant(video.sponsor_card_style, sponsorNames.length);
+  const thumbnailSrc = isDemoMode
+    ? getDemoMapPreviewImage(video.youtube_video_id)
+    : video.thumbnail_url || "/creators/final-cta-map-mockup.png";
+
+  const cardShellClassName = cn(
+    "group relative w-[260px] shrink-0 overflow-hidden rounded-xl border-2 bg-[#050505] transition-all duration-300 cursor-pointer flex flex-col",
+    isWatched
+      ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+      : isStarted
+        ? "border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+        : isHighlighted
+          ? "border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35)]"
+          : "border-white/[0.1] hover:border-white/30 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]",
+    className
+  );
+
+  const badges: Array<{ text: string; color: string }> = [];
+  if (isWatched) {
+    badges.push({
+      text: "COMPLETADO",
+      color: "bg-emerald-500 text-emerald-950 border-emerald-500/30",
+    });
+  }
+  if (isStarted) {
+    badges.push({
+      text: "INCOMPLETO",
+      color: "bg-yellow-400 text-black border-yellow-400/40 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
+    });
+  }
+  if (isFeatured) {
+    badges.push({
+      text: "FAVORITO",
+      color: "bg-red-500 text-red-50 border-red-500/35",
+    });
+  }
+  if (isWatchLater) {
+    badges.push({
+      text: "VER MÁS TARDE",
+      color: "bg-blue-500 text-blue-950 border-blue-400/85 ring-1 ring-blue-400/25",
+    });
+  }
+
+  const sponsorBanner = (() => {
+    if (sponsorNames.length === 0) return null;
+    if (sponsorVariant === "multi_bar") {
+      return (
+        <div className="shrink-0 bg-white/[0.05] border-b border-white/[0.05] p-2 flex items-center justify-between z-20">
+          <span className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-widest">Sponsored by</span>
+          <div className="flex gap-1">
+            {sponsorNames.map((name) => (
+              <span key={name} className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase">{name}</span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (sponsorVariant === "coupon_yellow") {
+      return (
+        <div className="shrink-0 bg-zinc-900 border-b-2 border-dashed border-zinc-600 p-1.5 flex items-center justify-between z-20 text-yellow-400">
+          <span className="text-[8px] font-black uppercase">{sponsorNames[0]}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px]">✂</span>
+            <span className="text-[8px] font-mono font-bold tracking-widest uppercase border border-yellow-500/50 px-1">CODE: GURU20</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (sponsorVariant === "premium_strip") {
+      return (
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 px-4 py-0.5 rounded-b-xl bg-white text-black shadow-md border-b-2 border-x-2 border-zinc-200">
+          <p className="text-[8px] font-black uppercase">{sponsorNames[0]}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="shrink-0 bg-red-600 hover:bg-red-500 transition-colors p-2 flex items-center justify-center z-20 text-white gap-2">
+        <span className="text-[9px] font-black uppercase tracking-widest">[ {sponsorNames[0]} ] 50% OFF ➔</span>
+      </div>
+    );
+  })();
+
+  return (
+    <div
+      className={cardShellClassName}
+      style={{ height: "165px" }}
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect?.(video)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onSelect?.(video);
+      }}
+    >
+      {sponsorBanner}
+
+      <div className="relative flex-1 w-full overflow-hidden">
+        <Image
+          src={thumbnailSrc}
+          alt={video.title}
+          fill
+          priority={imagePriority}
+          sizes="260px"
+          className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500"
+        />
+
+        <div className="absolute top-2 left-2 z-20 flex gap-1.5 justify-start">
+          {badges.map((badge) => (
+            <span key={badge.text} className={cn("px-1.5 py-0.5 text-[8px] font-bold uppercase rounded shadow-sm border", badge.color)}>
+              {badge.text}
+            </span>
+          ))}
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-black/50 backdrop-blur-sm p-2">
+          <p className="text-[11px] font-semibold text-white leading-tight drop-shadow-[0_2px_3px_rgba(0,0,0,1)]">
+            {video.title}
+          </p>
+        </div>
+      </div>
+
+      <div className="shrink-0 bg-black border-t border-zinc-800 p-1.5 flex items-center justify-between z-20 relative">
+        <div className="flex gap-1.5 items-center text-[8px] font-mono text-zinc-400 w-1/3 justify-start">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span>{formatCompactMetric(videoViews)}</span>
+        </div>
+
+        <div className="flex gap-1.5 items-center text-[8px] font-mono text-zinc-400 justify-center w-1/3 absolute left-1/2 -translate-x-1/2">
+          <span className="text-[10px]">{countryCodeToFlag(countryCode)}</span>
+          <span className="truncate">{countryName}</span>
+        </div>
+
+        <div className="flex gap-1.5 items-center text-[8px] font-mono text-zinc-400 w-1/3 justify-end">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span>{durationLabel}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function countryCodeToFlag(code: string) {
+  const normalized = code.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) return "🌍";
+  return String.fromCodePoint(
+    normalized.charCodeAt(0) + 127397,
+    normalized.charCodeAt(1) + 127397
+  );
+}
+
+function formatCompactMetric(value: number) {
+  if (!Number.isFinite(value)) return "0";
+  if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}M`;
+  if (value >= 1_000) return `${Math.round(value / 100) / 10}K`;
+  return String(Math.round(value));
+}

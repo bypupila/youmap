@@ -230,6 +230,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
     startedAtMs: null,
     elapsedMsById: {},
   });
+  const suppressEndedForVideoIdRef = useRef<string | null>(null);
   const externalYoutubeOpenRef = useRef<ExternalYoutubeOpenState | null>(null);
   const videoActivity = useLocalVideoActivity();
 
@@ -490,6 +491,9 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       if (!videoId) return;
 
       if (state === "playing") {
+        if (suppressEndedForVideoIdRef.current === videoId) {
+          suppressEndedForVideoIdRef.current = null;
+        }
         const tracker = playbackTrackerRef.current;
         if (tracker.videoId && tracker.videoId !== videoId) {
           commitPlaybackElapsed(tracker.videoId);
@@ -506,6 +510,10 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
       }
 
       commitPlaybackElapsed(videoId);
+      if (suppressEndedForVideoIdRef.current === videoId) {
+        suppressEndedForVideoIdRef.current = null;
+        return;
+      }
       videoActivity.setVideoWatchStatus(videoId, "watched");
     },
     [commitPlaybackElapsed, videoActivity]
@@ -528,10 +536,12 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
         getPlaybackElapsedMs(videoId) >= VIDEO_EXIT_PROMPT_THRESHOLD_MS;
 
       if (!shouldPrompt) {
+        suppressEndedForVideoIdRef.current = videoId;
         action();
         return;
       }
 
+      suppressEndedForVideoIdRef.current = videoId;
       setVideoPlaybackCommand({ id: Date.now(), action: "pause" });
       setVideoExitPrompt({
         videoId,
@@ -545,6 +555,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
   function confirmVideoExitComplete() {
     if (!videoExitPrompt) return;
     commitPlaybackElapsed(videoExitPrompt.videoId);
+    suppressEndedForVideoIdRef.current = null;
     videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "watched");
     const nextAction = videoExitPrompt.action;
     setVideoExitPrompt(null);
@@ -552,6 +563,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
   }
 
   function continueWatchingVideo() {
+    suppressEndedForVideoIdRef.current = null;
     setVideoExitPrompt(null);
     setVideoPlaybackCommand({ id: Date.now(), action: "play" });
   }
@@ -559,6 +571,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
   function watchLaterPendingVideoExit() {
     if (!videoExitPrompt) return;
     commitPlaybackElapsed(videoExitPrompt.videoId);
+    suppressEndedForVideoIdRef.current = null;
     videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "watch_later");
     if (!videoActivity.savedIds.has(videoExitPrompt.videoId)) {
       videoActivity.toggleVideoSaved(videoExitPrompt.videoId);
@@ -914,6 +927,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
               onBecomePatron={() => window.location.assign("/onboarding")}
               onManageSponsors={() => setShowSponsorModal(true)}
               onAction={flash}
+              onOpenAdmin={() => window.location.assign("/map-admin-proposal")}
               analytics={proposalAnalytics}
               votePanel={
                 !isVideoFocusMode
@@ -1404,20 +1418,26 @@ function MapVotePanel2({
   prompt,
   votedCountryCode,
   variant = "overlay",
+  mode = "viewer",
   onSelectCountry,
   onConfirmVote,
   onCancelVote,
+  onOpenAdmin,
+  onFinalizeVote,
 }: {
   candidates: Array<{ code: string; name: string; count: number; votes: number }>;
   prompt: LocalVotePrompt | null;
   votedCountryCode: string | null;
   variant?: "overlay" | "sidebar";
+  mode?: "viewer" | "creator";
   onSelectCountry: (countryCode: string) => void;
   onConfirmVote: (countryCode: string) => void;
   onCancelVote: () => void;
+  onOpenAdmin?: () => void;
+  onFinalizeVote?: () => void;
 }) {
   const totalVotes = candidates.reduce((sum, country) => sum + country.votes, 0);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const isCreator = mode === "creator";
 
   return (
     <div
@@ -1428,64 +1448,78 @@ function MapVotePanel2({
       }
     >
       <section className="pointer-events-auto rounded-xl border border-white/[0.08] bg-[#050b10]/82 p-3 text-white shadow-2xl backdrop-blur-xl">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="min-w-0">
+        <div className={cn("mb-2 flex items-center gap-3", isCreator ? "justify-between" : "justify-center")}>
+          <div className={cn("min-w-0", !isCreator && "text-center")}>
             <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#ff5a3d]">Fan vote</p>
             <h3 className="text-[12px] font-black leading-tight text-white">Próximo destino</h3>
           </div>
-          <button
-            type="button"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ff5a3d]/30 bg-[#ff5a3d]/10 text-[15px] font-black leading-none text-[#ff5a3d] transition hover:bg-[#ff5a3d]/18"
-            onClick={() => setIsMinimized((current) => !current)}
-            aria-label={isMinimized ? "Expandir fan vote" : "Minimizar fan vote"}
-          >
-            <span className="flex h-full translate-y-[-1px] items-center justify-center leading-none">
-              {isMinimized ? "+" : "-"}
-            </span>
-          </button>
+          {isCreator ? (
+            <button
+              type="button"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ff5a3d]/30 bg-[#ff5a3d]/10 text-[#ff5a3d] transition hover:bg-[#ff5a3d]/18"
+              onClick={() => onOpenAdmin?.()}
+              aria-label="Abrir panel de votaciones"
+              title="Abrir panel de votaciones"
+            >
+              <List size={14} weight="bold" />
+            </button>
+          ) : null}
         </div>
-        {!isMinimized ? (
-          <>
-            <div className="space-y-1.5">
-              {candidates.map((country, index) => {
-                const active = votedCountryCode === country.code;
-                const width = totalVotes > 0 ? Math.max(12, Math.round((country.votes / totalVotes) * 100)) : 12;
+        <div className="space-y-1.5">
+          {candidates.map((country, index) => {
+            const active = votedCountryCode === country.code;
+            const width = totalVotes > 0 ? Math.max(12, Math.round((country.votes / totalVotes) * 100)) : 12;
 
-                return (
-                  <button
-                    key={country.code}
-                    type="button"
-                    className={cn(
-                      "group relative flex h-10 w-full items-center gap-2 overflow-hidden rounded-lg border px-2 text-left transition",
-                      active
-                        ? "border-[#ff5a3d]/55 bg-[#ff5a3d]/10"
-                        : "border-white/[0.06] bg-white/[0.035] hover:border-[#ff5a3d]/35 hover:bg-white/[0.06]"
-                    )}
-                    onClick={() => onSelectCountry(country.code)}
-                  >
-                    {country.votes > 0 ? (
-                      <span className="absolute inset-y-1 left-1 rounded-md bg-[#ff5a3d]/18" style={{ width: `${width}%` }} />
-                    ) : null}
-                    <span className="relative z-10 shrink-0 text-[10px] font-black text-[#ff5a3d]">#{index + 1}</span>
-                    <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/10 bg-black/25 text-[14px]">
-                      {countryCodeToFlag(country.code)}
-                    </span>
-                    <span className="relative z-10 min-w-0 flex-1">
-                      <span className="block truncate text-[11px] font-bold text-white">{country.name}</span>
-                      <span className="text-[9px] font-semibold text-[#8d98a5]">{country.votes} votos</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-center text-[10px] leading-4 text-[#8d98a5]">
-              Click en un país para votar.
-            </p>
-          </>
+            return (
+              <button
+                key={country.code}
+                type="button"
+                className={cn(
+                  "group relative flex h-10 w-full items-center gap-2 overflow-hidden rounded-lg border px-2 text-left transition",
+                  active
+                    ? "border-[#ff5a3d]/55 bg-[#ff5a3d]/10"
+                    : "border-white/[0.06] bg-white/[0.035] hover:border-[#ff5a3d]/35 hover:bg-white/[0.06]"
+                )}
+                onClick={() => onSelectCountry(country.code)}
+              >
+                {country.votes > 0 ? (
+                  <span className="absolute inset-y-1 left-1 rounded-md bg-[#ff5a3d]/18" style={{ width: `${width}%` }} />
+                ) : null}
+                <span className="relative z-10 shrink-0 text-[10px] font-black text-[#ff5a3d]">#{index + 1}</span>
+                <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/10 bg-black/25 text-[14px]">
+                  {countryCodeToFlag(country.code)}
+                </span>
+                <span className="relative z-10 min-w-0 flex-1">
+                  <span className="block truncate text-[11px] font-bold text-white">{country.name}</span>
+                  <span className="text-[9px] font-semibold text-[#8d98a5]">{country.votes} votos</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-center text-[10px] leading-4 text-[#8d98a5]">
+          Click en un país para votar.
+        </p>
+        {isCreator ? (
+          <div className="mt-3">
+            <button
+              type="button"
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-[#ff5a3d]/35 bg-[#ff5a3d]/12 px-3 text-[11px] font-black uppercase tracking-[0.12em] text-[#ffb4a4] transition hover:bg-[#ff5a3d]/20"
+              onClick={() => {
+                if (onFinalizeVote) {
+                  onFinalizeVote();
+                  return;
+                }
+                onOpenAdmin?.();
+              }}
+            >
+              Finalizar votación
+            </button>
+          </div>
         ) : null}
       </section>
 
-      {prompt && !isMinimized ? (
+      {prompt ? (
         <div className="pointer-events-auto mt-2 rounded-xl border border-[#ff5a3d]/28 bg-[#050b10]/92 p-3 text-white shadow-2xl backdrop-blur-xl">
           <p className="text-[11px] font-bold leading-5 text-[#dce4ed]">
             Votar por{" "}
@@ -1687,19 +1721,21 @@ function VideoInspirationRail2({
           );
         })}
         
-        {/* Next Scroll Navigation Arrow Button */}
-        <div className="flex items-center justify-center pl-2 shrink-0">
-          <button 
-            type="button" 
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#050b10]/60 hover:bg-[#050b10]/95 hover:border-white/20 text-white transition shadow-lg"
-            onClick={() => {
-              const first = railVideos[0];
-              if (first) onSelect(first);
-            }}
-          >
-            <CaretDown size={15} className="rotate-[-90deg] text-[#ff5a3d]" />
-          </button>
-        </div>
+        {videos.length > railVideos.length ? (
+          <div className="flex items-center justify-center pl-2 shrink-0">
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#050b10]/60 text-white transition shadow-lg hover:border-white/20 hover:bg-[#050b10]/95"
+              onClick={() => {
+                const first = railVideos[0];
+                if (first) onSelect(first);
+              }}
+              aria-label="Ver más videos"
+            >
+              <CaretDown size={15} className="rotate-[-90deg] text-[#ff5a3d]" />
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -1711,6 +1747,7 @@ function ProposalRightRail2({
   onBecomePatron,
   onManageSponsors,
   onAction,
+  onOpenAdmin,
   analytics,
   votePanel,
 }: {
@@ -1718,6 +1755,7 @@ function ProposalRightRail2({
   onBecomePatron: () => void;
   onManageSponsors: () => void;
   onAction: (m: string) => void;
+  onOpenAdmin: () => void;
   analytics: ProposalAnalytics;
   votePanel: {
     candidates: Array<{ code: string; name: string; count: number; votes: number }>;
@@ -1730,6 +1768,7 @@ function ProposalRightRail2({
 }) {
   const channelAvatarSrc = channel.thumbnail_url || "/creators/luisito-comunica.png";
   const channelName = channel.channel_name || "Canal";
+  const isCreatorWorkspace = true;
 
   return (
     <div className="flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -1768,9 +1807,12 @@ function ProposalRightRail2({
           prompt={votePanel.prompt}
           votedCountryCode={votePanel.votedCountryCode}
           variant="sidebar"
+          mode={isCreatorWorkspace ? "creator" : "viewer"}
           onSelectCountry={votePanel.onSelectCountry}
           onConfirmVote={votePanel.onConfirmVote}
           onCancelVote={votePanel.onCancelVote}
+          onOpenAdmin={isCreatorWorkspace ? onOpenAdmin : undefined}
+          onFinalizeVote={isCreatorWorkspace ? () => onAction("Votacion finalizada.") : undefined}
         />
       ) : null}
       

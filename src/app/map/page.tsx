@@ -51,7 +51,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           voterFingerprint: getMapVoterFingerprintFromCookieStore(cookieStore),
         }));
   const isDemoMap = requestedChannelId === DEMO_CHANNEL_SLUG || payload?.channel.id === DEMO_CHANNEL_ID;
-  const forceViewerMode = isPublicReadOnlyHandle(payload?.channel.canonicalHandle || null);
+  const forceViewerMode = isDemoMap || isPublicReadOnlyHandle(payload?.channel.canonicalHandle || null);
   const headerEyebrow = requestedChannelId === payload?.channel.id ? "Mapa público" : isDemoMap ? "Mapa demo" : "Demo de respaldo";
   if (!payload) {
     return (
@@ -93,7 +93,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
           fanVoteOptions={payload.fanVoteOptions}
           headerEyebrow={headerEyebrow}
           forceViewerMode={forceViewerMode}
-          viewMode={isDemoMap || payload.viewer.isOwner ? "creator" : "viewer"}
+          viewMode={payload.viewer.isOwner ? "creator" : "viewer"}
           isDemoMode={isDemoMap}
         />
       </div>

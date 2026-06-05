@@ -129,7 +129,8 @@ export function preserveChannelHandleSlug(value?: string | null) {
 
 export function buildPublicShareUrl(handleOrUsername?: string | null) {
   const slug = preserveChannelHandleSlug(handleOrUsername) || DEMO_USERNAME;
-  return `${FALLBACK_SHARE_HOST}/${slug}`;
+  const sourceParam = encodeURIComponent(slug);
+  return `${FALLBACK_SHARE_HOST}/map?channelId=${encodeURIComponent(DEMO_CHANNEL_SLUG)}&sharedFrom=${sourceParam}`;
 }
 
 async function resolvePublicChannel(identifier: string): Promise<PublicChannelRow | null> {
