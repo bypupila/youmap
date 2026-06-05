@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { CreatorAdminPanel, type CreatorPanelTab } from "@/components/creator/creator-admin-panel";
 import { getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
-import { buildPublicShareUrl, loadPublicMapPayloadByChannelId } from "@/lib/map-public";
+import { loadPublicMapPayloadByChannelId } from "@/lib/map-public";
 import { sql } from "@/lib/neon";
 import { cn } from "@/lib/utils";
 
@@ -67,7 +67,7 @@ export default async function CreatorPanelPage({ searchParams }: CreatorPanelPag
     }
   }
 
-  const mapUrl = buildPublicShareUrl(payload.channel.channel_handle || payload.channel.canonicalHandle);
+  const mapUrl = `/map?channelId=${encodeURIComponent(payload.channel.id)}${isDemoMode ? "&demo=1" : ""}`;
 
   return (
     <main className="min-h-[100dvh] bg-[#05080d] text-foreground">

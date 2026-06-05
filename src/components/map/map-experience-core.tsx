@@ -41,8 +41,8 @@ import {
 import { useLocalVideoActivity, type VideoActivityController } from "@/components/map/video-activity";
 import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
-import { MapVideoCard } from "@/components/map/map-video-card";
 import { isDemoChannelId } from "@/lib/demo-data";
+import { getDemoMapPreviewImage } from "@/lib/demo-video-previews";
 import { useSubscription } from "@/lib/use-subscription";
 
 type ContentFilterWindow = "all" | "365" | "90" | "30";
@@ -209,11 +209,10 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     startedAtMs: null,
     elapsedMsById: {},
   });
-  const suppressEndedForVideoIdRef = useRef<string | null>(null);
   const externalYoutubeOpenRef = useRef<ExternalYoutubeOpenState | null>(null);
   const videoActivity = useLocalVideoActivity({
     channelId: channel.id,
-    persistToProfile: Boolean(viewer?.isAuthenticated && !viewer.isOwner),
+    persistToProfile: Boolean(viewer?.isAuthenticated && !viewer.isOwner && !isDemoMode),
   });
 
   // States for interactive simulations
@@ -232,9 +231,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   const viewerSubscription = useSubscription({ demo: isDemoMode });
   const isCreatorWorkspace = activeMapMode === "creator";
   const hidePlatformAds = activeMapMode === "viewer" && viewerSubscription.active;
-  const [shareUrl, setShareUrl] = useState(viewer?.shareUrl || "");
-  const [viewerRegisterNext, setViewerRegisterNext] = useState("");
-  const shouldGatePublicRegistration = !viewer?.isAuthenticated && !viewer?.isOwner;
   const adminPanelHref = useMemo(() => {
     const params = new URLSearchParams();
     if (channel.id) params.set("channelId", channel.id);
@@ -245,12 +241,14 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   const viewerRegisterHref = useMemo(() => {
     const params = new URLSearchParams();
     if (channel.id) params.set("channelId", channel.id);
-    if (viewerRegisterNext) params.set("next", viewerRegisterNext);
+    if (typeof window !== "undefined") {
+      params.set("next", `${window.location.pathname}${window.location.search}${window.location.hash}`);
+    }
     params.set("utm_source", isDemoMode ? "demo_map" : "creator_map");
     params.set("utm_medium", isDemoMode ? "product" : "map");
     params.set("utm_campaign", isDemoMode ? "mvp_demo" : "viewer_registration");
     return `/auth/viewer-register?${params.toString()}`;
-  }, [channel.id, isDemoMode, viewerRegisterNext]);
+  }, [channel.id, isDemoMode]);
   const sidebarCountries = useMemo<SidebarCountryItem[]>(() => {
     const bucket = new Map<string, SidebarCountryItem>();
     for (const video of videoLocations) {
@@ -450,15 +448,25 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
       const youtubeVideoId = String(video.youtube_video_id || "").trim();
       if (!youtubeVideoId) continue;
       const videoRecordId = String(video.id || "").trim();
+      const countryCode = String(video.country_code || "").toUpperCase().trim();
       const names = new Set<string>();
       for (const sponsor of sponsors) {
         if (!sponsor.brand_name) continue;
         const scope = getSponsorScope(sponsor);
-        if (scope !== "video") continue;
-        const assignedVideoIds = (sponsor.video_ids || []).map((id) => String(id || "").trim()).filter(Boolean);
-        if (assignedVideoIds.includes(videoRecordId) || assignedVideoIds.includes(youtubeVideoId)) {
-          names.add(sponsor.brand_name);
+        if (scope === "video") {
+          if (!videoRecordId) continue;
+          if ((sponsor.video_ids || []).includes(videoRecordId)) {
+            names.add(sponsor.brand_name);
+          }
+          continue;
         }
+        if (scope === "country") {
+          if (countryCode && (sponsor.country_codes || []).map((code) => String(code || "").toUpperCase().trim()).includes(countryCode)) {
+            names.add(sponsor.brand_name);
+          }
+          continue;
+        }
+        names.add(sponsor.brand_name);
       }
       byVideoId.set(youtubeVideoId, Array.from(names));
     }
@@ -472,12 +480,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     },
     [sponsorNamesByYoutubeVideoId]
   );
-
-  useEffect(() => {
-    const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    setViewerRegisterNext(currentPath);
-    setShareUrl(viewer?.shareUrl || window.location.href);
-  }, [viewer?.shareUrl]);
 
   useEffect(() => {
     setHasMounted(true);
@@ -542,9 +544,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
       if (!videoId) return;
 
       if (state === "playing") {
-        if (suppressEndedForVideoIdRef.current === videoId) {
-          suppressEndedForVideoIdRef.current = null;
-        }
         const tracker = playbackTrackerRef.current;
         if (tracker.videoId && tracker.videoId !== videoId) {
           commitPlaybackElapsed(tracker.videoId);
@@ -561,10 +560,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
       }
 
       commitPlaybackElapsed(videoId);
-      if (suppressEndedForVideoIdRef.current === videoId) {
-        suppressEndedForVideoIdRef.current = null;
-        return;
-      }
       videoActivity.setVideoWatchStatus(videoId, "watched");
     },
     [commitPlaybackElapsed, videoActivity]
@@ -587,12 +582,10 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
         getPlaybackElapsedMs(videoId) >= VIDEO_EXIT_PROMPT_THRESHOLD_MS;
 
       if (!shouldPrompt) {
-        suppressEndedForVideoIdRef.current = videoId;
         action();
         return;
       }
 
-      suppressEndedForVideoIdRef.current = videoId;
       setVideoPlaybackCommand({ id: Date.now(), action: "pause" });
       setVideoExitPrompt({
         videoId,
@@ -606,7 +599,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   function confirmVideoExitComplete() {
     if (!videoExitPrompt) return;
     commitPlaybackElapsed(videoExitPrompt.videoId);
-    suppressEndedForVideoIdRef.current = null;
     videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "watched");
     const nextAction = videoExitPrompt.action;
     setVideoExitPrompt(null);
@@ -614,7 +606,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   }
 
   function continueWatchingVideo() {
-    suppressEndedForVideoIdRef.current = null;
     setVideoExitPrompt(null);
     setVideoPlaybackCommand({ id: Date.now(), action: "play" });
   }
@@ -622,7 +613,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   function watchLaterPendingVideoExit() {
     if (!videoExitPrompt) return;
     commitPlaybackElapsed(videoExitPrompt.videoId);
-    suppressEndedForVideoIdRef.current = null;
     videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "watch_later");
     if (!videoActivity.savedIds.has(videoExitPrompt.videoId)) {
       videoActivity.toggleVideoSaved(videoExitPrompt.videoId);
@@ -717,17 +707,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     <div data-component="MapExperienceCore" className="relative h-screen overflow-hidden bg-[#03060a] text-[#f5f7fb] font-sans antialiased">
       {/* Background glowing effects */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_18%,rgba(255,90,61,0.08),transparent_35%),linear-gradient(180deg,#04090f,#030508_60%,#010204)] pointer-events-none" />
-      {shouldGatePublicRegistration ? (
-        <Link
-          href={viewerRegisterHref}
-          className="absolute inset-0 z-[140] flex items-center justify-center px-4 text-center"
-          aria-label="Crear cuenta gratuita para seguir viendo este mapa"
-        >
-          <span className="pointer-events-none rounded-full border border-white/15 bg-[#050b10]/90 px-5 py-3 text-[13px] font-semibold text-white shadow-[0_18px_60px_-24px_rgba(0,0,0,0.95)] backdrop-blur-md">
-            Crear cuenta gratuita
-          </span>
-        </Link>
-      ) : null}
       
       <div className={cn(
         "relative grid h-screen min-h-0 overflow-hidden grid-cols-1",
@@ -770,7 +749,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             isDemoMode={isDemoMode}
-            shareUrl={shareUrl}
             viewerRegisterHref={viewerRegisterHref}
             onCopyUrl={() => flash("URL copiada al portapapeles.")}
             onPreviewViewer={() => setActiveMapMode("viewer")}
@@ -809,8 +787,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                 selectedCountryCode={selectedCountryCode}
                 watchedVideoIds={videoActivity.seenIds}
                 videoWatchStatusById={videoActivity.watchStatusById}
-                resolveSponsorNames={resolveVideoSponsorNames}
-                isDemoMode={useDemoMapEmbedPreviews}
                 onActiveVideoChange={setActiveVideo}
                 onPinnedVideoChange={(video) => {
                   if (video) {
@@ -982,22 +958,19 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
               />
             ) : null}
 
-            {!isVideoFocusMode ? (
+            {!isVideoFocusMode && !isCreatorWorkspace ? (
               <div className="lg:hidden">
                 <MapVotePanel2
                   candidates={hasMounted ? voteCandidates : []}
                   prompt={votePrompt}
                   votedCountryCode={votedCountryCode}
                   variant="overlay"
-                  mode={isCreatorWorkspace ? "creator" : "viewer"}
                   onSelectCountry={(countryCode) => {
                     setSelectedCountryCode(countryCode);
                     openVotePrompt(countryCode);
                   }}
                   onConfirmVote={confirmVote}
                   onCancelVote={() => setVotePrompt(null)}
-                  onOpenAdmin={isCreatorWorkspace ? openAdminPanel : undefined}
-                  onFinalizeVote={isCreatorWorkspace ? () => flash("Votacion finalizada.") : undefined}
                 />
               </div>
             ) : null}
@@ -1019,7 +992,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
               analytics={proposalAnalytics}
               mapMode={activeMapMode}
               votePanel={
-                !isVideoFocusMode
+                !isVideoFocusMode && !isCreatorWorkspace
                   ? {
                       candidates: hasMounted ? voteCandidates : [],
                       prompt: votePrompt,
@@ -1156,22 +1129,45 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                 <X size={20} />
               </button>
             </div>
-            <div className="grid max-h-[70vh] grid-cols-[repeat(auto-fit,260px)] justify-center gap-4 overflow-y-auto p-4">
-              {railSourceVideos.map((video, index) => (
-                <MapVideoCard
-                  key={`all-${video.youtube_video_id}`}
-                  video={video}
-                  activity={videoActivity}
-                  sponsorNames={resolveVideoSponsorNames(video)}
-                  highlightedVideoId={String(pinnedVideo?.youtube_video_id || "").trim() || null}
-                  isDemoMode={useDemoMapEmbedPreviews}
-                  imagePriority={index === 0}
-                  onSelect={() => {
-                    setShowAllVideosModal(false);
-                    requestVideoExit(() => openMapVideo(video));
-                  }}
-                />
-              ))}
+            <div className="grid max-h-[70vh] grid-cols-1 gap-3 overflow-y-auto p-4 md:grid-cols-2 xl:grid-cols-3">
+              {railSourceVideos.map((video) => {
+                const watchState = getProposalVideoWatchState(video.youtube_video_id, videoActivity);
+                const isWatched = watchState === "watched";
+                const isInProgress = watchState === "incomplete";
+                return (
+                  <button
+                    key={`all-${video.youtube_video_id}`}
+                    type="button"
+                    className={cn(
+                      "group relative overflow-hidden rounded-xl border bg-black/30 text-left transition",
+                      isWatched
+                        ? "border-emerald-400/45"
+                        : isInProgress
+                          ? "border-yellow-300/45"
+                          : "border-white/[0.08]"
+                    )}
+                    onClick={() => {
+                      setShowAllVideosModal(false);
+                      requestVideoExit(() => openMapVideo(video));
+                    }}
+                  >
+                    <div className="relative h-36 w-full">
+                      <Image
+                        src={useDemoMapEmbedPreviews ? getDemoMapPreviewImage(video.youtube_video_id) : (video.thumbnail_url || "/creators/final-cta-map-mockup.png")}
+                        alt={video.title}
+                        fill
+                        sizes="420px"
+                        className="object-cover"
+                      />
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/90 to-black/10" />
+                    </div>
+                    <div className="p-3">
+                      <p className="line-clamp-2 text-[12px] font-bold text-white">{video.title}</p>
+                      <p className="mt-1 text-[10px] text-[#a8b1bb]">{countryCodeToFlag(String(video.country_code || "").toUpperCase())} {getCountryNameInSpanish(video.country_code, video.country_name)}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1457,7 +1453,6 @@ function ProposalTopbar2({
   searchQuery,
   setSearchQuery,
   isDemoMode,
-  shareUrl,
   viewerRegisterHref,
   onCopyUrl,
   onPreviewViewer,
@@ -1471,7 +1466,6 @@ function ProposalTopbar2({
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   isDemoMode: boolean;
-  shareUrl: string;
   viewerRegisterHref: string;
   onCopyUrl: () => void;
   onPreviewViewer: () => void;
@@ -1502,6 +1496,7 @@ function ProposalTopbar2({
     };
   }, [shareMenuOpen]);
 
+  const shareUrl = typeof window === "undefined" ? "" : window.location.href;
   const shareTitle = typeof document === "undefined" ? "TravelYourMap" : document.title || "TravelYourMap";
   const encodedUrl = encodeURIComponent(shareUrl);
   const encodedText = encodeURIComponent(shareTitle);
@@ -1641,7 +1636,7 @@ function ProposalTopbar2({
                 className="mt-1 flex h-9 w-full items-center gap-2 rounded-lg border border-[#ff5a3d] bg-[#ff5a3d] px-3 text-left text-[11px] font-bold text-black transition hover:bg-[#ff6b4f] hover:text-black"
                 onClick={async () => {
                   try {
-                    await navigator.clipboard.writeText(shareUrl);
+                    await navigator.clipboard.writeText(window.location.href);
                     onCopyUrl();
                   } finally {
                     setShareMenuOpen(false);
@@ -1665,26 +1660,20 @@ function MapVotePanel2({
   prompt,
   votedCountryCode,
   variant = "overlay",
-  mode = "viewer",
   onSelectCountry,
   onConfirmVote,
   onCancelVote,
-  onOpenAdmin,
-  onFinalizeVote,
 }: {
   candidates: Array<{ code: string; name: string; count: number; votes: number }>;
   prompt: LocalVotePrompt | null;
   votedCountryCode: string | null;
   variant?: "overlay" | "sidebar";
-  mode?: "viewer" | "creator";
   onSelectCountry: (countryCode: string) => void;
   onConfirmVote: (countryCode: string) => void;
   onCancelVote: () => void;
-  onOpenAdmin?: () => void;
-  onFinalizeVote?: () => void;
 }) {
   const totalVotes = candidates.reduce((sum, country) => sum + country.votes, 0);
-  const isCreator = mode === "creator";
+  const [isMinimized, setIsMinimized] = useState(false);
 
   return (
     <div
@@ -1694,80 +1683,66 @@ function MapVotePanel2({
           ? "w-full"
           : "pointer-events-none absolute left-4 top-4 z-[95] w-[min(190px,calc(100%-2rem))]"
       }
-      >
+    >
       <section className="pointer-events-auto rounded-xl border border-white/[0.08] bg-[#050b10]/82 p-3 text-white shadow-2xl backdrop-blur-xl">
-        <div className={cn("mb-2 flex items-center gap-3", isCreator ? "justify-between" : "justify-center")}>
-          <div className={cn("min-w-0", !isCreator && "text-center")}>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#ff5a3d]">Fan vote</p>
             <h3 className="text-[12px] font-black leading-tight text-white">Próximo destino</h3>
           </div>
-          {isCreator ? (
-            <button
-              type="button"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ff5a3d]/30 bg-[#ff5a3d]/10 text-[#ff5a3d] transition hover:bg-[#ff5a3d]/18"
-              onClick={() => onOpenAdmin?.()}
-              aria-label="Abrir panel de votaciones"
-              title="Abrir panel de votaciones"
-            >
-              <List size={14} weight="bold" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ff5a3d]/30 bg-[#ff5a3d]/10 text-[15px] font-black leading-none text-[#ff5a3d] transition hover:bg-[#ff5a3d]/18"
+            onClick={() => setIsMinimized((current) => !current)}
+            aria-label={isMinimized ? "Expandir fan vote" : "Minimizar fan vote"}
+          >
+            <span className="flex h-full translate-y-[-1px] items-center justify-center leading-none">
+              {isMinimized ? "+" : "-"}
+            </span>
+          </button>
         </div>
-        <div className="space-y-1.5">
-          {candidates.map((country, index) => {
-            const active = votedCountryCode === country.code;
-            const width = totalVotes > 0 ? Math.max(12, Math.round((country.votes / totalVotes) * 100)) : 12;
+        {!isMinimized ? (
+          <>
+            <div className="space-y-1.5">
+              {candidates.map((country, index) => {
+                const active = votedCountryCode === country.code;
+                const width = totalVotes > 0 ? Math.max(12, Math.round((country.votes / totalVotes) * 100)) : 12;
 
-            return (
-              <button
-                key={country.code}
-                type="button"
-                className={cn(
-                  "group relative flex h-10 w-full items-center gap-2 overflow-hidden rounded-lg border px-2 text-left transition",
-                  active
-                    ? "border-[#ff5a3d]/55 bg-[#ff5a3d]/10"
-                    : "border-white/[0.06] bg-white/[0.035] hover:border-[#ff5a3d]/35 hover:bg-white/[0.06]"
-                )}
-                onClick={() => onSelectCountry(country.code)}
-              >
-                {country.votes > 0 ? (
-                  <span className="absolute inset-y-1 left-1 rounded-md bg-[#ff5a3d]/18" style={{ width: `${width}%` }} />
-                ) : null}
-                <span className="relative z-10 shrink-0 text-[10px] font-black text-[#ff5a3d]">#{index + 1}</span>
-                <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/10 bg-black/25 text-[14px]">
-                  {countryCodeToFlag(country.code)}
-                </span>
-                <span className="relative z-10 min-w-0 flex-1">
-                  <span className="block truncate text-[11px] font-bold text-white">{country.name}</span>
-                  <span className="text-[9px] font-semibold text-[#8d98a5]">{country.votes} votos</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-2 text-center text-[10px] leading-4 text-[#8d98a5]">
-          Click en un país para votar.
-        </p>
-        {isCreator ? (
-          <div className="mt-3">
-            <button
-              type="button"
-              className="flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-[#ff5a3d]/35 bg-[#ff5a3d]/12 px-3 text-[11px] font-black uppercase tracking-[0.12em] text-[#ffb4a4] transition hover:bg-[#ff5a3d]/20"
-              onClick={() => {
-                if (onFinalizeVote) {
-                  onFinalizeVote();
-                  return;
-                }
-                onOpenAdmin?.();
-              }}
-            >
-              Finalizar votación
-            </button>
-          </div>
+                return (
+                  <button
+                    key={country.code}
+                    type="button"
+                    className={cn(
+                      "group relative flex h-10 w-full items-center gap-2 overflow-hidden rounded-lg border px-2 text-left transition",
+                      active
+                        ? "border-[#ff5a3d]/55 bg-[#ff5a3d]/10"
+                        : "border-white/[0.06] bg-white/[0.035] hover:border-[#ff5a3d]/35 hover:bg-white/[0.06]"
+                    )}
+                    onClick={() => onSelectCountry(country.code)}
+                  >
+                    {country.votes > 0 ? (
+                      <span className="absolute inset-y-1 left-1 rounded-md bg-[#ff5a3d]/18" style={{ width: `${width}%` }} />
+                    ) : null}
+                    <span className="relative z-10 shrink-0 text-[10px] font-black text-[#ff5a3d]">#{index + 1}</span>
+                    <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/10 bg-black/25 text-[14px]">
+                      {countryCodeToFlag(country.code)}
+                    </span>
+                    <span className="relative z-10 min-w-0 flex-1">
+                      <span className="block truncate text-[11px] font-bold text-white">{country.name}</span>
+                      <span className="text-[9px] font-semibold text-[#8d98a5]">{country.votes} votos</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-center text-[10px] leading-4 text-[#8d98a5]">
+              Click en un país para votar.
+            </p>
+          </>
         ) : null}
       </section>
 
-      {prompt ? (
+      {prompt && !isMinimized ? (
         <div className="pointer-events-auto mt-2 rounded-xl border border-[#ff5a3d]/28 bg-[#050b10]/92 p-3 text-white shadow-2xl backdrop-blur-xl">
           <p className="text-[11px] font-bold leading-5 text-[#dce4ed]">
             Votar por{" "}
@@ -1881,7 +1856,7 @@ function VideoInspirationRail2({
   const railVideos = videos.slice(0, 14);
 
   return (
-    <section data-component="VideoInspirationRail2" className="bg-[#03060a]/50 p-4 border border-white/[0.06] rounded-xl shrink-0 h-[230px]">
+    <section data-component="VideoInspirationRail2" className="bg-[#03060a]/50 p-4 border border-white/[0.06] rounded-xl shrink-0 h-[190px]">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-[14px] font-black uppercase tracking-wider text-white">
           {selectedCountryCode ? (
@@ -1905,39 +1880,95 @@ function VideoInspirationRail2({
         </div>
       </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-5 scrollbar-thin select-none pr-4">
-        {railVideos.map((video, index) => {
+      <div className="flex gap-4 overflow-x-auto pb-1.5 scrollbar-thin select-none pr-8">
+        {railVideos.map((video) => {
+          const countryCode = String(video.country_code || "").toUpperCase();
+          const videoViews = Number(video.view_count || 0);
+          const durationMinutes = Math.max(1, Math.round(Number(video.duration_seconds || 0) / 60));
+          const watchState = getProposalVideoWatchState(video.youtube_video_id, activity);
+          const isWatched = watchState === "watched";
+          const isIncomplete = watchState === "incomplete";
+          const videoId = String(video.youtube_video_id || "").trim();
+          const isHighlighted = Boolean(videoId) && videoId === String(highlightedVideoId || "").trim();
           const sponsorNames = resolveSponsorNames(video);
 
           return (
-            <MapVideoCard
-              key={video.youtube_video_id}
-              video={video}
-              activity={activity}
-              sponsorNames={sponsorNames}
-              highlightedVideoId={highlightedVideoId}
-              isDemoMode={isDemoMode}
-              imagePriority={index === 0}
-              onSelect={onSelect}
-            />
+            <div 
+              key={video.youtube_video_id} 
+              className={cn(
+                "group relative h-[126px] w-[215px] shrink-0 overflow-hidden rounded-xl border bg-white/[0.02] transition",
+                isHighlighted && "border-[#ff7d63] ring-1 ring-[#ff7d63]/70",
+                isWatched && "border-emerald-400/60 bg-emerald-500/[0.08] hover:border-emerald-300/80",
+                isIncomplete && "border-yellow-300/60 bg-yellow-300/[0.08] hover:border-yellow-200/80",
+                !isWatched && !isIncomplete && !isHighlighted && "border-white/[0.07] hover:border-[#ff5a3d]/20"
+              )}
+            >
+              {/* Image background cover */}
+              <Image 
+                src={isDemoMode ? getDemoMapPreviewImage(video.youtube_video_id) : (video.thumbnail_url || "/creators/final-cta-map-mockup.png")}
+                alt={video.title} 
+                fill 
+                sizes="215px" 
+                className="object-cover opacity-85 transition duration-300 group-hover:scale-105" 
+              />
+              {/* Card gradient overlay */}
+              <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.85))]" />
+              {isWatched ? <span className="absolute inset-0 bg-emerald-500/18 mix-blend-screen" /> : null}
+              {isIncomplete ? <span className="absolute inset-0 bg-yellow-300/16 mix-blend-screen" /> : null}
+
+              {/* Top metadata tags */}
+              <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
+                <span className="rounded bg-black/40 backdrop-blur-sm px-1.5 py-0.5 text-[8px] font-bold text-slate-300 flex items-center gap-1">
+                  <Clock size={10} /> {durationMinutes} min
+                </span>
+                <span className="bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-1">
+                  <Eye size={10} /> {formatCompactMetric(videoViews)}
+                </span>
+              </div>
+              {sponsorNames.length > 0 ? (
+                <div className="absolute left-2 top-7 right-2">
+                  <span className="inline-flex max-w-full truncate rounded bg-[#ff5a3d]/80 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.06em] text-white">
+                    Sponsor: {sponsorNames.join(", ")}
+                  </span>
+                </div>
+              ) : null}
+
+              {/* Bottom text block with creator avatar */}
+              <button 
+                type="button" 
+                className="absolute inset-0 pt-12 p-3 text-left w-full h-full"
+                onClick={() => onSelect(video)}
+              >
+                <div className="absolute bottom-3 left-3 right-3">
+                  <span className="line-clamp-1 text-[11px] font-black text-white group-hover:text-[#ff7d63] transition leading-tight">
+                    {video.title}
+                  </span>
+                  
+                  {/* Creator and location inline tag */}
+                  <span className="mt-1.5 inline-flex items-center gap-1.5 text-[9px] font-bold text-[#cbd3dc]">
+                    <span>{countryCodeToFlag(countryCode)}</span>
+                    <span className="opacity-40">•</span>
+                    <span className="truncate">{getCountryNameInSpanish(video.country_code, video.country_name)}</span>
+                  </span>
+                </div>
+              </button>
+            </div>
           );
         })}
         
-        {videos.length > railVideos.length ? (
-          <div className="flex items-center justify-center pl-2 shrink-0">
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#050b10]/60 text-white transition shadow-lg hover:border-white/20 hover:bg-[#050b10]/95"
-              onClick={() => {
-                const first = railVideos[0];
-                if (first) onSelect(first);
-              }}
-              aria-label="Ver más videos"
-            >
-              <CaretDown size={15} className="rotate-[-90deg] text-[#ff5a3d]" />
-            </button>
-          </div>
-        ) : null}
+        {/* Next Scroll Navigation Arrow Button */}
+        <div className="flex items-center justify-center pl-2 shrink-0">
+          <button 
+            type="button" 
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#050b10]/60 hover:bg-[#050b10]/95 hover:border-white/20 text-white transition shadow-lg"
+            onClick={() => {
+              const first = railVideos[0];
+              if (first) onSelect(first);
+            }}
+          >
+            <CaretDown size={15} className="rotate-[-90deg] text-[#ff5a3d]" />
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -2065,18 +2096,15 @@ function ProposalRightRail2({
         </div>
       </section>
 
-      {votePanel ? (
+      {!isCreatorWorkspace && votePanel ? (
         <MapVotePanel2
           candidates={votePanel.candidates}
           prompt={votePanel.prompt}
           votedCountryCode={votePanel.votedCountryCode}
           variant="sidebar"
-          mode={isCreatorWorkspace ? "creator" : "viewer"}
           onSelectCountry={votePanel.onSelectCountry}
           onConfirmVote={votePanel.onConfirmVote}
           onCancelVote={votePanel.onCancelVote}
-          onOpenAdmin={isCreatorWorkspace ? onOpenAdmin : undefined}
-          onFinalizeVote={isCreatorWorkspace ? () => onAction("Votacion finalizada.") : undefined}
         />
       ) : null}
 
@@ -2187,7 +2215,7 @@ function ProposalRightRail2({
 
       {/* 3. Support Patronage banner */}
       {!isCreatorWorkspace ? (
-      <section className="sticky bottom-0 z-10 mt-auto rounded-xl border border-[#ff5a3d]/18 bg-[#050b10] p-4 shadow-[0_-18px_40px_-26px_rgba(0,0,0,0.9)]">
+      <section className="sticky bottom-0 z-10 mt-auto rounded-xl border border-[#ff5a3d]/15 bg-[radial-gradient(ellipse_at_top_right,rgba(255,90,61,0.06),transparent_60%)] bg-[#050b10]/88 p-4 shadow-[0_-18px_40px_-26px_rgba(0,0,0,0.85)] backdrop-blur-xl">
         <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ff937d]">
           Crea tu mapa
         </h2>

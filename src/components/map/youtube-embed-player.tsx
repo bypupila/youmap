@@ -124,7 +124,6 @@ export function YouTubeEmbedPlayer({
   const playerRef = useRef<YTPlayerInstance | null>(null);
   const hasObservedPlayingRef = useRef(false);
   const onPlaybackStateChangeRef = useRef(onPlaybackStateChange);
-  const isDestroyingRef = useRef(false);
   const normalizedVideoId = normalizeYouTubeVideoId(videoId);
   const [status, setStatus] = useState<EmbedStatus>(normalizedVideoId ? "loading" : "error");
   const [errorReason, setErrorReason] = useState<EmbedErrorReason>(normalizedVideoId ? null : "invalid_id");
@@ -148,7 +147,6 @@ export function YouTubeEmbedPlayer({
     playerRef.current?.destroy();
     playerRef.current = null;
     hasObservedPlayingRef.current = false;
-    isDestroyingRef.current = false;
 
     if (!normalizedVideoId) {
       setStatus("error");
@@ -177,14 +175,14 @@ export function YouTubeEmbedPlayer({
               if (!cancelled) setStatus("ready");
             },
             onError: (event) => {
-              if (cancelled || isDestroyingRef.current) return;
+              if (cancelled) return;
               playerRef.current?.destroy();
               playerRef.current = null;
               setErrorReason(event.data === 2 ? "invalid_id" : "player_error");
               setStatus("error");
             },
             onStateChange: (event) => {
-              if (cancelled || isDestroyingRef.current) return;
+              if (cancelled) return;
               if (event.data === 1) {
                 hasObservedPlayingRef.current = true;
                 onPlaybackStateChangeRef.current?.("playing");
@@ -205,7 +203,6 @@ export function YouTubeEmbedPlayer({
 
     return () => {
       cancelled = true;
-      isDestroyingRef.current = true;
       playerRef.current?.destroy();
       playerRef.current = null;
     };
@@ -227,7 +224,8 @@ export function YouTubeEmbedPlayer({
       <div
         className={cn("relative aspect-video min-h-[202px] overflow-hidden rounded-xl border border-white/10 bg-black", frameClassName)}
         onPointerDownCapture={() => {
-          if (showFallback) return;
+          if (showFallback || hasObservedPlayingRef.current) return;
+          hasObservedPlayingRef.current = true;
           onPlaybackStateChangeRef.current?.("playing");
         }}
       >

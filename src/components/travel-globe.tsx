@@ -11,7 +11,6 @@ import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
 import { SponsorBanner } from "@/components/sponsors/sponsor-banner";
 import { createCountryFlagElement, getCountryFlagClassName } from "@/lib/country-flags";
 import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
-import { MapVideoCard } from "@/components/map/map-video-card";
 
 type PointKind = "country" | "video";
 
@@ -63,8 +62,6 @@ interface TravelGlobeProps {
   votedCountryCode?: string | null;
   watchedVideoIds?: Set<string>;
   videoWatchStatusById?: Record<string, "not_started" | "not_finished" | "watched" | "watch_later">;
-  resolveSponsorNames?: (video: TravelVideoLocation | null | undefined) => string[];
-  isDemoMode?: boolean;
   interactive?: boolean;
   showControls?: boolean;
   minimalOverlay?: boolean;
@@ -97,8 +94,6 @@ export function TravelGlobe({
   votedCountryCode = null,
   watchedVideoIds,
   videoWatchStatusById,
-  resolveSponsorNames,
-  isDemoMode = false,
   interactive = true,
   showControls = true,
   minimalOverlay = false,
@@ -922,16 +917,34 @@ export function TravelGlobe({
                 </button>
               </div>
 
-              <div className="grid justify-center gap-3 overflow-y-auto pr-1" style={{ maxHeight: "calc(100dvh - 220px)" }}>
+              <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: "calc(100dvh - 220px)" }}>
                 {visibleVideos.map((video) => (
-                  <MapVideoCard
+                  <button
+                    type="button"
                     key={`${panelPointId}-${video.youtube_video_id}`}
-                    video={video}
-                    activity={{ seenIds: watchedVideoIds, watchStatusById: videoWatchStatusById }}
-                    sponsorNames={resolveSponsorNames?.(video) || []}
-                    isDemoMode={isDemoMode}
-                    onSelect={() => onPinnedVideoChange?.(video)}
-                  />
+                    onClick={() => onPinnedVideoChange?.(video)}
+                    className="block w-full rounded-xl border border-white/10 bg-white/5 p-2 text-left transition hover:bg-white/10"
+                  >
+                    <div className="flex gap-3">
+                      {video.thumbnail_url ? (
+                        <Image
+                          src={toCompactYouTubeThumbnail(video.thumbnail_url) || video.thumbnail_url}
+                          alt={video.title}
+                          width={120}
+                          height={72}
+                          className="h-16 w-28 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="h-16 w-28 rounded-md bg-white/10" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="line-clamp-2 text-xs font-semibold">{video.title}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {formatNumber(Number(video.view_count || 0))} views · {formatDate(video.published_at)}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
                 ))}
               </div>
             </>
@@ -948,8 +961,9 @@ export function TravelGlobe({
       ) : null}
 
       {minimalOverlay && !isMobileViewport && hoveredPoint?.kind === "video" && hoveredPoint.videos?.[0] ? (
-        <div
-          className="pointer-events-auto absolute left-1/2 top-[68px] z-[24] w-[260px] -translate-x-1/2"
+        <button
+          type="button"
+          className="pointer-events-auto absolute left-1/2 top-[68px] z-[24] w-[280px] -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#050910]/92 text-left shadow-2xl backdrop-blur-md"
           onMouseEnter={() => {
             if (hoverClearTimeoutRef.current) {
               window.clearTimeout(hoverClearTimeoutRef.current);
@@ -957,16 +971,25 @@ export function TravelGlobe({
             }
           }}
           onMouseLeave={() => scheduleHoverPointClear(hoveredPoint.point_id, 1000)}
+          onClick={() => onPinnedVideoChange?.(hoveredPoint.videos[0] || null)}
         >
-          <MapVideoCard
-            video={hoveredPoint.videos[0]}
-            activity={{ seenIds: watchedVideoIds, watchStatusById: videoWatchStatusById }}
-            sponsorNames={resolveSponsorNames?.(hoveredPoint.videos[0]) || []}
-            isDemoMode={isDemoMode}
-            imagePriority
-            onSelect={(video) => onPinnedVideoChange?.(video)}
-          />
-        </div>
+          <div className="relative h-[126px] w-full">
+            <Image
+              src={toCompactYouTubeThumbnail(hoveredPoint.videos[0].thumbnail_url) || hoveredPoint.videos[0].thumbnail_url || "https://via.placeholder.com/360x202/111827/9CA3AF?text=Video"}
+              alt={hoveredPoint.videos[0].title}
+              fill
+              sizes="280px"
+              className="object-cover"
+            />
+          </div>
+          <div className="border-t border-white/[0.08] px-3 py-2">
+            <p className="line-clamp-2 text-[11px] font-bold text-white">{hoveredPoint.videos[0].title}</p>
+            <p className="mt-1 text-[10px] text-[#a9b4c0]">
+              <span className={`${getCountryFlagClassName(hoveredPoint.country_code)} mr-1 inline-block h-[10px] w-[14px] rounded-[2px] align-[-1px]`} />
+              {getCountryNameInSpanish(hoveredPoint.country_code, hoveredPoint.country_name)}
+            </p>
+          </div>
+        </button>
       ) : null}
 
       {showControls ? (

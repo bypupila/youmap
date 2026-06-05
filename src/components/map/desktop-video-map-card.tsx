@@ -430,7 +430,7 @@ export function DesktopVideoMapCard({
                   watchBadgeTone === "success"
                     ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400"
                     : watchBadgeTone === "active"
-                      ? "border-yellow-400/40 bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.18)]"
+                      ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
                       : "border-white/[0.08] bg-white/[0.03] text-zinc-400"
                 )}
               >
@@ -441,19 +441,7 @@ export function DesktopVideoMapCard({
               {watchMenuOpen ? (
                 <div className="absolute left-1/2 top-[calc(100%+6px)] z-20 min-w-[130px] -translate-x-1/2 overflow-hidden rounded border border-white/[0.08] bg-[#080808] p-1 shadow-2xl">
                   <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_started"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-white">SIN INICIAR</button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished");
-                      setWatchMenuOpen(false);
-                    }}
-                    className={cn(
-                      "block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02]",
-                      watchStatus === "not_finished" && "bg-yellow-400 text-black"
-                    )}
-                  >
-                    INCOMPLETO
-                  </button>
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "not_finished"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-amber-300">INICIADO</button>
                   <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watched"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-emerald-500">COMPLETADO</button>
                   <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-white">VER MÁS TARDE</button>
                 </div>
@@ -671,7 +659,7 @@ export function DesktopVideoMapCard({
                     watchStatus === "not_finished" && "text-[#ffd37c]"
                   )}
                 >
-                  INCOMPLETO
+                  INICIADO
                 </button>
                 <button
                   type="button"

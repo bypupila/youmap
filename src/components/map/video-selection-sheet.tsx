@@ -21,7 +21,6 @@ import {
 import { DemoVideoEmbedPreview } from "@/components/map/demo-video-embed-preview";
 import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
 import { getDemoMapPreviewImage } from "@/lib/demo-video-previews";
-import { getSponsorCardStyleLabel } from "@/lib/sponsor-card-style";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
@@ -110,14 +109,9 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
                 {currentVideo?.title || "Selecciona un video"}
               </h2>
               {currentSponsorNames.length > 0 ? (
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#ffb49f]">
-                    Sponsor: {currentSponsorNames.join(", ")}
-                  </p>
-                  <span className="rounded-full border border-[#ff5a3d]/20 bg-[#ff5a3d]/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#ff9c84]">
-                    {getSponsorCardStyleLabel(currentVideo?.sponsor_card_style, currentSponsorNames.length)}
-                  </span>
-                </div>
+                <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#ffb49f]">
+                  Sponsor: {currentSponsorNames.join(", ")}
+                </p>
               ) : null}
             </div>
             <Button
@@ -329,14 +323,9 @@ function VideoRow({
       <span className="min-w-0 flex-1">
         <span className="line-clamp-2 text-[12px] font-semibold leading-4 text-[#f4f7fb]">{video.title}</span>
         {sponsorNames.length > 0 ? (
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            <span className="truncate text-[10px] font-bold uppercase tracking-[0.06em] text-[#ffb49f]">
-              Sponsor: {sponsorNames.join(", ")}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#d5dbe2]">
-              {getSponsorCardStyleLabel(video.sponsor_card_style, sponsorNames.length)}
-            </span>
-          </div>
+          <span className="mt-0.5 block truncate text-[10px] font-bold uppercase tracking-[0.06em] text-[#ffb49f]">
+            Sponsor: {sponsorNames.join(", ")}
+          </span>
         ) : null}
         <span className="mt-1 block truncate text-[11px] text-[#9da5ae]">{formatVideoPlace(video)}</span>
         <span className="mt-1 flex items-center gap-2 text-[10px] text-[#7f8994]">

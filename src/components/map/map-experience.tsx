@@ -432,7 +432,7 @@ export function MapExperience({
   const [isDesktopViewport, setIsDesktopViewport] = useState(false);
   const videoActivity = useLocalVideoActivity({
     channelId: channelId || channel.id,
-    persistToProfile: Boolean(viewer.isAuthenticated && !viewer.isOwner),
+    persistToProfile: Boolean(viewer.isAuthenticated && !viewer.isOwner && viewMode !== "demo"),
   });
   const rootRef = useRef<HTMLDivElement | null>(null);
   const videosRailRef = useRef<HTMLDivElement | null>(null);
@@ -445,7 +445,6 @@ export function MapExperience({
     startedAtMs: null,
     elapsedMsById: {},
   });
-  const suppressEndedForVideoIdRef = useRef<string | null>(null);
   const previousVideoActivityRef = useRef<PreviousVideoActivityState | null>(null);
 
   useEffect(() => {
@@ -468,26 +467,6 @@ export function MapExperience({
     setSponsorItems(sponsors);
     demoSponsorsBaselineRef.current = sponsors;
   }, [sponsors]);
-
-  const resolveVideoSponsorNames = useCallback(
-    (video: TravelVideoLocation | null | undefined) => {
-      const youtubeVideoId = String(video?.youtube_video_id || "").trim();
-      if (!youtubeVideoId) return [] as string[];
-      const videoRecordId = String(video?.id || "").trim();
-      const names = new Set<string>();
-
-      for (const sponsor of sponsorItems) {
-        if (!sponsor.brand_name || sponsor.scope !== "video") continue;
-        const assignedVideoIds = (sponsor.video_ids || []).map((id) => String(id || "").trim()).filter(Boolean);
-        if (assignedVideoIds.includes(videoRecordId) || assignedVideoIds.includes(youtubeVideoId)) {
-          names.add(sponsor.brand_name);
-        }
-      }
-
-      return Array.from(names);
-    },
-    [sponsorItems]
-  );
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -1416,9 +1395,6 @@ export function MapExperience({
       if (!videoId) return;
 
       if (state === "playing") {
-        if (suppressEndedForVideoIdRef.current === videoId) {
-          suppressEndedForVideoIdRef.current = null;
-        }
         const tracker = playbackTrackerRef.current;
         if (tracker.videoId && tracker.videoId !== videoId) {
           const switchedElapsedMs = commitPlaybackElapsed(tracker.videoId);
@@ -1437,10 +1413,6 @@ export function MapExperience({
       }
 
       const endedElapsedMs = commitPlaybackElapsed(videoId);
-      if (suppressEndedForVideoIdRef.current === videoId) {
-        suppressEndedForVideoIdRef.current = null;
-        return;
-      }
       trackWatchTimeEvent(videoId, endedElapsedMs, "ended");
       videoActivity.setVideoWatchStatus(videoId, "watched");
     },
@@ -1489,12 +1461,10 @@ export function MapExperience({
         getPlaybackElapsedMs(videoId) >= VIDEO_EXIT_PROMPT_THRESHOLD_MS;
 
       if (!shouldPrompt) {
-        suppressEndedForVideoIdRef.current = videoId;
         action();
         return;
       }
 
-      suppressEndedForVideoIdRef.current = videoId;
       setVideoPlaybackCommand({ id: Date.now(), action: "pause" });
       setVideoExitPrompt({
         videoId,
@@ -1531,7 +1501,6 @@ export function MapExperience({
     if (!videoExitPrompt) return;
     const exitElapsedMs = commitPlaybackElapsed(videoExitPrompt.videoId);
     trackWatchTimeEvent(videoExitPrompt.videoId, exitElapsedMs, "exit");
-    suppressEndedForVideoIdRef.current = null;
     videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "watched");
     const nextAction = videoExitPrompt.action;
     setVideoExitPrompt(null);
@@ -1539,7 +1508,6 @@ export function MapExperience({
   }
 
   function continueWatchingVideo() {
-    suppressEndedForVideoIdRef.current = null;
     setVideoExitPrompt(null);
     setVideoPlaybackCommand({ id: Date.now(), action: "play" });
   }
@@ -1548,7 +1516,6 @@ export function MapExperience({
     if (!videoExitPrompt) return;
     const exitElapsedMs = commitPlaybackElapsed(videoExitPrompt.videoId);
     trackWatchTimeEvent(videoExitPrompt.videoId, exitElapsedMs, "exit");
-    suppressEndedForVideoIdRef.current = null;
     videoActivity.setVideoWatchStatus(videoExitPrompt.videoId, "not_finished");
     if (!videoActivity.savedIds.has(videoExitPrompt.videoId)) {
       videoActivity.toggleVideoSaved(videoExitPrompt.videoId);
@@ -1694,10 +1661,6 @@ export function MapExperience({
           focusVideoId={focusVideoId}
           selectedCountryCode={selectedCountryCode}
           votedCountryCode={fanVoteState?.viewer_vote_country_code || null}
-          watchedVideoIds={videoActivity.seenIds}
-          videoWatchStatusById={videoActivity.watchStatusById}
-          resolveSponsorNames={resolveVideoSponsorNames}
-          isDemoMode={isDemoMode}
           command={globeCommand}
           rotationEnabled={globeRotationEnabled}
           onRotationChange={setGlobeRotationEnabled}
@@ -1726,10 +1689,6 @@ export function MapExperience({
         focusVideoId={focusVideoId}
         selectedCountryCode={selectedCountryCode}
         votedCountryCode={fanVoteState?.viewer_vote_country_code || null}
-        watchedVideoIds={videoActivity.seenIds}
-        videoWatchStatusById={videoActivity.watchStatusById}
-        resolveSponsorNames={resolveVideoSponsorNames}
-        isDemoMode={isDemoMode}
         command={globeCommand}
         rotationEnabled={globeRotationEnabled}
         onRotationChange={setGlobeRotationEnabled}

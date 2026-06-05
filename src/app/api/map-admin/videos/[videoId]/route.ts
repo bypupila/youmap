@@ -6,7 +6,6 @@ import { isDemoChannelId } from "@/lib/demo-data";
 import { columnExists } from "@/lib/db-schema";
 import { geocodeLocation } from "@/lib/geocode";
 import { normalizeCountryCode } from "@/lib/map-polls";
-import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
 import { sql } from "@/lib/neon";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +24,6 @@ const patchSchema = z.object({
   channelId: z.string().uuid(),
   visible_on_map: z.boolean().optional(),
   featured: z.boolean().optional(),
-  sponsor_card_style: z.enum(["cta_red", "coupon_yellow", "premium_strip"]).optional().nullable(),
   internal_notes: z.string().trim().max(1000).optional().nullable(),
   location: locationSchema.optional(),
 }).strict();
@@ -42,11 +40,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ vi
     }
     const access = await requireCreatorChannelAccess(payload.channelId, sessionUser.id);
     if (!access) return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });
-    const [hasVisibleOnMap, hasFeatured, hasVideoInternalNotes, hasSponsorCardStyle, hasLocationInternalNotes] = await Promise.all([
+    const [hasVisibleOnMap, hasFeatured, hasVideoInternalNotes, hasLocationInternalNotes] = await Promise.all([
       columnExists("public", "videos", "visible_on_map"),
       columnExists("public", "videos", "featured"),
       columnExists("public", "videos", "internal_notes"),
-      columnExists("public", "videos", "sponsor_card_style"),
       columnExists("public", "video_locations", "internal_notes"),
     ]);
 
@@ -63,7 +60,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ vi
     if (
       typeof payload.visible_on_map === "boolean" ||
       typeof payload.featured === "boolean" ||
-      typeof payload.sponsor_card_style !== "undefined" ||
       typeof payload.internal_notes !== "undefined"
     ) {
       const setClauses: string[] = [];
@@ -75,10 +71,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ vi
       if (hasFeatured && typeof payload.featured === "boolean") {
         values.push(payload.featured);
         setClauses.push(`featured = $${values.length}`);
-      }
-      if (hasSponsorCardStyle && typeof payload.sponsor_card_style !== "undefined") {
-        values.push(normalizeSponsorCardStyle(payload.sponsor_card_style) || null);
-        setClauses.push(`sponsor_card_style = $${values.length}`);
       }
       if (hasVideoInternalNotes && typeof payload.internal_notes !== "undefined") {
         values.push(payload.internal_notes ?? null);

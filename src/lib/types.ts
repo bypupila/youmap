@@ -38,7 +38,6 @@ export interface TravelVideo {
   sponsor_detectado_texto?: string | null;
   sponsor_detectado_confianza?: number | null;
   sponsor_detectado_fuente?: string | null;
-  sponsor_card_style?: "cta_red" | "coupon_yellow" | "premium_strip" | null;
   updated_at?: string | null;
 }
 
