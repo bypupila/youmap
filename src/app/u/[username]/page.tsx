@@ -74,7 +74,8 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
   }
 
   const isDemoMap = isDemoUsername(resolvedParams.username) || payload.channel.id === DEMO_CHANNEL_ID;
-  const forceViewerMode = isPublicReadOnlyHandle(payload.channel.canonicalHandle) || isPublicReadOnlyHandle(resolvedParams.username);
+  const forceViewerMode =
+    isDemoMap || isPublicReadOnlyHandle(payload.channel.canonicalHandle) || isPublicReadOnlyHandle(resolvedParams.username);
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
@@ -93,7 +94,7 @@ export default async function PublicMapPage({ params }: PublicMapPageProps) {
           availablePollOptions={payload.availablePollOptions}
           fanVoteOptions={payload.fanVoteOptions}
           forceViewerMode={forceViewerMode}
-          viewMode={isDemoMap || payload.viewer.isOwner ? "creator" : "viewer"}
+          viewMode={payload.viewer.isOwner ? "creator" : "viewer"}
           isDemoMode={isDemoMap}
         />
       </div>

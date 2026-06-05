@@ -3,6 +3,7 @@ import { columnExists } from "@/lib/db-schema";
 import { loadLuisitoMapData } from "@/lib/luisito-map-data";
 import { loadDrewMapData } from "@/lib/drew-map-data";
 import { sql } from "@/lib/neon";
+import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
 export interface MapSummary {
@@ -82,6 +83,7 @@ interface RawLocationRow {
   sponsor_detectado_texto: string | null;
   sponsor_detectado_confianza: number | string | null;
   sponsor_detectado_fuente: string | null;
+  sponsor_card_style: string | null;
   video_updated_at: string | null;
 }
 
@@ -255,7 +257,9 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
   if (!channelRow) return null;
 
   const hasVisibleOnMap = await columnExists("public", "videos", "visible_on_map");
+  const hasSponsorCardStyle = await columnExists("public", "videos", "sponsor_card_style");
   const visibleFilter = hasVisibleOnMap ? "and coalesce(v.visible_on_map, true) = true" : "";
+  const selectSponsorCardStyle = hasSponsorCardStyle ? "v.sponsor_card_style::text as sponsor_card_style" : "null::text as sponsor_card_style";
 
   const [locationRows, manualRows] = await Promise.all([
     sql.query<RawLocationRow[]>(
@@ -311,6 +315,7 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
           v.sponsor_detectado_texto,
           v.sponsor_detectado_confianza,
           v.sponsor_detectado_fuente,
+          ${selectSponsorCardStyle},
           v.updated_at as video_updated_at
         from public.video_locations vl
         inner join public.videos v on v.id = vl.video_id
@@ -414,6 +419,7 @@ export async function loadMapDataByChannelId(channelId: string): Promise<MapData
         sponsor_detectado_texto: row.sponsor_detectado_texto || null,
         sponsor_detectado_confianza: row.sponsor_detectado_confianza === null ? null : Number(row.sponsor_detectado_confianza),
         sponsor_detectado_fuente: row.sponsor_detectado_fuente || null,
+        sponsor_card_style: normalizeSponsorCardStyle(row.sponsor_card_style) || null,
         updated_at: row.video_updated_at || null,
       } satisfies TravelVideoLocation;
     })
