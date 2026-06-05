@@ -39,6 +39,11 @@ import {
   type PollEditorFormState,
 } from "@/components/map/poll-editor-form";
 import { cn } from "@/lib/utils";
+import {
+  SPONSOR_CARD_STYLE_OPTIONS,
+  getSponsorCardStyleLabel,
+  normalizeSponsorCardStyle,
+} from "@/lib/sponsor-card-style";
 
 type InitialFilters = {
   status: string;
@@ -516,7 +521,19 @@ function VideosTab({
                       <Star size={13} weight={video.featured ? "fill" : "regular"} />
                     </button>
                   </div>
-                  {video.sponsor_names.length > 0 ? <p className="mt-2 truncate text-[11px] text-[#ffb49f]">{video.sponsor_names.join(", ")}</p> : null}
+                  {video.sponsor_names.length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="truncate text-[11px] text-[#ffb49f]">{video.sponsor_names.join(", ")}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#cfd7e1]">
+                          {video.sponsor_names.length} sponsor{video.sponsor_names.length === 1 ? "" : "s"}
+                        </span>
+                        <span className="inline-flex rounded-full border border-[#ff5a3d]/20 bg-[#ff5a3d]/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#ff9c84]">
+                          {getSponsorCardStyleLabel(video.sponsor_card_style, video.sponsor_names.length)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
                 </td>
                 <td className="px-3 py-3 text-right">
                   <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 px-2 text-[11px] font-bold text-white hover:bg-white/[0.06]" onClick={() => onOpenVideo(video.id)}>
@@ -853,10 +870,14 @@ function EditVideoModal({
   onClose: () => void;
   onSubmit: (videoId: string, payloadPatch: Record<string, unknown>, success: string) => Promise<boolean>;
 }) {
+  const sponsorCount = video.sponsor_names.length;
+  const isMultiSponsor = sponsorCount > 1;
+  const currentSponsorStyle = normalizeSponsorCardStyle(video.sponsor_card_style) || "cta_red";
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const payloadPatch = {
+    const payloadPatch: Record<string, unknown> = {
       internal_notes: String(formData.get("internal_notes") || "").trim() || null,
       location: {
         country_code: String(formData.get("country_code") || "").trim().toUpperCase(),
@@ -870,12 +891,15 @@ function EditVideoModal({
         internal_notes: String(formData.get("location_internal_notes") || "").trim() || null,
       },
     };
+    if (!isMultiSponsor) {
+      payloadPatch.sponsor_card_style = String(formData.get("sponsor_card_style") || currentSponsorStyle);
+    }
     const ok = await onSubmit(video.id, payloadPatch, "Ubicacion actualizada.");
     if (ok) onClose();
   }
 
   return (
-    <BaseModal title="Editar ubicacion" onClose={onClose}>
+    <BaseModal title="Editar video" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
           <VideoThumb video={video} />
@@ -883,6 +907,73 @@ function EditVideoModal({
             <p className="truncate text-[13px] font-bold text-white">{video.title}</p>
             <p className="text-[11px] text-[#8e98a6]">{video.youtube_video_id}</p>
           </div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.1em] text-[#9aa3af]">Sponsors del video</p>
+              <p className="mt-1 text-[12px] text-white">
+                {sponsorCount > 0 ? `${sponsorCount} sponsor${sponsorCount === 1 ? "" : "s"} asignado${sponsorCount === 1 ? "" : "s"}.` : "Sin sponsors asignados."}
+              </p>
+            </div>
+            <span className={cn("rounded-full border px-2 py-1 text-[10px] font-black uppercase", sponsorCount > 0 ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/[0.03] text-[#9aa3af]")}>
+              {sponsorCount > 0 ? getSponsorCardStyleLabel(video.sponsor_card_style, sponsorCount) : "Sin sponsor"}
+            </span>
+          </div>
+          {video.sponsor_names.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {video.sponsor_names.map((name) => (
+                <span key={name} className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-bold text-white">
+                  {name}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="rounded-lg border border-white/10 bg-[#0b1017] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.1em] text-[#9aa3af]">Diseño sponsor</p>
+              <p className="mt-1 text-[12px] text-[#c9d2dc]">
+                {isMultiSponsor
+                  ? "Auto: cuando hay mas de un sponsor se usa la barra multi sponsor."
+                  : "Elige cómo se mostrará el sponsor en todos los mapas públicos."}
+              </p>
+            </div>
+            {isMultiSponsor ? (
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#9aa3af]">
+                Multi sponsor
+              </span>
+            ) : null}
+          </div>
+          {!isMultiSponsor ? (
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              {SPONSOR_CARD_STYLE_OPTIONS.map((option) => {
+                const active = currentSponsorStyle === option.value;
+                return (
+                  <label
+                    key={option.value}
+                    className={cn(
+                      "cursor-pointer rounded-xl border p-3 transition",
+                      active
+                        ? "border-[#ff5a3d]/35 bg-[#ff5a3d]/10"
+                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]"
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="sponsor_card_style"
+                      value={option.value}
+                      defaultChecked={active}
+                      className="sr-only"
+                    />
+                    <p className="text-[12px] font-black text-white">{option.label}</p>
+                    <p className="mt-1 text-[11px] leading-4 text-[#9aa3af]">{option.description}</p>
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Pais ISO" name="country_code" defaultValue={video.country_code || countries[0]?.country_code || ""} required />

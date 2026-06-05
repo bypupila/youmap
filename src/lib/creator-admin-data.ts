@@ -39,6 +39,7 @@ export interface CreatorAdminVideo {
   sponsor_detectado_texto: string | null;
   sponsor_detectado_confianza: number | null;
   sponsor_detectado_fuente: string | null;
+  sponsor_card_style: "cta_red" | "coupon_yellow" | "premium_strip" | null;
   updated_at: string | null;
 }
 
@@ -211,6 +212,7 @@ interface VideoRow {
   sponsor_detectado_texto: string | null;
   sponsor_detectado_confianza: number | string | null;
   sponsor_detectado_fuente: string | null;
+  sponsor_card_style: string | null;
   updated_at: string | null;
 }
 
@@ -256,6 +258,7 @@ interface CreatorAdminSchemaFeatures {
   hasVideoVisibleOnMap: boolean;
   hasVideoFeatured: boolean;
   hasVideoInternalNotes: boolean;
+  hasSponsorCardStyle: boolean;
   hasVideoLocationInternalNotes: boolean;
   hasSponsorDates: boolean;
   hasSponsorInternalNotes: boolean;
@@ -307,6 +310,7 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     hasVideoVisibleOnMap,
     hasVideoFeatured,
     hasVideoInternalNotes,
+    hasSponsorCardStyle,
     hasVideoLocationInternalNotes,
     hasSponsorStartDate,
     hasSponsorEndDate,
@@ -323,6 +327,7 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     columnExists("public", "videos", "visible_on_map"),
     columnExists("public", "videos", "featured"),
     columnExists("public", "videos", "internal_notes"),
+    columnExists("public", "videos", "sponsor_card_style"),
     columnExists("public", "video_locations", "internal_notes"),
     columnExists("public", "sponsors", "start_date"),
     columnExists("public", "sponsors", "end_date"),
@@ -341,6 +346,7 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     hasVideoVisibleOnMap,
     hasVideoFeatured,
     hasVideoInternalNotes,
+    hasSponsorCardStyle,
     hasVideoLocationInternalNotes,
     hasSponsorDates: hasSponsorStartDate && hasSponsorEndDate,
     hasSponsorInternalNotes,
@@ -445,6 +451,9 @@ async function loadAdminVideos(channelId: string, features: CreatorAdminSchemaFe
   const selectVisible = features.hasVideoVisibleOnMap ? "v.visible_on_map" : "true::boolean as visible_on_map";
   const selectFeatured = features.hasVideoFeatured ? "v.featured" : "false::boolean as featured";
   const selectInternalNotes = features.hasVideoInternalNotes ? "v.internal_notes" : "null::text as internal_notes";
+  const selectSponsorCardStyle = features.hasSponsorCardStyle
+    ? "v.sponsor_card_style::text as sponsor_card_style"
+    : "null::text as sponsor_card_style";
   const selectLocationNotes = features.hasVideoLocationInternalNotes
     ? "vl.internal_notes as location_internal_notes"
     : "null::text as location_internal_notes";
@@ -476,6 +485,7 @@ async function loadAdminVideos(channelId: string, features: CreatorAdminSchemaFe
         ${selectVisible},
         ${selectFeatured},
         ${selectInternalNotes},
+        ${selectSponsorCardStyle},
         vl.id as location_id,
         vl.country_code,
         vl.country_name,
@@ -662,6 +672,7 @@ function normalizeVideoRow(row: VideoRow, videoSponsors: CreatorAdminSponsor[]):
     visible_on_map: row.visible_on_map !== false,
     featured: Boolean(row.featured),
     internal_notes: row.internal_notes,
+    sponsor_card_style: row.sponsor_card_style as CreatorAdminVideo["sponsor_card_style"],
     location_id: row.location_id,
     country_code: row.country_code ? normalizeCountryCode(row.country_code) : null,
     country_name: row.country_name || row.country_code,
