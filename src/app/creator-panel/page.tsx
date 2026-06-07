@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { CreatorAdminPanel, type CreatorPanelTab } from "@/components/creator/creator-admin-panel";
 import { getValidSessionUserIdFromServerCookies } from "@/lib/current-user";
 import { DEMO_CHANNEL_SLUG } from "@/lib/demo-data";
-import { buildPublicShareUrl, loadPublicMapPayloadByChannelId } from "@/lib/map-public";
+import { loadPublicMapPayloadByChannelId } from "@/lib/map-public";
+import { buildPublicMapUrl } from "@/lib/map-urls";
 import { sql } from "@/lib/neon";
 import { cn } from "@/lib/utils";
 
@@ -67,7 +68,8 @@ export default async function CreatorPanelPage({ searchParams }: CreatorPanelPag
     }
   }
 
-  const mapUrl = buildPublicShareUrl(payload.channel.channel_handle || payload.channel.canonicalHandle);
+  const dashboardHref = `/dashboard?channelId=${encodeURIComponent(payload.channel.id)}${isDemoMode ? "&demo=1" : ""}`;
+  const mapUrl = buildPublicMapUrl(payload.channel.id);
 
   return (
     <main className="min-h-[100dvh] bg-[#05080d] text-foreground">
@@ -78,8 +80,8 @@ export default async function CreatorPanelPage({ searchParams }: CreatorPanelPag
               <p className="text-[11px] uppercase tracking-[0.14em] text-[#9da5ae]">{isDemoMode ? "Demo Creator" : "Creator Real"}</p>
               <h1 className="text-[20px] font-semibold tracking-tight text-[#f5f7fb]">Panel</h1>
             </div>
-            <a href={mapUrl} className="inline-flex h-9 items-center rounded-lg border border-white/10 px-3 text-[12px] text-[#d8dee6] hover:bg-white/[0.06]">
-              Volver al mapa
+            <a href={dashboardHref} className="inline-flex h-9 items-center rounded-lg border border-white/10 px-3 text-[12px] text-[#d8dee6] hover:bg-white/[0.06]">
+              Volver al dashboard
             </a>
           </div>
           <nav className="mt-3 flex flex-wrap gap-1.5">

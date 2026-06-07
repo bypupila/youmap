@@ -28,6 +28,7 @@ import {
   Calculator,
   Suitcase,
 } from "@phosphor-icons/react";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
 import {
   countryCodeToFlag,
@@ -130,7 +131,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
     setCopiedServiceId(serviceId);
 
     try {
-      await navigator.clipboard.writeText(code);
+      await copyTextToClipboard(code);
     } catch {
       // Demo-only feedback should still work if clipboard permissions are blocked.
     }
@@ -2870,7 +2871,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
 
                       {/* Interactive Copy Code Box */}
                       <button
-                        onClick={() => navigator.clipboard.writeText("YOUBOOK15")}
+                        onClick={() => void copyTextToClipboard("YOUBOOK15")}
                         className="bg-black/60 border border-white/5 py-1 px-1 rounded text-center cursor-pointer hover:border-blue-500/40 select-all text-[8px] text-zinc-300 active:bg-blue-900/20 active:text-white transition-colors"
                         title="Haga clic para copiar el código"
                       >
@@ -2900,7 +2901,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
 
                       {/* Interactive Copy Code Box */}
                       <button
-                        onClick={() => navigator.clipboard.writeText("YOUAIR25")}
+                        onClick={() => void copyTextToClipboard("YOUAIR25")}
                         className="bg-black/60 border border-white/5 py-1 px-1 rounded text-center cursor-pointer hover:border-rose-500/40 select-all text-[8px] text-zinc-300 active:bg-rose-900/20 active:text-white transition-colors"
                         title="Haga clic para copiar el código"
                       >

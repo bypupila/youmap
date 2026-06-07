@@ -180,9 +180,11 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
                       "inline-flex h-9 items-center gap-1 rounded-full border px-2.5 text-[10px] font-black uppercase tracking-[0.08em]",
                       currentWatchBadgeTone === "success"
                           ? "border-[rgba(85,200,123,0.45)] bg-[rgba(85,200,123,0.12)] text-[#c8f3d6]"
-                          : currentWatchBadgeTone === "active"
-                            ? "border-[rgba(255,186,73,0.4)] bg-[rgba(255,186,73,0.12)] text-[#ffe0ab]"
-                            : "border-white/10 bg-white/[0.04] text-[#d8dee6]"
+                          : currentWatchBadgeTone === "watch_later"
+                            ? "border-[rgba(59,130,246,0.35)] bg-[rgba(59,130,246,0.12)] text-[#9ec1ff]"
+                            : currentWatchBadgeTone === "danger"
+                              ? "border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.12)] text-[#ffb4b4]"
+                              : "border-white/10 bg-white/[0.04] text-[#d8dee6]"
                     )}
                   >
                     <BatteryCharging size={12} weight="fill" />

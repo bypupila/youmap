@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,14 @@ function ViewerRegisterContent() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [consentPlatformPromotions, setConsentPlatformPromotions] = useState(false);
   const [consentCreatorPromotions, setConsentCreatorPromotions] = useState(false);
+
+  const backgroundMapHref = useMemo(() => {
+    const nextPath = String(searchParams.get("next") || "").trim();
+    if (nextPath.startsWith("/map")) return nextPath;
+    const channelId = String(searchParams.get("channelId") || "").trim();
+    if (channelId) return `/map?channelId=${encodeURIComponent(channelId)}`;
+    return "/map";
+  }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,9 +85,19 @@ function ViewerRegisterContent() {
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden text-foreground">
-      <div className="platform-grid-glow pointer-events-none absolute inset-0" />
-      <div className="relative z-10 mx-auto max-w-[760px] px-4 py-8">
-        <section className="tm-surface-strong rounded-[2rem] border border-white/10 p-6 sm:p-8">
+      <div className="absolute inset-0">
+        <iframe
+          title="Vista previa del mapa"
+          src={backgroundMapHref}
+          className="absolute inset-0 h-full w-full scale-[1.01] border-0 opacity-55 saturate-[0.8] blur-[1px]"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        <div className="platform-grid-glow pointer-events-none absolute inset-0" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,90,61,0.18),transparent_28%),radial-gradient(circle_at_82%_18%,rgba(255,90,61,0.12),transparent_26%),linear-gradient(180deg,rgba(3,6,10,0.72),rgba(3,6,10,0.9))]" />
+      </div>
+      <div className="relative z-10 mx-auto flex min-h-[100dvh] max-w-[760px] items-center px-4 py-8">
+        <section className="tm-surface-strong w-full rounded-[2rem] border border-white/10 p-6 shadow-[0_30px_120px_-60px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-8">
           <p className="tym-overline">Cuenta Viewer</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-foreground">Registro gratuito</h1>
           <p className="mt-3 text-sm text-muted-foreground">

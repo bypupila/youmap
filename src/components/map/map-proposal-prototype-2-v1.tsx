@@ -26,6 +26,7 @@ import {
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { TravelGlobe } from "@/components/travel-globe";
 import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
@@ -83,7 +84,7 @@ type ProposalAnalytics = {
   reactions: number;
 };
 
-type ProposalVideoWatchState = "watched" | "incomplete" | "none";
+type ProposalVideoWatchState = "watched" | "incomplete" | "watch_later" | "none";
 type CountrySortMode = "seen" | "alphabetical";
 
 function countryCodeToFlag(code: string) {
@@ -139,7 +140,8 @@ function getProposalVideoWatchState(
   const explicitStatus = activity.watchStatusById[normalized];
   if (explicitStatus === "watched") return "watched";
   if (explicitStatus === "not_started") return "none";
-  if (explicitStatus === "not_finished" || explicitStatus === "watch_later") return "incomplete";
+  if (explicitStatus === "watch_later") return "watch_later";
+  if (explicitStatus === "not_finished") return "incomplete";
 
   return activity.seenIds.has(normalized) ? "watched" : "none";
 }
@@ -734,7 +736,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 pointMode="video"
                 showSummaryCard={false}
                 showPointPanel
-                pointPanelClassName="left-1/2 top-4 w-[min(280px,calc(100vw-2rem))] -translate-x-1/2 sm:w-[min(300px,calc(100vw-3rem))]"
+                pointPanelClassName="left-1/2 top-4 w-[245px] -translate-x-1/2 sm:w-[245px]"
                 openVideoOnCountrySelect={false}
                 selectedCountryCode={selectedCountryCode}
                 watchedVideoIds={videoActivity.seenIds}
@@ -1035,6 +1037,7 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                 const watchState = getProposalVideoWatchState(video.youtube_video_id, videoActivity);
                 const isWatched = watchState === "watched";
                 const isInProgress = watchState === "incomplete";
+                const isWatchLater = watchState === "watch_later";
                 return (
                   <button
                     key={`all-${video.youtube_video_id}`}
@@ -1043,8 +1046,10 @@ export function MapProposalPrototype2({ channel, videoLocations }: MapProposalPr
                       "group relative overflow-hidden rounded-xl border bg-black/30 text-left transition",
                       isWatched
                         ? "border-emerald-400/45"
-                        : isInProgress
-                          ? "border-yellow-300/45"
+                        : isWatchLater
+                          ? "border-blue-400/45"
+                          : isInProgress
+                            ? "border-red-400/45"
                           : "border-white/[0.08]"
                     )}
                     onClick={() => {
@@ -1397,7 +1402,7 @@ function ProposalTopbar2({
           className="flex h-10 items-center gap-2 rounded-full border border-[#ff5a3d]/55 bg-[#ff5a3d] px-4 text-[12px] font-bold text-white transition hover:bg-[#ff6a50]"
           onClick={async () => {
             try {
-              await navigator.clipboard.writeText(window.location.href);
+              await copyTextToClipboard(window.location.href);
               onCopyUrl();
             } catch {
               onCopyUrl();
@@ -1661,6 +1666,7 @@ function VideoInspirationRail2({
           const watchState = getProposalVideoWatchState(video.youtube_video_id, activity);
           const isWatched = watchState === "watched";
           const isIncomplete = watchState === "incomplete";
+          const isWatchLater = watchState === "watch_later";
           const videoId = String(video.youtube_video_id || "").trim();
           const isHighlighted = Boolean(videoId) && videoId === String(highlightedVideoId || "").trim();
 
@@ -1671,8 +1677,9 @@ function VideoInspirationRail2({
                 "group relative h-[126px] w-[215px] shrink-0 overflow-hidden rounded-xl border bg-white/[0.02] transition",
                 isHighlighted && "border-[#ff7d63] ring-1 ring-[#ff7d63]/70",
                 isWatched && "border-emerald-400/60 bg-emerald-500/[0.08] hover:border-emerald-300/80",
-                isIncomplete && "border-yellow-300/60 bg-yellow-300/[0.08] hover:border-yellow-200/80",
-                !isWatched && !isIncomplete && !isHighlighted && "border-white/[0.07] hover:border-[#ff5a3d]/20"
+                isWatchLater && "border-blue-400/60 bg-blue-400/[0.08] hover:border-blue-300/80",
+                isIncomplete && "border-red-400/60 bg-red-400/[0.08] hover:border-red-300/80",
+                !isWatched && !isIncomplete && !isWatchLater && !isHighlighted && "border-white/[0.07] hover:border-[#ff5a3d]/20"
               )}
             >
               {/* Image background cover */}
@@ -1686,7 +1693,8 @@ function VideoInspirationRail2({
               {/* Card gradient overlay */}
               <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.85))]" />
               {isWatched ? <span className="absolute inset-0 bg-emerald-500/18 mix-blend-screen" /> : null}
-              {isIncomplete ? <span className="absolute inset-0 bg-yellow-300/16 mix-blend-screen" /> : null}
+              {isIncomplete ? <span className="absolute inset-0 bg-red-400/16 mix-blend-screen" /> : null}
+              {isWatchLater ? <span className="absolute inset-0 bg-blue-400/16 mix-blend-screen" /> : null}
 
               {/* Top metadata tags */}
               <div className="absolute top-2 left-2 right-2 flex items-center justify-between">

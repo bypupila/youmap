@@ -28,7 +28,8 @@ import {
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
-import type { MapRailSponsor, MapViewerContext } from "@/lib/map-public";
+import type { MapRailSponsor, MapViewerContext } from "@/lib/map-types";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { TravelGlobe } from "@/components/travel-globe";
 import { DesktopVideoMapCard } from "@/components/map/desktop-video-map-card";
@@ -234,7 +235,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   const hidePlatformAds = activeMapMode === "viewer" && viewerSubscription.active;
   const [shareUrl, setShareUrl] = useState(viewer?.shareUrl || "");
   const [viewerRegisterNext, setViewerRegisterNext] = useState("");
-  const shouldGatePublicRegistration = !viewer?.isAuthenticated && !viewer?.isOwner;
   const adminPanelHref = useMemo(() => {
     const params = new URLSearchParams();
     if (channel.id) params.set("channelId", channel.id);
@@ -717,18 +717,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     <div data-component="MapExperienceCore" className="relative h-screen overflow-hidden bg-[#03060a] text-[#f5f7fb] font-sans antialiased">
       {/* Background glowing effects */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_18%,rgba(255,90,61,0.08),transparent_35%),linear-gradient(180deg,#04090f,#030508_60%,#010204)] pointer-events-none" />
-      {shouldGatePublicRegistration ? (
-        <Link
-          href={viewerRegisterHref}
-          className="absolute inset-0 z-[140] flex items-center justify-center px-4 text-center"
-          aria-label="Crear cuenta gratuita para seguir viendo este mapa"
-        >
-          <span className="pointer-events-none rounded-full border border-white/15 bg-[#050b10]/90 px-5 py-3 text-[13px] font-semibold text-white shadow-[0_18px_60px_-24px_rgba(0,0,0,0.95)] backdrop-blur-md">
-            Crear cuenta gratuita
-          </span>
-        </Link>
-      ) : null}
-      
       <div className={cn(
         "relative grid h-screen min-h-0 overflow-hidden grid-cols-1",
         !isMapFullscreen && "lg:grid-cols-[220px_minmax(0,1fr)_270px] xl:grid-cols-[230px_minmax(0,1fr)_280px] 2xl:grid-cols-[240px_minmax(0,1fr)_300px] 3xl:grid-cols-[250px_minmax(0,1fr)_320px]"
@@ -804,7 +792,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                 pointMode="video"
                 showSummaryCard={false}
                 showPointPanel
-                pointPanelClassName="left-1/2 top-4 w-[min(280px,calc(100vw-2rem))] -translate-x-1/2 sm:w-[min(300px,calc(100vw-3rem))]"
+                pointPanelClassName="left-1/2 top-4 w-[245px] -translate-x-1/2 sm:w-[245px]"
                 openVideoOnCountrySelect={false}
                 selectedCountryCode={selectedCountryCode}
                 watchedVideoIds={videoActivity.seenIds}
@@ -1641,7 +1629,7 @@ function ProposalTopbar2({
                 className="mt-1 flex h-9 w-full items-center gap-2 rounded-lg border border-[#ff5a3d] bg-[#ff5a3d] px-3 text-left text-[11px] font-bold text-black transition hover:bg-[#ff6b4f] hover:text-black"
                 onClick={async () => {
                   try {
-                    await navigator.clipboard.writeText(shareUrl);
+                    await copyTextToClipboard(shareUrl);
                     onCopyUrl();
                   } finally {
                     setShareMenuOpen(false);
@@ -1927,14 +1915,14 @@ function VideoInspirationRail2({
           <div className="flex items-center justify-center pl-2 shrink-0">
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#050b10]/60 text-white transition shadow-lg hover:border-white/20 hover:bg-[#050b10]/95"
+              className="flex h-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#050b10]/60 px-3 text-[10px] font-black uppercase tracking-[0.08em] text-white transition shadow-lg hover:border-white/20 hover:bg-[#050b10]/95"
               onClick={() => {
                 const first = railVideos[0];
                 if (first) onSelect(first);
               }}
               aria-label="Ver más videos"
             >
-              <CaretDown size={15} className="rotate-[-90deg] text-[#ff5a3d]" />
+              Ver más videos
             </button>
           </div>
         ) : null}

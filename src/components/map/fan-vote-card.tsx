@@ -15,7 +15,7 @@ import {
 } from "@/components/map/poll-editor-form";
 import type { MapFanVoteSummary } from "@/lib/map-fan-votes";
 import type { MapPollRecord } from "@/lib/map-polls";
-import type { MapViewerContext } from "@/lib/map-public";
+import type { MapViewerContext } from "@/lib/map-types";
 
 interface FanVoteCardProps {
   channelId: string;

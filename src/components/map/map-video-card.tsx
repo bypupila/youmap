@@ -56,8 +56,12 @@ export function MapVideoCard({
     "group relative w-[260px] shrink-0 overflow-hidden rounded-xl border-2 bg-[#050505] transition-all duration-300 cursor-pointer flex flex-col",
     isWatched
       ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-      : isStarted
+      : isWatchLater
+        ? "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+      : isFeatured
         ? "border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+      : isStarted
+        ? "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]"
         : isHighlighted
           ? "border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35)]"
           : "border-white/[0.1] hover:border-white/30 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]",
@@ -74,13 +78,13 @@ export function MapVideoCard({
   if (isStarted) {
     badges.push({
       text: "INCOMPLETO",
-      color: "bg-yellow-400 text-black border-yellow-400/40 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
+      color: "bg-red-500 text-red-50 border-red-500/35",
     });
   }
   if (isFeatured) {
     badges.push({
       text: "FAVORITO",
-      color: "bg-red-500 text-red-50 border-red-500/35",
+      color: "bg-yellow-400 text-black border-yellow-400/40 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
     });
   }
   if (isWatchLater) {

@@ -3,12 +3,13 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
+import { normalizeExternalSponsorUrl, normalizeSponsorLogoUrl } from "@/lib/sponsor-url";
 
 const sponsorSchema = z.object({
   brand_name: z.string().min(2),
-  logo_url: z.string().url().optional().or(z.literal("")).transform((value) => value || null),
-  website_url: z.string().url().optional().or(z.literal("")).transform((value) => value || null),
-  affiliate_url: z.string().url().optional().or(z.literal("")).transform((value) => value || null),
+  logo_url: z.string().trim().optional().nullable(),
+  website_url: z.string().trim().optional().nullable(),
+  affiliate_url: z.string().trim().optional().nullable(),
   discount_code: z.string().max(40).optional().or(z.literal("")).transform((value) => value || null),
   description: z.string().max(280).optional().or(z.literal("")).transform((value) => value || null),
   country_code: z.string().length(2).optional().nullable(),
@@ -18,6 +19,19 @@ export async function POST(request: Request) {
   try {
     const isDemoMode = new URL(request.url).searchParams.get("demo") === "1";
     const payload = sponsorSchema.parse(await request.json());
+    const logoUrl = normalizeSponsorLogoUrl(payload.logo_url);
+    const websiteUrl = normalizeExternalSponsorUrl(payload.website_url);
+    const affiliateUrl = normalizeExternalSponsorUrl(payload.affiliate_url);
+
+    if (String(payload.logo_url || "").trim() && !logoUrl) {
+      return NextResponse.json({ error: "Invalid logo url" }, { status: 400 });
+    }
+    if (String(payload.website_url || "").trim() && !websiteUrl) {
+      return NextResponse.json({ error: "Invalid website url" }, { status: 400 });
+    }
+    if (String(payload.affiliate_url || "").trim() && !affiliateUrl) {
+      return NextResponse.json({ error: "Invalid affiliate url" }, { status: 400 });
+    }
 
     if (isDemoMode) {
       return NextResponse.json({
@@ -26,8 +40,9 @@ export async function POST(request: Request) {
         demo: true,
         sponsor: {
           brand_name: payload.brand_name,
-          website_url: payload.website_url,
-          affiliate_url: payload.affiliate_url,
+          logo_url: logoUrl,
+          website_url: websiteUrl,
+          affiliate_url: affiliateUrl,
           discount_code: payload.discount_code,
           description: payload.description,
           country_code: payload.country_code,
@@ -54,9 +69,9 @@ export async function POST(request: Request) {
       values (
         ${userId},
         ${payload.brand_name},
-        ${payload.logo_url},
-        ${payload.website_url},
-        ${payload.affiliate_url},
+        ${logoUrl},
+        ${websiteUrl},
+        ${affiliateUrl},
         ${payload.discount_code},
         ${payload.description},
         true

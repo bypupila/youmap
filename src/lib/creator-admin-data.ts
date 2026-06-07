@@ -1,8 +1,9 @@
-import { buildPublicShareUrl } from "@/lib/map-public";
 import { normalizeCity, normalizeCountryCode, type MapPollMode, type MapPollStatus } from "@/lib/map-polls";
 import { columnExists, tableExists } from "@/lib/db-schema";
 import { sql } from "@/lib/neon";
 import type { TravelChannel } from "@/lib/types";
+import { buildPublicMapUrl } from "@/lib/map-urls";
+import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
 
 export type CreatorAdminTab = "resumen" | "videos" | "paises" | "votaciones" | "sponsors" | "audiencia" | "actividad";
 export type CreatorAdminUiStatus = "auto" | "manual" | "pending" | "unlocated";
@@ -55,6 +56,7 @@ export interface CreatorAdminSponsor {
   country_codes: string[];
   video_ids: string[];
   scope: "global" | "country" | "video";
+  sponsor_card_style: "cta_red" | "coupon_yellow" | "premium_strip" | null;
   click_count: number;
   start_date: string | null;
   end_date: string | null;
@@ -224,6 +226,7 @@ interface SponsorRow {
   affiliate_url: string | null;
   discount_code: string | null;
   description: string | null;
+  sponsor_card_style: string | null;
   active: boolean;
   country_codes: string[] | null;
   video_ids: string[] | null;
@@ -258,8 +261,9 @@ interface CreatorAdminSchemaFeatures {
   hasVideoVisibleOnMap: boolean;
   hasVideoFeatured: boolean;
   hasVideoInternalNotes: boolean;
-  hasSponsorCardStyle: boolean;
+  hasVideoSponsorCardStyle: boolean;
   hasVideoLocationInternalNotes: boolean;
+  hasSponsorCardStyle: boolean;
   hasSponsorDates: boolean;
   hasSponsorInternalNotes: boolean;
   hasPollVisibility: boolean;
@@ -310,8 +314,9 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     hasVideoVisibleOnMap,
     hasVideoFeatured,
     hasVideoInternalNotes,
-    hasSponsorCardStyle,
+    hasVideoSponsorCardStyle,
     hasVideoLocationInternalNotes,
+    hasSponsorCardStyle,
     hasSponsorStartDate,
     hasSponsorEndDate,
     hasSponsorInternalNotes,
@@ -329,6 +334,7 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     columnExists("public", "videos", "internal_notes"),
     columnExists("public", "videos", "sponsor_card_style"),
     columnExists("public", "video_locations", "internal_notes"),
+    columnExists("public", "sponsors", "sponsor_card_style"),
     columnExists("public", "sponsors", "start_date"),
     columnExists("public", "sponsors", "end_date"),
     columnExists("public", "sponsors", "internal_notes"),
@@ -346,8 +352,9 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     hasVideoVisibleOnMap,
     hasVideoFeatured,
     hasVideoInternalNotes,
-    hasSponsorCardStyle,
+    hasVideoSponsorCardStyle,
     hasVideoLocationInternalNotes,
+    hasSponsorCardStyle,
     hasSponsorDates: hasSponsorStartDate && hasSponsorEndDate,
     hasSponsorInternalNotes,
     hasPollVisibility,
@@ -418,7 +425,7 @@ export async function loadCreatorAdminPayload({ channelId, baseUrl }: LoadCreato
   };
   const quickAction = buildQuickAction({ videos, countries, polls, sponsors, syncStatus });
   const handle = channelRow.channel_handle || channelRow.username;
-  const publicUrl = buildPublicShareUrl(handle);
+  const publicUrl = buildPublicMapUrl(channelRow.id);
 
   return {
     channel: {
@@ -451,7 +458,7 @@ async function loadAdminVideos(channelId: string, features: CreatorAdminSchemaFe
   const selectVisible = features.hasVideoVisibleOnMap ? "v.visible_on_map" : "true::boolean as visible_on_map";
   const selectFeatured = features.hasVideoFeatured ? "v.featured" : "false::boolean as featured";
   const selectInternalNotes = features.hasVideoInternalNotes ? "v.internal_notes" : "null::text as internal_notes";
-  const selectSponsorCardStyle = features.hasSponsorCardStyle
+  const selectSponsorCardStyle = features.hasVideoSponsorCardStyle
     ? "v.sponsor_card_style::text as sponsor_card_style"
     : "null::text as sponsor_card_style";
   const selectLocationNotes = features.hasVideoLocationInternalNotes
@@ -522,6 +529,7 @@ async function loadAdminSponsors(ownerUserId: string, features: CreatorAdminSche
   const selectStartDate = features.hasSponsorDates ? "s.start_date" : "null::timestamptz as start_date";
   const selectEndDate = features.hasSponsorDates ? "s.end_date" : "null::timestamptz as end_date";
   const selectInternalNotes = features.hasSponsorInternalNotes ? "s.internal_notes" : "null::text as internal_notes";
+  const selectSponsorCardStyle = features.hasSponsorCardStyle ? "s.sponsor_card_style::text as sponsor_card_style" : "null::text as sponsor_card_style";
   const selectVideoIds = hasVideoSponsorRules
     ? "coalesce(array_remove(array_agg(distinct svr.video_id::text), null), '{}'::text[]) as video_ids"
     : "'{}'::text[] as video_ids";
@@ -537,6 +545,7 @@ async function loadAdminSponsors(ownerUserId: string, features: CreatorAdminSche
         s.affiliate_url,
         s.discount_code,
         s.description,
+        ${selectSponsorCardStyle},
         s.active,
         ${selectStartDate},
         ${selectEndDate},
@@ -706,6 +715,7 @@ function normalizeSponsorRow(row: SponsorRow): CreatorAdminSponsor {
     affiliate_url: row.affiliate_url,
     discount_code: row.discount_code,
     description: row.description,
+    sponsor_card_style: normalizeSponsorCardStyle(row.sponsor_card_style),
     active: row.active,
     country_codes: countryCodes,
     video_ids: videoIds,

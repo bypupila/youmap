@@ -1,15 +1,20 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowsClockwise, CaretDown, CaretUp, Check, Copy, GlobeHemisphereWest, MapPin, Plus, Trash, Video } from "@phosphor-icons/react";
 import { AnalyticsDashboard } from "@/components/analytics-dashboard";
+import { SponsorStylePreview } from "@/components/creator/sponsor-style-preview";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { MapFanVoteSummary } from "@/lib/map-fan-votes";
 import type { MapSummary } from "@/lib/map-data";
 import type { MapPollRecord } from "@/lib/map-polls";
-import type { MapRailSponsor } from "@/lib/map-public";
+import type { MapRailSponsor } from "@/lib/map-types";
+import { copyTextToClipboard } from "@/lib/clipboard";
+import { normalizeExternalSponsorUrl, normalizeSponsorLogoUrl } from "@/lib/sponsor-url";
+import { getSponsorCardStyleLabel, type SponsorCardStyle } from "@/lib/sponsor-card-style";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +76,14 @@ export function CreatorAdminPanel({
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [pollState, setPollState] = useState<MapPollRecord | null>(initialPoll);
   const [sponsors, setSponsors] = useState<MapRailSponsor[]>(initialSponsors);
+  const [sponsorBrandName, setSponsorBrandName] = useState("");
+  const [sponsorLogoUrl, setSponsorLogoUrl] = useState("");
+  const [sponsorAffiliateUrl, setSponsorAffiliateUrl] = useState("");
+  const [sponsorDiscountCode, setSponsorDiscountCode] = useState("");
+  const [sponsorDescription, setSponsorDescription] = useState("");
+  const [sponsorCategoryName, setSponsorCategoryName] = useState("");
+  const [sponsorCtaLabel, setSponsorCtaLabel] = useState("");
+  const [sponsorCardStyle, setSponsorCardStyle] = useState<SponsorCardStyle>("cta_red");
   const [sponsorScope, setSponsorScope] = useState<"global" | "country" | "video">("country");
   const [sponsorActionType, setSponsorActionType] = useState<"link" | "coupon">("link");
   const [selectedCountryCodes, setSelectedCountryCodes] = useState<string[]>([]);
@@ -140,6 +153,23 @@ export function CreatorAdminPanel({
       .filter(Boolean);
     return Array.from(new Set([...SPONSOR_CATEGORY_PRESETS, ...dynamicOptions]));
   }, [sponsors]);
+
+  function resetSponsorForm() {
+    setSponsorError(null);
+    setSponsorBrandName("");
+    setSponsorLogoUrl("");
+    setSponsorAffiliateUrl("");
+    setSponsorDiscountCode("");
+    setSponsorDescription("");
+    setSponsorCategoryName("");
+    setSponsorCtaLabel("");
+    setSponsorCardStyle("cta_red");
+    setSponsorScope("country");
+    setSponsorActionType("link");
+    setSelectedCountryCodes([]);
+    setSelectedVideoIds([]);
+  }
+
   const bulkRows = useMemo(() => {
     const byCountry = bulkCountryFilter === "all" ? null : bulkCountryFilter;
     const byStatus = bulkStatusFilter === "all" ? null : bulkStatusFilter;
@@ -183,9 +213,8 @@ export function CreatorAdminPanel({
 
   async function copyMapUrl() {
     try {
-      if (typeof navigator === "undefined" || !navigator.clipboard) throw new Error("Clipboard unavailable");
-      await navigator.clipboard.writeText(mapUrl);
-      setCopyState("copied");
+      const copied = await copyTextToClipboard(mapUrl);
+      setCopyState(copied ? "copied" : "error");
       window.setTimeout(() => setCopyState("idle"), 1800);
     } catch {
       setCopyState("error");
@@ -238,17 +267,15 @@ export function CreatorAdminPanel({
 
   async function createSponsor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const actionType = String(formData.get("action_type") || "link").trim() === "coupon" ? "coupon" : "link";
-    const payload = {
-      brand_name: String(formData.get("brand_name") || "").trim(),
-      affiliate_url: String(formData.get("affiliate_url") || "").trim() || null,
-      description: String(formData.get("description") || "").trim() || null,
-      category_name: String(formData.get("category_name") || "").trim() || null,
-      action_type: actionType as "link" | "coupon",
-      action_value: String(formData.get("action_value") || "").trim() || null,
-      cta_label: String(formData.get("cta_label") || "").trim() || null,
-    };
+
+    const brand_name = sponsorBrandName.trim();
+    const logo_url = normalizeSponsorLogoUrl(sponsorLogoUrl);
+    const affiliate_url = normalizeExternalSponsorUrl(sponsorAffiliateUrl);
+    const discount_code = sponsorDiscountCode.trim() || null;
+    const description = sponsorDescription.trim() || null;
+    const category_name = sponsorCategoryName.trim() || null;
+    const cta_label = sponsorCtaLabel.trim() || null;
+
     const normalizedCountryCodes = Array.from(
       new Set(
         selectedCountryCodes
@@ -258,7 +285,23 @@ export function CreatorAdminPanel({
     );
     const normalizedVideoIds = Array.from(new Set(selectedVideoIds.map((videoId) => String(videoId || "").trim()).filter(Boolean)));
 
-    if (!payload.brand_name) return;
+    if (!brand_name) return;
+    if (sponsorLogoUrl.trim() && !logo_url) {
+      setSponsorError("Logo URL inválida.");
+      return;
+    }
+    if (sponsorActionType === "link" && !sponsorAffiliateUrl.trim()) {
+      setSponsorError("Escribe la URL de destino del sponsor.");
+      return;
+    }
+    if (sponsorActionType === "link" && sponsorAffiliateUrl.trim() && !affiliate_url) {
+      setSponsorError("URL del sponsor inválida.");
+      return;
+    }
+    if (sponsorActionType === "coupon" && !discount_code) {
+      setSponsorError("Escribe el código del cupón.");
+      return;
+    }
     if (sponsorScope === "country" && normalizedCountryCodes.length === 0) {
       setSponsorError("Selecciona al menos un país para scope país.");
       return;
@@ -271,36 +314,50 @@ export function CreatorAdminPanel({
     setCreatingSponsor(true);
     setSponsorError(null);
     try {
-      const nextDisplayOrder = Math.max(
-        0,
-        ...sponsors.map((entry) => (Number.isFinite(Number(entry.display_order)) ? Number(entry.display_order) : 100))
-      ) + 10;
+      const nextDisplayOrder =
+        Math.max(0, ...sponsors.map((entry) => (Number.isFinite(Number(entry.display_order)) ? Number(entry.display_order) : 100))) + 10;
+      const sponsorPayload = {
+        brand_name,
+        logo_url,
+        website_url: null,
+        affiliate_url: sponsorActionType === "link" ? affiliate_url : null,
+        discount_code: sponsorActionType === "coupon" ? discount_code : null,
+        description,
+        category_name,
+        action_type: sponsorActionType,
+        action_value: sponsorActionType === "coupon" ? discount_code : null,
+        cta_label,
+        sponsor_card_style: sponsorCardStyle,
+      };
+
       if (isDemoMode) {
         setSponsors((current) => [
           {
             id: `demo-sponsor-${Date.now()}`,
-            brand_name: payload.brand_name,
-            logo_url: null,
-            description: payload.description,
-            discount_code: null,
-            affiliate_url: payload.affiliate_url,
-            category_name: payload.category_name,
-            action_type: payload.action_type,
-            action_value: payload.action_value,
-            cta_label: payload.cta_label,
+            brand_name,
+            logo_url,
+            website_url: null,
+            description,
+            discount_code: sponsorPayload.discount_code,
+            affiliate_url: sponsorPayload.affiliate_url,
+            category_name,
+            action_type: sponsorActionType,
+            action_value: sponsorPayload.action_value,
+            cta_label,
             display_order: nextDisplayOrder,
             country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
             video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
             scope: sponsorScope,
+            sponsor_card_style: sponsorCardStyle,
             isExample: true,
+            click_count: 0,
+            start_date: null,
+            end_date: null,
+            internal_notes: null,
           },
           ...current,
         ]);
-        event.currentTarget.reset();
-        setSponsorScope("country");
-        setSponsorActionType("link");
-        setSelectedCountryCodes([]);
-        setSelectedVideoIds([]);
+        resetSponsorForm();
         return;
       }
 
@@ -310,16 +367,7 @@ export function CreatorAdminPanel({
         body: JSON.stringify({
           channelId,
           sponsorId: null,
-          brand_name: payload.brand_name,
-          logo_url: null,
-          website_url: null,
-          affiliate_url: payload.affiliate_url,
-          discount_code: payload.action_type === "coupon" ? payload.action_value : null,
-          description: payload.description,
-          category_name: payload.category_name,
-          action_type: payload.action_type,
-          action_value: payload.action_value,
-          cta_label: payload.cta_label,
+          ...sponsorPayload,
           display_order: nextDisplayOrder,
           scope: sponsorScope,
           country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
@@ -333,27 +381,29 @@ export function CreatorAdminPanel({
       setSponsors((current) => [
         {
           id: sponsorId,
-          brand_name: payload.brand_name,
-          logo_url: null,
-          description: payload.description,
-          discount_code: payload.action_type === "coupon" ? payload.action_value : null,
-          affiliate_url: payload.affiliate_url,
-          category_name: payload.category_name,
-          action_type: payload.action_type,
-          action_value: payload.action_value,
-          cta_label: payload.cta_label,
+          brand_name,
+          logo_url,
+          website_url: null,
+          description,
+          discount_code: sponsorPayload.discount_code,
+          affiliate_url: sponsorPayload.affiliate_url,
+          category_name,
+          action_type: sponsorActionType,
+          action_value: sponsorPayload.action_value,
+          cta_label,
           display_order: nextDisplayOrder,
           country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
           video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
           scope: sponsorScope,
+          sponsor_card_style: sponsorCardStyle,
+          click_count: 0,
+          start_date: null,
+          end_date: null,
+          internal_notes: null,
         },
         ...current,
       ]);
-      event.currentTarget.reset();
-      setSponsorScope("country");
-      setSponsorActionType("link");
-      setSelectedCountryCodes([]);
-      setSelectedVideoIds([]);
+      resetSponsorForm();
     } catch (error) {
       setSponsorError(error instanceof Error ? error.message : "No se pudo crear el sponsor.");
     } finally {
@@ -646,65 +696,110 @@ export function CreatorAdminPanel({
             <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Sponsors</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 px-4 pb-4 pt-1">
-            <form className="grid gap-2 md:grid-cols-2" onSubmit={createSponsor}>
-              <input name="brand_name" required placeholder="Marca" className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none" />
-              <select
-                name="scope"
-                value={sponsorScope}
-                onChange={(event) => {
-                  const nextScope = event.target.value as "global" | "country" | "video";
-                  setSponsorScope(nextScope);
-                  if (nextScope !== "country") setSelectedCountryCodes([]);
-                  if (nextScope !== "video") setSelectedVideoIds([]);
-                }}
-                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-              >
-                <option value="global">Scope global</option>
-                <option value="country">Scope país</option>
-                <option value="video">Scope video</option>
-              </select>
-              <input
-                name="category_name"
-                list="sponsor-category-options"
-                placeholder="Categoría del servicio (ej: Dónde dormir)"
-                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+            <form className="space-y-4" onSubmit={createSponsor}>
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  name="brand_name"
+                  required
+                  value={sponsorBrandName}
+                  onChange={(event) => setSponsorBrandName(event.target.value)}
+                  placeholder="Marca"
+                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+                />
+                <input
+                  name="logo_url"
+                  value={sponsorLogoUrl}
+                  onChange={(event) => setSponsorLogoUrl(event.target.value)}
+                  placeholder="Logo URL opcional"
+                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+                />
+                <select
+                  name="scope"
+                  value={sponsorScope}
+                  onChange={(event) => {
+                    const nextScope = event.target.value as "global" | "country" | "video";
+                    setSponsorScope(nextScope);
+                    if (nextScope !== "country") setSelectedCountryCodes([]);
+                    if (nextScope !== "video") setSelectedVideoIds([]);
+                  }}
+                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+                >
+                  <option value="global">Scope global</option>
+                  <option value="country">Scope país</option>
+                  <option value="video">Scope video</option>
+                </select>
+                <input
+                  name="category_name"
+                  list="sponsor-category-options"
+                  value={sponsorCategoryName}
+                  onChange={(event) => setSponsorCategoryName(event.target.value)}
+                  placeholder="Categoría del servicio (ej: Dónde dormir)"
+                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+                />
+                <datalist id="sponsor-category-options">
+                  {sponsorCategoryOptions.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+                <select
+                  name="action_type"
+                  value={sponsorActionType}
+                  onChange={(event) => setSponsorActionType(event.target.value === "coupon" ? "coupon" : "link")}
+                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+                >
+                  <option value="link">Redirigir a URL</option>
+                  <option value="coupon">Copiar cupón</option>
+                </select>
+                {sponsorActionType === "coupon" ? (
+                  <input
+                    name="discount_code"
+                    value={sponsorDiscountCode}
+                    onChange={(event) => setSponsorDiscountCode(event.target.value)}
+                    placeholder="Código del cupón"
+                    className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+                  />
+                ) : (
+                  <input
+                    name="affiliate_url"
+                    value={sponsorAffiliateUrl}
+                    onChange={(event) => setSponsorAffiliateUrl(event.target.value)}
+                    placeholder="URL del sponsor (se normaliza automáticamente)"
+                    className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+                  />
+                )}
+                <input
+                  name="cta_label"
+                  value={sponsorCtaLabel}
+                  onChange={(event) => setSponsorCtaLabel(event.target.value)}
+                  placeholder="Texto del CTA (ej: Ver oferta)"
+                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
+                />
+                <input
+                  name="description"
+                  value={sponsorDescription}
+                  onChange={(event) => setSponsorDescription(event.target.value)}
+                  placeholder="Descripción corta"
+                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none md:col-span-2"
+                />
+              </div>
+
+              <SponsorStylePreview
+                brandName={sponsorBrandName.trim() || "Marca"}
+                logoUrl={normalizeSponsorLogoUrl(sponsorLogoUrl)}
+                description={sponsorDescription.trim() || null}
+                ctaLabel={sponsorCtaLabel.trim() || null}
+                actionType={sponsorActionType}
+                actionValue={(sponsorActionType === "coupon" ? sponsorDiscountCode : sponsorAffiliateUrl).trim() || null}
+                selectedStyle={sponsorCardStyle}
+                onSelectStyle={setSponsorCardStyle}
               />
-              <datalist id="sponsor-category-options">
-                {sponsorCategoryOptions.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
-              <select
-                name="action_type"
-                value={sponsorActionType}
-                onChange={(event) => setSponsorActionType(event.target.value === "coupon" ? "coupon" : "link")}
-                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-              >
-                <option value="link">Redirigir a URL</option>
-                <option value="coupon">Copiar cupón</option>
-              </select>
-              <input
-                name={sponsorActionType === "coupon" ? "action_value" : "affiliate_url"}
-                placeholder={sponsorActionType === "coupon" ? "Código del cupón" : "URL afiliado"}
-                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-              />
-              <input
-                name="cta_label"
-                placeholder="Texto del CTA (ej: Ver oferta)"
-                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-              />
-              <input
-                name={sponsorActionType === "coupon" ? "affiliate_url" : "action_value"}
-                placeholder={sponsorActionType === "coupon" ? "URL destino opcional" : "Acción secundaria (opcional)"}
-                className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none md:col-span-2"
-              />
-              <input name="description" placeholder="Descripcion corta" className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none md:col-span-2" />
+
               {sponsorScope === "country" ? (
                 <select
                   multiple
                   value={selectedCountryCodes}
                   onChange={(event) => setSelectedCountryCodes(Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
-                  className="min-h-[116px] rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-[#f5f7fb] outline-none md:col-span-2"
+                  className="min-h-[116px] w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-[#f5f7fb] outline-none"
                 >
                   {sponsorCountryOptions.map((country) => (
                     <option key={country.code} value={country.code}>
@@ -718,7 +813,7 @@ export function CreatorAdminPanel({
                   multiple
                   value={selectedVideoIds}
                   onChange={(event) => setSelectedVideoIds(Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
-                  className="min-h-[146px] rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-[#f5f7fb] outline-none md:col-span-2"
+                  className="min-h-[146px] w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-[#f5f7fb] outline-none"
                 >
                   {sponsorVideoOptions.map((video) => {
                     const videoId = String(video.id || "");
@@ -730,10 +825,15 @@ export function CreatorAdminPanel({
                   })}
                 </select>
               ) : null}
-              <Button type="submit" size="sm" className="md:col-span-2 md:w-fit" disabled={creatingSponsor}>
-                <Plus size={14} />
-                {creatingSponsor ? "Guardando..." : "Agregar sponsor"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button type="submit" size="sm" disabled={creatingSponsor}>
+                  <Plus size={14} />
+                  {creatingSponsor ? "Guardando..." : "Agregar sponsor"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={resetSponsorForm} disabled={creatingSponsor}>
+                  Limpiar
+                </Button>
+              </div>
             </form>
             {sponsorError ? <p className="text-[12px] text-[#ffb4b4]">{sponsorError}</p> : null}
             <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
@@ -900,10 +1000,26 @@ export function CreatorAdminPanel({
             <div className="space-y-2">
               {sortedSponsors.map((sponsor, index) => (
                 <div key={sponsor.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-medium text-[#f5f7fb]">{sponsor.brand_name}</p>
-                    {sponsor.category_name ? <p className="truncate text-[11px] text-[#d8dfe8]">{sponsor.category_name}</p> : null}
-                    <p className="truncate text-[11px] text-[#9da5ae]">{formatSponsorCoverage(sponsor, sponsorVideoTitleById)}</p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
+                      {sponsor.logo_url ? (
+                        <Image src={sponsor.logo_url} alt={sponsor.brand_name} fill sizes="44px" className="object-contain p-1.5" unoptimized />
+                      ) : (
+                        <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#f5f7fb]">
+                          {sponsor.brand_name.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-[13px] font-medium text-[#f5f7fb]">{sponsor.brand_name}</p>
+                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#d8dfe6]">
+                          {getSponsorCardStyleLabel(sponsor.sponsor_card_style, (sponsor.video_ids?.length || 0) || sponsor.country_codes.length)}
+                        </span>
+                      </div>
+                      {sponsor.category_name ? <p className="truncate text-[11px] text-[#d8dfe8]">{sponsor.category_name}</p> : null}
+                      <p className="truncate text-[11px] text-[#9da5ae]">{formatSponsorCoverage(sponsor, sponsorVideoTitleById)}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <Button

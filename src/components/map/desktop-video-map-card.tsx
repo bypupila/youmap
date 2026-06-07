@@ -30,7 +30,8 @@ import { DemoVideoEmbedPreview } from "@/components/map/demo-video-embed-preview
 import { YouTubeEmbedPlayer } from "@/components/map/youtube-embed-player";
 import { CountryFlag } from "@/components/ui/country-flag";
 import type { TravelVideoLocation } from "@/lib/types";
-import type { MapRailSponsor } from "@/lib/map-public";
+import type { MapRailSponsor } from "@/lib/map-types";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 interface DesktopVideoMapCardProps {
@@ -169,14 +170,26 @@ export function DesktopVideoMapCard({
     openedInYoutube: isOpenedInYoutube,
     watchStatus,
   });
+  const isWatched = watchStatus === "watched";
+  const isWatchLater = watchStatus === "watch_later";
+  const isIncomplete = watchStatus === "not_finished" || isOpenedInYoutube;
+  const cardBorderClassName = isWatched
+    ? "border-2 border-emerald-500/55 shadow-[0_30px_90px_-30px_rgba(16,185,129,0.28)]"
+    : isWatchLater
+      ? "border-2 border-blue-500/55 shadow-[0_30px_90px_-30px_rgba(59,130,246,0.28)]"
+    : isIncomplete
+      ? "border-2 border-red-500/55 shadow-[0_30px_90px_-30px_rgba(239,68,68,0.28)]"
+      : "border-2 border-white/[0.08] shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]";
   const selectedCountryName = getCountryNameInSpanish(selectedVideo.country_code, selectedVideo.country_name);
 
   const handleCopyCoupon = (code: string, id: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCouponId(id);
-    setTimeout(() => {
-      setCopiedCouponId(null);
-    }, 2000);
+    void (async () => {
+      if (!(await copyTextToClipboard(code))) return;
+      setCopiedCouponId(id);
+      setTimeout(() => {
+        setCopiedCouponId(null);
+      }, 2000);
+    })();
   };
 
   const renderSponsorStrip = () => {
@@ -293,8 +306,8 @@ export function DesktopVideoMapCard({
     const promoDescription = ad.description || "Promoción activa para viewers y creadores de Travel Your Map.";
     const hasAdHref = Boolean(ad.href);
     return (
-      <section className="group relative w-full overflow-hidden rounded-xl border border-red-500/35 bg-[radial-gradient(ellipse_at_top_left,rgba(255,90,61,0.12),transparent_58%)] bg-[#050b10]/70 px-4 py-2.5 text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)] transition-all duration-300 hover:border-red-500/45">
-        <div className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,143,120,0.06),transparent_60%)] transition-all duration-300 group-hover:scale-125" />
+      <section className="group relative w-full overflow-hidden rounded-xl border border-red-500/35 bg-black px-4 py-2.5 text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)] transition-all duration-300 hover:border-red-500/45">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-black/0 transition-all duration-300 group-hover:scale-125" />
         
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -358,7 +371,7 @@ export function DesktopVideoMapCard({
     return (
       <div className="pointer-events-auto w-full max-w-[480px] space-y-3">
         {renderPlatformBanner()}
-        <article className="group relative w-full lg:w-[480px] shrink-0 overflow-hidden rounded-xl border border-red-500/35 bg-[#080808] text-sm text-white shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
+        <article className={cn("group relative w-full lg:w-[480px] shrink-0 overflow-hidden rounded-xl border bg-[#080808] text-sm text-white", cardBorderClassName)}>
           <div className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.04),transparent_60%)]" />
 
           <header className="relative px-4 pb-3 pt-4">
@@ -379,7 +392,7 @@ export function DesktopVideoMapCard({
                     onClick={() => activity.toggleVideoFeatured(selectedVideo.youtube_video_id)}
                     className={cn(
                       "inline-flex h-7 items-center gap-1 rounded border px-2.5 text-[10px] font-bold transition-all active:scale-95",
-                      isFeatured ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-white/[0.06] bg-white/[0.02] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                      isFeatured ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-400" : "border-white/[0.06] bg-white/[0.02] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
                     )}
                   >
                     <Star size={11} weight={isFeatured ? "fill" : "regular"} />
@@ -394,7 +407,7 @@ export function DesktopVideoMapCard({
                     className={cn(
                       "inline-flex h-7 items-center gap-1 rounded border px-2.5 text-[10px] font-bold transition-all active:scale-95",
                       watchStatus === "watch_later" || isSaved
-                        ? "border-red-500/30 bg-red-500/10 text-red-400"
+                        ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
                         : "border-white/[0.06] bg-white/[0.02] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
                     )}
                   >
@@ -429,8 +442,10 @@ export function DesktopVideoMapCard({
                   "inline-flex h-8 items-center gap-1 rounded border px-2.5 text-[9px] font-black tracking-wider transition-all",
                   watchBadgeTone === "success"
                     ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400"
-                    : watchBadgeTone === "active"
-                      ? "border-yellow-400/40 bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.18)]"
+                    : watchBadgeTone === "watch_later"
+                      ? "border-blue-500/30 bg-blue-500/10 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.16)]"
+                      : watchBadgeTone === "danger"
+                        ? "border-red-500/30 bg-red-500/10 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.14)]"
                       : "border-white/[0.08] bg-white/[0.03] text-zinc-400"
                 )}
               >
@@ -449,13 +464,13 @@ export function DesktopVideoMapCard({
                     }}
                     className={cn(
                       "block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02]",
-                      watchStatus === "not_finished" && "bg-yellow-400 text-black"
+                      watchStatus === "not_finished" && "bg-red-500 text-red-50"
                     )}
                   >
                     INCOMPLETO
                   </button>
                   <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watched"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-emerald-500">COMPLETADO</button>
-                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later"); setWatchMenuOpen(false); }} className="block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02] hover:text-white">VER MÁS TARDE</button>
+                  <button type="button" onClick={() => { activity.setVideoWatchStatus(selectedVideo.youtube_video_id, "watch_later"); setWatchMenuOpen(false); }} className={cn("block w-full rounded px-2 py-1.5 text-center text-[10px] font-bold text-zinc-400 hover:bg-white/[0.02]", watchStatus === "watch_later" && "bg-blue-500/10 text-blue-400")}>VER MÁS TARDE</button>
                 </div>
               ) : null}
             </div>
@@ -531,10 +546,11 @@ export function DesktopVideoMapCard({
   return (
     <article
       className={cn(
-        "pointer-events-auto w-full overflow-hidden text-sm text-white",
+        "pointer-events-auto w-full overflow-hidden text-sm text-white border",
+        cardBorderClassName,
         isTheater
-          ? "rounded-xl border border-white/[0.06] bg-[#080808]/95 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]"
-          : "rounded-xl border border-white/10 bg-[#07101a]/90 shadow-[0_28px_90px_-48px_rgba(0,0,0,0.94)] backdrop-blur-2xl"
+          ? "rounded-xl bg-[#080808]/95"
+          : "rounded-xl bg-[#07101a]/90 backdrop-blur-2xl"
       )}
     >
       <header className={cn("flex justify-between gap-2", isTheater ? "items-start px-3 py-2.5" : "items-center px-2.5 py-1.5")}>
@@ -630,15 +646,17 @@ export function DesktopVideoMapCard({
             <button
               type="button"
               onClick={() => setWatchMenuOpen((current) => !current)}
-            className={cn(
-                "inline-flex h-8 items-center gap-1 border px-2.5 text-[10px] font-black uppercase tracking-[0.08em] transition hover:brightness-110",
-                isTheater ? "rounded" : "rounded-full",
-                watchBadgeTone === "success"
-                  ? "border-[rgba(85,200,123,0.45)] bg-[rgba(85,200,123,0.12)] text-[#c8f3d6]"
-                  : watchBadgeTone === "active"
-                    ? "border-[rgba(255,186,73,0.4)] bg-[rgba(255,186,73,0.12)] text-[#ffe0ab]"
-                    : "border-white/10 bg-white/[0.04] text-[#d8dee6]"
-              )}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1 border px-2.5 text-[10px] font-black uppercase tracking-[0.08em] transition hover:brightness-110",
+                  isTheater ? "rounded" : "rounded-full",
+                  watchBadgeTone === "success"
+                    ? "border-[rgba(85,200,123,0.45)] bg-[rgba(85,200,123,0.12)] text-[#c8f3d6]"
+                    : watchBadgeTone === "watch_later"
+                      ? "border-[rgba(59,130,246,0.35)] bg-[rgba(59,130,246,0.12)] text-[#9ec1ff]"
+                      : watchBadgeTone === "danger"
+                        ? "border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.12)] text-[#ffb4b4]"
+                        : "border-white/10 bg-white/[0.04] text-[#d8dee6]"
+                )}
               aria-label="Cambiar estado de avance del video"
             >
               <BatteryCharging size={12} weight="fill" />
@@ -668,7 +686,7 @@ export function DesktopVideoMapCard({
                   }}
                   className={cn(
                     "block w-full rounded-md px-2 py-1.5 text-center text-[11px] hover:bg-white/[0.08]",
-                    watchStatus === "not_finished" && "text-[#ffd37c]"
+                    watchStatus === "not_finished" && "text-[#ff8f8f]"
                   )}
                 >
                   INCOMPLETO
@@ -695,7 +713,7 @@ export function DesktopVideoMapCard({
                   }}
                   className={cn(
                     "block w-full rounded-md px-2 py-1.5 text-center text-[11px] hover:bg-white/[0.08]",
-                    (watchStatus === "watch_later" || !watchStatus) && "text-[#d8dee6]"
+                    (watchStatus === "watch_later" || !watchStatus) && "text-[#8fb4ff]"
                   )}
                 >
                   VER MAS TARDE

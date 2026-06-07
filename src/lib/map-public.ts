@@ -8,33 +8,9 @@ import { buildPollOptionsFromVideos, loadMapPoll, type MapPollRecord } from "@/l
 import { columnExists, tableExists } from "@/lib/db-schema";
 import { sql } from "@/lib/neon";
 import type { TravelChannel } from "@/lib/types";
-
-export interface MapViewerContext {
-  isOwner: boolean;
-  isAuthenticated: boolean;
-  role: AppUserRole;
-  isSuperAdmin: boolean;
-  shareUrl: string;
-  adminUrl: string | null;
-}
-
-export interface MapRailSponsor {
-  id: string;
-  brand_name: string;
-  logo_url: string | null;
-  description: string | null;
-  discount_code: string | null;
-  affiliate_url: string | null;
-  category_name?: string | null;
-  action_type?: "link" | "coupon" | null;
-  action_value?: string | null;
-  cta_label?: string | null;
-  display_order?: number;
-  country_codes: string[];
-  video_ids?: string[];
-  scope?: "global" | "country" | "video";
-  isExample?: boolean;
-}
+import { buildViewerRegisterUrl } from "@/lib/map-urls";
+import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
+import type { MapRailSponsor, MapViewerContext } from "@/lib/map-types";
 
 export interface PublicMapPayload extends MapDataPayload {
   channel: TravelChannel & {
@@ -60,7 +36,6 @@ interface PublicChannelRow {
   last_synced_at: string | null;
 }
 
-const FALLBACK_SHARE_HOST = "https://travelyourmap.bypupila.com";
 const LOCAL_GLOBAL_MAP_IDS = new Set(["luisito-global-map", "drew-global-map"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -127,10 +102,13 @@ export function preserveChannelHandleSlug(value?: string | null) {
     .replace(/^\/+/, "");
 }
 
-export function buildPublicShareUrl(handleOrUsername?: string | null) {
+export function buildPublicShareUrl(channelId: string, handleOrUsername?: string | null) {
   const slug = preserveChannelHandleSlug(handleOrUsername) || DEMO_USERNAME;
-  const sourceParam = encodeURIComponent(slug);
-  return `${FALLBACK_SHARE_HOST}/map?channelId=${encodeURIComponent(DEMO_CHANNEL_SLUG)}&sharedFrom=${sourceParam}`;
+  return buildViewerRegisterUrl({
+    channelId,
+    next: `/map?channelId=${channelId}`,
+    sharedFrom: slug,
+  });
 }
 
 async function resolvePublicChannel(identifier: string): Promise<PublicChannelRow | null> {
@@ -183,6 +161,7 @@ async function loadSponsorsForUser(userId: string) {
     hasActionValue,
     hasCtaLabel,
     hasDisplayOrder,
+    hasSponsorCardStyle,
     hasSponsorCategories,
   ] = await Promise.all([
     tableExists("public", "sponsor_video_rules"),
@@ -191,6 +170,7 @@ async function loadSponsorsForUser(userId: string) {
     columnExists("public", "sponsors", "action_value"),
     columnExists("public", "sponsors", "cta_label"),
     columnExists("public", "sponsors", "display_order"),
+    columnExists("public", "sponsors", "sponsor_card_style"),
     tableExists("public", "sponsor_categories"),
   ]);
   const selectVideoIds = hasSponsorVideoRules
@@ -202,6 +182,7 @@ async function loadSponsorsForUser(userId: string) {
   const selectActionValue = hasActionValue ? "s.action_value as action_value" : "null::text as action_value";
   const selectCtaLabel = hasCtaLabel ? "s.cta_label as cta_label" : "null::text as cta_label";
   const selectDisplayOrder = hasDisplayOrder ? "s.display_order::int as display_order" : "0::int as display_order";
+  const selectSponsorCardStyle = hasSponsorCardStyle ? "s.sponsor_card_style::text as sponsor_card_style" : "null::text as sponsor_card_style";
   const joinCategories = hasCategoryId && hasSponsorCategories ? "left join public.sponsor_categories sc on sc.id = s.category_id" : "";
   const sponsorOrderBy = hasDisplayOrder ? "order by s.display_order asc, s.created_at desc" : "order by s.created_at desc";
   const normalizeSponsorRow = (sponsor: {
@@ -216,6 +197,7 @@ async function loadSponsorsForUser(userId: string) {
     action_value: string | null;
     cta_label: string | null;
     display_order: number | string | null;
+    sponsor_card_style: string | null;
     country_codes: string[] | null;
     video_ids: string[] | null;
   }): MapRailSponsor => {
@@ -236,6 +218,7 @@ async function loadSponsorsForUser(userId: string) {
       action_value: sponsor.action_value,
       cta_label: sponsor.cta_label,
       display_order: Number.isFinite(displayOrder) ? displayOrder : 0,
+      sponsor_card_style: normalizeSponsorCardStyle(sponsor.sponsor_card_style),
       country_codes: countryCodes,
       video_ids: videoIds,
       scope,
@@ -255,6 +238,7 @@ async function loadSponsorsForUser(userId: string) {
       action_value: string | null;
       cta_label: string | null;
       display_order: number | string | null;
+      sponsor_card_style: string | null;
       country_codes: string[] | null;
       video_ids: string[] | null;
     }>>(
@@ -271,6 +255,7 @@ async function loadSponsorsForUser(userId: string) {
           ${selectActionValue},
           ${selectCtaLabel},
           ${selectDisplayOrder},
+          ${selectSponsorCardStyle},
           array_remove(array_agg(distinct sgr.country_code), null) as country_codes,
           ${selectVideoIds}
         from public.sponsors s
@@ -303,6 +288,7 @@ async function loadSponsorsForUser(userId: string) {
     action_value: string | null;
     cta_label: string | null;
     display_order: number | string | null;
+    sponsor_card_style: string | null;
     country_codes: string[] | null;
     video_ids: string[] | null;
   }>>(
@@ -319,6 +305,7 @@ async function loadSponsorsForUser(userId: string) {
         ${selectActionValue},
         ${selectCtaLabel},
         ${selectDisplayOrder},
+        ${selectSponsorCardStyle},
         array_remove(array_agg(distinct sgr.country_code), null) as country_codes,
         ${selectVideoIds}
       from public.sponsors s
@@ -386,7 +373,7 @@ export async function loadPublicMapPayloadByChannelId({
         isAuthenticated: Boolean(viewerUserId),
         role: "viewer",
         isSuperAdmin: false,
-        shareUrl: `${FALLBACK_SHARE_HOST}/map?channelId=${encodeURIComponent(channelId)}`,
+        shareUrl: buildPublicShareUrl(channelId),
         adminUrl: null,
       },
       sponsors: [],
@@ -481,7 +468,7 @@ async function loadPublicMapPayloadByChannelRef(
       isAuthenticated: Boolean(viewerUserId),
       role: sessionUser?.role || "viewer",
       isSuperAdmin,
-      shareUrl: buildPublicShareUrl(channelRef.channel_handle || channelRef.username),
+      shareUrl: buildPublicShareUrl(channelRef.id, channelRef.channel_handle || channelRef.username),
       adminUrl: isOwner || isSuperAdmin ? `/creator-panel?channelId=${encodeURIComponent(channelRef.id)}` : null,
     },
     sponsors,

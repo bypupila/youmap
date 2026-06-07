@@ -1036,9 +1036,9 @@ function SponsorModal({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Marca" name="brand_name" defaultValue={sponsor?.brand_name || ""} required />
-          <Field label="Logo URL" name="logo_url" type="url" defaultValue={sponsor?.logo_url || ""} />
-          <Field label="Website" name="website_url" type="url" defaultValue={sponsor?.website_url || ""} />
-          <Field label="URL afiliada" name="affiliate_url" type="url" defaultValue={sponsor?.affiliate_url || ""} />
+          <Field label="Logo URL" name="logo_url" type="text" defaultValue={sponsor?.logo_url || ""} />
+          <Field label="Website" name="website_url" type="text" defaultValue={sponsor?.website_url || ""} />
+          <Field label="URL afiliada" name="affiliate_url" type="text" defaultValue={sponsor?.affiliate_url || ""} />
           <Field label="Codigo" name="discount_code" defaultValue={sponsor?.discount_code || ""} />
           <Field label="Descripcion corta" name="description" maxLength={80} defaultValue={sponsor?.description || ""} />
         </div>
@@ -1106,7 +1106,7 @@ function NewVoteModal({
           <SelectField label="Estado" name="status" options={[{ value: "live", label: "Abierta" }, { value: "draft", label: "Borrador" }]} />
           <SelectField label="Visibilidad" name="visibility" options={[{ value: "public", label: "Publica en el mapa" }, { value: "link_only", label: "Solo link directo" }]} />
         </div>
-        <Field label="URL sponsor del destino" name="sponsor_url" type="url" />
+        <Field label="URL sponsor del destino" name="sponsor_url" type="text" placeholder="www.ejemplo.com o https://..." />
         <ModalFooter onClose={onClose} submitLabel="Guardar votacion" />
       </form>
     </BaseModal>
