@@ -38,6 +38,7 @@ export function readViewerAuthAttributionFromLocation(fallback?: string | URLSea
 
 export function buildViewerRegisterHref(attribution: ViewerAuthAttribution) {
   const params = new URLSearchParams();
+  params.set("intent", "viewer");
   if (attribution.registrationChannelId) params.set("channelId", attribution.registrationChannelId);
   if (attribution.safeNext) params.set("next", attribution.safeNext);
   if (attribution.utmSource) params.set("utm_source", attribution.utmSource);

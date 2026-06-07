@@ -126,7 +126,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               isAuthenticated: true,
               role: sessionUserRole,
               isSuperAdmin: sessionUserRole === "superadmin",
-              shareUrl: buildPublicShareUrl(payload.channel.channel_handle || payload.channel.canonicalHandle),
+              shareUrl: buildPublicShareUrl(payload.channel.id, payload.channel.channel_handle || payload.channel.canonicalHandle),
               adminUrl: "/creator-panel",
             }
           }

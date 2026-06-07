@@ -803,7 +803,7 @@ export function TravelGlobe({
       ) : null}
 
       {showSummaryCard && !minimalOverlay ? (
-        <div className={`absolute left-4 top-4 z-20 rounded-2xl border border-white/10 bg-black/55 p-4 text-white shadow-2xl backdrop-blur-md ${compact ? "w-[280px] sm:w-[300px]" : "w-[320px] sm:left-6 sm:top-6"}`}>
+        <div className={`absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-2xl border border-white/10 bg-black/55 p-4 text-white shadow-2xl backdrop-blur-md ${compact ? "w-[245px] sm:w-[245px]" : "w-[320px] sm:left-6 sm:top-6 sm:translate-x-0"}`}>
           <div className="mb-3 flex items-center gap-3">
             {channelData.thumbnail_url ? (
               <Image src={channelData.thumbnail_url} alt={channelData.channel_name} width={44} height={44} className="h-11 w-11 rounded-full object-cover" />
@@ -835,7 +835,7 @@ export function TravelGlobe({
         <aside
           className={`absolute z-30 text-white backdrop-blur-xl ${
             minimalOverlay
-              ? pointPanelClassName || "left-1/2 top-4 w-[min(280px,calc(100vw-2rem))] -translate-x-1/2"
+              ? pointPanelClassName || "left-1/2 top-4 w-[245px] -translate-x-1/2"
               : "right-0 top-0 h-full w-full max-w-[380px] border-l border-white/10 bg-black/85 p-4 sm:p-5"
           }`}
         >

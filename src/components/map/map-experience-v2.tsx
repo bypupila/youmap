@@ -5,7 +5,7 @@ import type { FanVoteOptionInput } from "@/lib/fan-vote-options";
 import type { MapFanVoteSummary } from "@/lib/map-fan-votes";
 import type { ManualVerificationItem, MapSummary } from "@/lib/map-data";
 import type { MapPollRecord } from "@/lib/map-polls";
-import type { MapRailSponsor, MapViewerContext } from "@/lib/map-public";
+import type { MapRailSponsor, MapViewerContext } from "@/lib/map-types";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
 type MapViewMode = "viewer" | "creator";

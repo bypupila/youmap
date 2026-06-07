@@ -60,8 +60,11 @@ import type { ManualVerificationItem, MapSummary } from "@/lib/map-data";
 import type { MapEventType } from "@/lib/map-event-types";
 import type { MapFanVoteSummary } from "@/lib/map-fan-votes";
 import type { MapPollRecord } from "@/lib/map-polls";
-import type { MapRailSponsor, MapViewerContext } from "@/lib/map-public";
+import type { MapRailSponsor, MapViewerContext } from "@/lib/map-types";
+import { buildPublicMapUrl } from "@/lib/map-urls";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { SPONSOR_INQUIRY_STATUSES, type SponsorInquiryStatus } from "@/lib/sponsor-inquiries";
+import { normalizeExternalSponsorUrl } from "@/lib/sponsor-url";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { toCompactYouTubeThumbnail } from "@/lib/youtube-thumbnails";
@@ -713,7 +716,7 @@ export function MapExperience({
       };
   const nextDestination = destinationCandidates[0] || null;
   const youtubeUrl = buildChannelUrl(channel);
-  const mapUrl = shellViewer.shareUrl || (channelId ? `/map?channelId=${encodeURIComponent(channelId)}` : "/map");
+  const mapUrl = channelId ? buildPublicMapUrl(channelId) : "/map";
   const shouldShowChrome = showHeader || showLegend || showOperationsPanel || showActiveVideoCard;
   const shouldUseDesktopVideoCard = shouldShowChrome && isDesktopViewport;
   const publicMapAnalyticsEnabled = Boolean(channelId && interactive && resolvedViewMode === "viewer" && !viewer.isOwner && !isDemoMode);
@@ -1287,8 +1290,8 @@ export function MapExperience({
     };
 
     try {
-      if (!copyWithTextarea() && typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(shareUrl);
+      if (!copyWithTextarea() && !(await copyTextToClipboard(shareUrl))) {
+        throw new Error("Clipboard unavailable");
       }
       setCopyState("copied");
       trackMapEvent("share_url_copied");
@@ -2014,11 +2017,10 @@ function MobileOverviewView({
 
         <button
           type="button"
-          className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] text-[13px] font-medium text-[#f5f7fb]"
+          className="mt-3 flex h-10 w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] px-4 text-[13px] font-medium text-[#f5f7fb]"
           onClick={() => setMobileTab("videos")}
         >
           Ver todos los videos
-          <CaretRight size={15} />
         </button>
       </section>
     </div>
@@ -3692,6 +3694,11 @@ function BrandInquiryCta({
     const proposedBudgetRaw = String(formData.get("proposed_budget_usd") || "").trim();
     const proposedBudgetUsd = proposedBudgetRaw.length > 0 ? Number(proposedBudgetRaw) : null;
     const hasInvalidBudget = proposedBudgetRaw.length > 0 && (!Number.isFinite(proposedBudgetUsd ?? Number.NaN) || (proposedBudgetUsd ?? 0) <= 0);
+    const websiteUrl = normalizeExternalSponsorUrl(String(formData.get("website_url") || "").trim());
+    if (String(formData.get("website_url") || "").trim() && !websiteUrl) {
+      setError("La web o landing no es valida.");
+      return;
+    }
 
     if (hasInvalidBudget) {
       setError("Ingresa un presupuesto valido en USD.");
@@ -3711,7 +3718,7 @@ function BrandInquiryCta({
           brandName: String(formData.get("brand_name") || "").trim(),
           contactName: String(formData.get("contact_name") || "").trim(),
           contactEmail: String(formData.get("contact_email") || "").trim(),
-          websiteUrl: String(formData.get("website_url") || "").trim(),
+          websiteUrl,
           whatsapp: String(formData.get("whatsapp") || "").trim(),
           proposedBudgetUsd: proposedBudgetUsd ? Math.round(proposedBudgetUsd) : null,
           brief: String(formData.get("brief") || "").trim(),
@@ -3775,7 +3782,7 @@ function BrandInquiryCta({
               </label>
               <label className="space-y-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">Web o landing</span>
-                <Input type="url" name="website_url" maxLength={240} placeholder="https://..." className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
+                <Input name="website_url" maxLength={240} placeholder="www.ejemplo.com o https://..." className="border-white/10 bg-white/[0.04] text-[#f5f7fb] placeholder:text-[#7e8792]" />
               </label>
               <label className="space-y-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6cdd5]">WhatsApp (opcional)</span>

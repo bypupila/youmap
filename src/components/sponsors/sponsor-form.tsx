@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { normalizeExternalSponsorUrl, normalizeSponsorLogoUrl } from "@/lib/sponsor-url";
 
 export function SponsorForm({ demo = false }: { demo?: boolean }) {
   const [loading, setLoading] = useState(false);
@@ -9,11 +10,31 @@ export function SponsorForm({ demo = false }: { demo?: boolean }) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const logo_url = normalizeSponsorLogoUrl(String(formData.get("logo_url") || "").trim());
+    const website_url = normalizeExternalSponsorUrl(String(formData.get("website_url") || "").trim());
+    const affiliate_url = normalizeExternalSponsorUrl(String(formData.get("affiliate_url") || "").trim());
+
+    if (String(formData.get("logo_url") || "").trim() && !logo_url) {
+      setLoading(false);
+      setMessage("Logo URL inválida");
+      return;
+    }
+    if (String(formData.get("website_url") || "").trim() && !website_url) {
+      setLoading(false);
+      setMessage("Website inválida");
+      return;
+    }
+    if (String(formData.get("affiliate_url") || "").trim() && !affiliate_url) {
+      setLoading(false);
+      setMessage("URL afiliada inválida");
+      return;
+    }
 
     const payload = {
       brand_name: String(formData.get("brand_name") || "").trim(),
-      website_url: String(formData.get("website_url") || "").trim(),
-      affiliate_url: String(formData.get("affiliate_url") || "").trim(),
+      logo_url,
+      website_url,
+      affiliate_url,
       discount_code: String(formData.get("discount_code") || "").trim(),
       description: String(formData.get("description") || "").trim(),
       country_code: String(formData.get("country_code") || "").trim().toUpperCase() || null,
@@ -45,8 +66,9 @@ export function SponsorForm({ demo = false }: { demo?: boolean }) {
       <div className="grid gap-2 md:grid-cols-2">
         <Field label="Marca" name="brand_name" required />
         <Field label="País (ISO)" name="country_code" placeholder="JP" />
-        <Field label="Website" name="website_url" type="url" />
-        <Field label="Afiliado" name="affiliate_url" type="url" />
+        <Field label="Logo URL opcional" name="logo_url" placeholder="https://..." />
+        <Field label="Website" name="website_url" placeholder="www.ejemplo.com" />
+        <Field label="Afiliado" name="affiliate_url" placeholder="www.ejemplo.com/oferta" />
         <Field label="Código" name="discount_code" />
         <Field label="Descripción" name="description" className="md:col-span-2" />
       </div>

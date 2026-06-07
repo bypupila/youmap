@@ -13,6 +13,7 @@ import {
   upsertMapPoll,
 } from "@/lib/map-polls";
 import { sql } from "@/lib/neon";
+import { normalizeExternalSponsorUrl } from "@/lib/sponsor-url";
 
 export const dynamic = "force-dynamic";
 
@@ -36,12 +37,8 @@ const pollPayloadSchema = z.object({
   visibility: z.enum(["public", "link_only"]).default("public"),
   countryOptions: z.array(optionSchema).default([]),
   sponsorId: z.string().uuid().optional().nullable(),
-  sponsorUrl: z.string().trim().url().optional().nullable().or(z.literal("")),
+  sponsorUrl: z.string().trim().optional().nullable(),
 });
-
-function cleanSponsorUrl(value: string | null | undefined) {
-  return value && value.trim() ? value.trim() : null;
-}
 
 async function getPollSchemaFeatures() {
   const [hasVisibility, hasWinnerCountry, hasWinnerCity, hasConvertedToDestination, hasSponsorId, hasSponsorUrl] = await Promise.all([
@@ -93,6 +90,10 @@ export async function POST(request: Request) {
     if (payload.action === "publish" || payload.action === "convert") {
       if (!payload.pollId) return NextResponse.json({ error: "pollId is required" }, { status: 400 });
       const winner = await updatePollWinner(payload.pollId, schema);
+      const sponsorUrl = normalizeExternalSponsorUrl(payload.sponsorUrl);
+      if (String(payload.sponsorUrl || "").trim() && !sponsorUrl) {
+        return NextResponse.json({ error: "Invalid sponsor URL" }, { status: 400 });
+      }
       const setClauses = ["published_at = coalesce(published_at, now())"];
       const values: unknown[] = [];
       if (schema.hasConvertedToDestination && payload.action === "convert") {
@@ -102,8 +103,8 @@ export async function POST(request: Request) {
         values.push(payload.sponsorId);
         setClauses.push(`sponsor_id = $${values.length}`);
       }
-      if (schema.hasSponsorUrl && cleanSponsorUrl(payload.sponsorUrl)) {
-        values.push(cleanSponsorUrl(payload.sponsorUrl));
+      if (schema.hasSponsorUrl && sponsorUrl) {
+        values.push(sponsorUrl);
         setClauses.push(`sponsor_url = $${values.length}`);
       }
       values.push(payload.pollId, payload.channelId);
@@ -166,7 +167,11 @@ export async function POST(request: Request) {
         setClauses.push(`sponsor_id = $${values.length}`);
       }
       if (schema.hasSponsorUrl) {
-        values.push(cleanSponsorUrl(payload.sponsorUrl));
+        const sponsorUrl = normalizeExternalSponsorUrl(payload.sponsorUrl);
+        if (String(payload.sponsorUrl || "").trim() && !sponsorUrl) {
+          return NextResponse.json({ error: "Invalid sponsor URL" }, { status: 400 });
+        }
+        values.push(sponsorUrl);
         setClauses.push(`sponsor_url = $${values.length}`);
       }
       if (setClauses.length > 0) {

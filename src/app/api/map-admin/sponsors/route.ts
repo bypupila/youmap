@@ -6,6 +6,8 @@ import { isDemoChannelId } from "@/lib/demo-data";
 import { columnExists, tableExists } from "@/lib/db-schema";
 import { normalizeCountryCode } from "@/lib/map-polls";
 import { sql } from "@/lib/neon";
+import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
+import { normalizeExternalSponsorUrl, normalizeSponsorLogoUrl } from "@/lib/sponsor-url";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +15,9 @@ const sponsorPayloadSchema = z.object({
   channelId: z.string().uuid(),
   sponsorId: z.string().uuid().optional().nullable(),
   brand_name: z.string().trim().min(2).max(120),
-  logo_url: z.string().trim().url().optional().nullable().or(z.literal("")),
-  website_url: z.string().trim().url().optional().nullable().or(z.literal("")),
-  affiliate_url: z.string().trim().url().optional().nullable().or(z.literal("")),
+  logo_url: z.string().trim().optional().nullable(),
+  website_url: z.string().trim().optional().nullable(),
+  affiliate_url: z.string().trim().optional().nullable(),
   discount_code: z.string().trim().max(40).optional().nullable(),
   description: z.string().trim().max(80).optional().nullable(),
   category_id: z.string().uuid().optional().nullable(),
@@ -23,6 +25,7 @@ const sponsorPayloadSchema = z.object({
   action_type: z.enum(["link", "coupon"]).default("link"),
   action_value: z.string().trim().max(160).optional().nullable(),
   cta_label: z.string().trim().max(60).optional().nullable(),
+  sponsor_card_style: z.enum(["cta_red", "coupon_yellow", "premium_strip"]).optional().nullable(),
   display_order: z.number().int().min(0).max(1_000_000).optional().nullable(),
   scope: z.enum(["global", "country", "video"]),
   country_codes: z.array(z.string().trim().length(2)).default([]),
@@ -32,10 +35,6 @@ const sponsorPayloadSchema = z.object({
   end_date: z.string().datetime().optional().nullable(),
   internal_notes: z.string().trim().max(1000).optional().nullable(),
 });
-
-function cleanUrl(value: string | null | undefined) {
-  return value && value.trim() ? value.trim() : null;
-}
 
 function cleanText(value: string | null | undefined) {
   return value && value.trim() ? value.trim() : null;
@@ -60,14 +59,27 @@ function normalizeSponsorPayload(payload: z.infer<typeof sponsorPayloadSchema>) 
   if (payload.scope === "video" && videoIds.length === 0) {
     throw new Error("Selecciona al menos un video para el sponsor.");
   }
+  const logoUrl = normalizeSponsorLogoUrl(payload.logo_url);
+  if (String(payload.logo_url || "").trim() && !logoUrl) {
+    throw new Error("Logo URL inválida.");
+  }
+  const websiteUrl = normalizeExternalSponsorUrl(payload.website_url);
+  if (String(payload.website_url || "").trim() && !websiteUrl) {
+    throw new Error("Website URL inválida.");
+  }
+  const affiliateUrl = normalizeExternalSponsorUrl(payload.affiliate_url);
+  if (String(payload.affiliate_url || "").trim() && !affiliateUrl) {
+    throw new Error("Affiliate URL inválida.");
+  }
   return {
     ...payload,
-    logo_url: cleanUrl(payload.logo_url),
-    website_url: cleanUrl(payload.website_url),
-    affiliate_url: cleanUrl(payload.affiliate_url),
+    logo_url: logoUrl,
+    website_url: websiteUrl,
+    affiliate_url: affiliateUrl,
     category_name: cleanText(payload.category_name),
     action_value: cleanText(payload.action_value),
     cta_label: cleanText(payload.cta_label),
+    sponsor_card_style: normalizeSponsorCardStyle(payload.sponsor_card_style),
     country_codes: payload.scope === "country" ? countryCodes : [],
     video_ids: payload.scope === "video" ? videoIds : [],
   };
@@ -80,6 +92,7 @@ async function getSponsorSchemaFeatures() {
     hasEndDate,
     hasInternalNotes,
     hasCategoryId,
+    hasSponsorCardStyle,
     hasActionType,
     hasActionValue,
     hasCtaLabel,
@@ -91,6 +104,7 @@ async function getSponsorSchemaFeatures() {
     columnExists("public", "sponsors", "end_date"),
     columnExists("public", "sponsors", "internal_notes"),
     columnExists("public", "sponsors", "category_id"),
+    columnExists("public", "sponsors", "sponsor_card_style"),
     columnExists("public", "sponsors", "action_type"),
     columnExists("public", "sponsors", "action_value"),
     columnExists("public", "sponsors", "cta_label"),
@@ -103,6 +117,7 @@ async function getSponsorSchemaFeatures() {
     hasDates: hasStartDate && hasEndDate,
     hasInternalNotes,
     hasCategoryId,
+    hasSponsorCardStyle,
     hasActionType,
     hasActionValue,
     hasCtaLabel,
@@ -203,6 +218,10 @@ export async function POST(request: Request) {
       insertColumns.push("category_id");
       insertValues.push(resolvedCategoryId);
     }
+    if (schema.hasSponsorCardStyle) {
+      insertColumns.push("sponsor_card_style");
+      insertValues.push(payload.sponsor_card_style || null);
+    }
     if (schema.hasActionType) {
       insertColumns.push("action_type");
       insertValues.push(payload.action_type);
@@ -298,6 +317,10 @@ export async function PATCH(request: Request) {
     if (schema.hasCategoryId) {
       setClauses.push(`category_id = $${updateValues.length + 1}`);
       updateValues.push(resolvedCategoryId);
+    }
+    if (schema.hasSponsorCardStyle) {
+      setClauses.push(`sponsor_card_style = $${updateValues.length + 1}`);
+      updateValues.push(payload.sponsor_card_style || null);
     }
     if (schema.hasActionType) {
       setClauses.push(`action_type = $${updateValues.length + 1}`);
