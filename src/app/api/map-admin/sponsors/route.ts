@@ -7,6 +7,7 @@ import { columnExists, tableExists } from "@/lib/db-schema";
 import { normalizeCountryCode } from "@/lib/map-polls";
 import { sql } from "@/lib/neon";
 import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
+import { validateSponsorBannerColors } from "@/lib/sponsor-banner-colors";
 import { normalizeExternalSponsorUrl, normalizeSponsorLogoUrl } from "@/lib/sponsor-url";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,8 @@ const sponsorPayloadSchema = z.object({
   action_value: z.string().trim().max(160).optional().nullable(),
   cta_label: z.string().trim().max(60).optional().nullable(),
   sponsor_card_style: z.enum(["cta_red", "coupon_yellow", "premium_strip"]).optional().nullable(),
+  sponsor_banner_background_color: z.string().trim().max(7).optional().nullable(),
+  sponsor_banner_text_color: z.string().trim().max(7).optional().nullable(),
   display_order: z.number().int().min(0).max(1_000_000).optional().nullable(),
   scope: z.enum(["global", "country", "video"]),
   country_codes: z.array(z.string().trim().length(2)).default([]),
@@ -71,6 +74,10 @@ function normalizeSponsorPayload(payload: z.infer<typeof sponsorPayloadSchema>) 
   if (String(payload.affiliate_url || "").trim() && !affiliateUrl) {
     throw new Error("Affiliate URL inválida.");
   }
+  const sponsorBannerColors = validateSponsorBannerColors(payload.sponsor_banner_background_color, payload.sponsor_banner_text_color);
+  if (!sponsorBannerColors.ok) {
+    throw new Error(sponsorBannerColors.error);
+  }
   return {
     ...payload,
     logo_url: logoUrl,
@@ -80,6 +87,8 @@ function normalizeSponsorPayload(payload: z.infer<typeof sponsorPayloadSchema>) 
     action_value: cleanText(payload.action_value),
     cta_label: cleanText(payload.cta_label),
     sponsor_card_style: normalizeSponsorCardStyle(payload.sponsor_card_style),
+    sponsor_banner_background_color: sponsorBannerColors.colors.backgroundColor,
+    sponsor_banner_text_color: sponsorBannerColors.colors.textColor,
     country_codes: payload.scope === "country" ? countryCodes : [],
     video_ids: payload.scope === "video" ? videoIds : [],
   };
@@ -93,6 +102,8 @@ async function getSponsorSchemaFeatures() {
     hasInternalNotes,
     hasCategoryId,
     hasSponsorCardStyle,
+    hasSponsorBannerBackgroundColor,
+    hasSponsorBannerTextColor,
     hasActionType,
     hasActionValue,
     hasCtaLabel,
@@ -105,6 +116,8 @@ async function getSponsorSchemaFeatures() {
     columnExists("public", "sponsors", "internal_notes"),
     columnExists("public", "sponsors", "category_id"),
     columnExists("public", "sponsors", "sponsor_card_style"),
+    columnExists("public", "sponsors", "sponsor_banner_background_color"),
+    columnExists("public", "sponsors", "sponsor_banner_text_color"),
     columnExists("public", "sponsors", "action_type"),
     columnExists("public", "sponsors", "action_value"),
     columnExists("public", "sponsors", "cta_label"),
@@ -118,6 +131,7 @@ async function getSponsorSchemaFeatures() {
     hasInternalNotes,
     hasCategoryId,
     hasSponsorCardStyle,
+    hasSponsorBannerColors: hasSponsorBannerBackgroundColor && hasSponsorBannerTextColor,
     hasActionType,
     hasActionValue,
     hasCtaLabel,
@@ -222,6 +236,10 @@ export async function POST(request: Request) {
       insertColumns.push("sponsor_card_style");
       insertValues.push(payload.sponsor_card_style || null);
     }
+    if (schema.hasSponsorBannerColors) {
+      insertColumns.push("sponsor_banner_background_color", "sponsor_banner_text_color");
+      insertValues.push(payload.sponsor_banner_background_color || null, payload.sponsor_banner_text_color || null);
+    }
     if (schema.hasActionType) {
       insertColumns.push("action_type");
       insertValues.push(payload.action_type);
@@ -321,6 +339,12 @@ export async function PATCH(request: Request) {
     if (schema.hasSponsorCardStyle) {
       setClauses.push(`sponsor_card_style = $${updateValues.length + 1}`);
       updateValues.push(payload.sponsor_card_style || null);
+    }
+    if (schema.hasSponsorBannerColors) {
+      setClauses.push(`sponsor_banner_background_color = $${updateValues.length + 1}`);
+      updateValues.push(payload.sponsor_banner_background_color || null);
+      setClauses.push(`sponsor_banner_text_color = $${updateValues.length + 1}`);
+      updateValues.push(payload.sponsor_banner_text_color || null);
     }
     if (schema.hasActionType) {
       setClauses.push(`action_type = $${updateValues.length + 1}`);

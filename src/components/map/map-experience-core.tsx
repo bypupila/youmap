@@ -44,6 +44,7 @@ import { VideoSelectionSheet } from "@/components/map/video-selection-sheet";
 import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 import { MapVideoCard } from "@/components/map/map-video-card";
 import { isDemoChannelId } from "@/lib/demo-data";
+import type { SponsorBannerColors } from "@/lib/sponsor-banner-colors";
 import { useSubscription } from "@/lib/use-subscription";
 
 type ContentFilterWindow = "all" | "365" | "90" | "30";
@@ -464,6 +465,27 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     }
     return byVideoId;
   }, [sponsors, videoLocations]);
+  const sponsorBannerColorsByYoutubeVideoId = useMemo(() => {
+    const byVideoId = new Map<string, SponsorBannerColors>();
+    for (const video of videoLocations) {
+      const youtubeVideoId = String(video.youtube_video_id || "").trim();
+      if (!youtubeVideoId) continue;
+      const videoRecordId = String(video.id || "").trim();
+      const matchedSponsors = sponsors.filter((sponsor) => {
+        if (!sponsor.brand_name || getSponsorScope(sponsor) !== "video") return false;
+        const assignedVideoIds = (sponsor.video_ids || []).map((id) => String(id || "").trim()).filter(Boolean);
+        return assignedVideoIds.includes(videoRecordId) || assignedVideoIds.includes(youtubeVideoId);
+      });
+      if (matchedSponsors.length !== 1) continue;
+      const [sponsor] = matchedSponsors;
+      if (!sponsor.sponsor_banner_background_color || !sponsor.sponsor_banner_text_color) continue;
+      byVideoId.set(youtubeVideoId, {
+        backgroundColor: sponsor.sponsor_banner_background_color,
+        textColor: sponsor.sponsor_banner_text_color,
+      });
+    }
+    return byVideoId;
+  }, [sponsors, videoLocations]);
   const resolveVideoSponsorNames = useCallback(
     (video: TravelVideoLocation | null | undefined) => {
       const key = String(video?.youtube_video_id || "").trim();
@@ -471,6 +493,14 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
       return sponsorNamesByYoutubeVideoId.get(key) || [];
     },
     [sponsorNamesByYoutubeVideoId]
+  );
+  const resolveVideoSponsorBannerColors = useCallback(
+    (video: TravelVideoLocation | null | undefined) => {
+      const key = String(video?.youtube_video_id || "").trim();
+      if (!key) return null;
+      return sponsorBannerColorsByYoutubeVideoId.get(key) || null;
+    },
+    [sponsorBannerColorsByYoutubeVideoId]
   );
 
   useEffect(() => {
@@ -798,6 +828,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                 watchedVideoIds={videoActivity.seenIds}
                 videoWatchStatusById={videoActivity.watchStatusById}
                 resolveSponsorNames={resolveVideoSponsorNames}
+                resolveSponsorBannerColors={resolveVideoSponsorBannerColors}
                 isDemoMode={useDemoMapEmbedPreviews}
                 onActiveVideoChange={setActiveVideo}
                 onPinnedVideoChange={(video) => {
@@ -959,6 +990,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                 videos={railSourceVideos}
                 selectedCountryCode={selectedCountryCode}
                 resolveSponsorNames={resolveVideoSponsorNames}
+                resolveSponsorBannerColors={resolveVideoSponsorBannerColors}
                 activity={videoActivity}
                 totalVideos={railVideoTotal}
                 highlightedVideoId={String(pinnedVideo?.youtube_video_id || "").trim() || null}
@@ -1151,6 +1183,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                   video={video}
                   activity={videoActivity}
                   sponsorNames={resolveVideoSponsorNames(video)}
+                  sponsorBannerColors={resolveVideoSponsorBannerColors(video)}
                   highlightedVideoId={String(pinnedVideo?.youtube_video_id || "").trim() || null}
                   isDemoMode={useDemoMapEmbedPreviews}
                   imagePriority={index === 0}
@@ -1842,6 +1875,7 @@ function VideoInspirationRail2({
   videos,
   selectedCountryCode,
   resolveSponsorNames,
+  resolveSponsorBannerColors,
   activity,
   totalVideos,
   highlightedVideoId,
@@ -1852,6 +1886,7 @@ function VideoInspirationRail2({
   videos: TravelVideoLocation[];
   selectedCountryCode: string | null;
   resolveSponsorNames: (video: TravelVideoLocation | null | undefined) => string[];
+  resolveSponsorBannerColors: (video: TravelVideoLocation | null | undefined) => SponsorBannerColors | null;
   activity: Pick<VideoActivityController, "seenIds" | "watchStatusById">;
   totalVideos: number;
   highlightedVideoId: string | null;
@@ -1903,6 +1938,7 @@ function VideoInspirationRail2({
               video={video}
               activity={activity}
               sponsorNames={sponsorNames}
+              sponsorBannerColors={resolveSponsorBannerColors(video)}
               highlightedVideoId={highlightedVideoId}
               isDemoMode={isDemoMode}
               imagePriority={index === 0}

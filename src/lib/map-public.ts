@@ -1,5 +1,5 @@
 import { normalizeUsername } from "@/lib/auth-identifiers";
-import { getSessionUserById, type AppUserRole, userIsSuperAdmin } from "@/lib/current-user";
+import { getSessionUserById, userIsSuperAdmin } from "@/lib/current-user";
 import { DEMO_CHANNEL, DEMO_CHANNEL_ID, DEMO_CHANNEL_SLUG, DEMO_USERNAME, isDemoUsername } from "@/lib/demo-data";
 import { buildMapFanVoteIdentity, createEmptyFanVoteSummary, loadMapFanVoteSummary, type MapFanVoteSummary } from "@/lib/map-fan-votes";
 import { buildRecommendedFanVoteOptions, type FanVoteOptionInput } from "@/lib/fan-vote-options";
@@ -10,6 +10,7 @@ import { sql } from "@/lib/neon";
 import type { TravelChannel } from "@/lib/types";
 import { buildViewerRegisterUrl } from "@/lib/map-urls";
 import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
+import { normalizeOptionalHexColor } from "@/lib/sponsor-banner-colors";
 import type { MapRailSponsor, MapViewerContext } from "@/lib/map-types";
 
 export interface PublicMapPayload extends MapDataPayload {
@@ -50,6 +51,9 @@ const EXAMPLE_SPONSORS: MapRailSponsor[] = [
     country_codes: ["GLOBAL"],
     video_ids: [],
     scope: "global",
+    sponsor_card_style: "premium_strip",
+    sponsor_banner_background_color: "#ffffff",
+    sponsor_banner_text_color: "#003b95",
     isExample: true,
   },
   {
@@ -62,6 +66,9 @@ const EXAMPLE_SPONSORS: MapRailSponsor[] = [
     country_codes: ["JP"],
     video_ids: [],
     scope: "country",
+    sponsor_card_style: "cta_red",
+    sponsor_banner_background_color: "#159a9c",
+    sponsor_banner_text_color: "#ffffff",
     isExample: true,
   },
   {
@@ -74,6 +81,9 @@ const EXAMPLE_SPONSORS: MapRailSponsor[] = [
     country_codes: ["AR", "CL", "PE"],
     video_ids: [],
     scope: "country",
+    sponsor_card_style: "coupon_yellow",
+    sponsor_banner_background_color: "#111827",
+    sponsor_banner_text_color: "#f8c846",
     isExample: true,
   },
   {
@@ -86,6 +96,9 @@ const EXAMPLE_SPONSORS: MapRailSponsor[] = [
     country_codes: ["GLOBAL"],
     video_ids: [],
     scope: "global",
+    sponsor_card_style: "premium_strip",
+    sponsor_banner_background_color: "#ff385c",
+    sponsor_banner_text_color: "#ffffff",
     isExample: true,
   },
 ];
@@ -162,6 +175,8 @@ async function loadSponsorsForUser(userId: string) {
     hasCtaLabel,
     hasDisplayOrder,
     hasSponsorCardStyle,
+    hasSponsorBannerBackgroundColor,
+    hasSponsorBannerTextColor,
     hasSponsorCategories,
   ] = await Promise.all([
     tableExists("public", "sponsor_video_rules"),
@@ -171,6 +186,8 @@ async function loadSponsorsForUser(userId: string) {
     columnExists("public", "sponsors", "cta_label"),
     columnExists("public", "sponsors", "display_order"),
     columnExists("public", "sponsors", "sponsor_card_style"),
+    columnExists("public", "sponsors", "sponsor_banner_background_color"),
+    columnExists("public", "sponsors", "sponsor_banner_text_color"),
     tableExists("public", "sponsor_categories"),
   ]);
   const selectVideoIds = hasSponsorVideoRules
@@ -183,6 +200,13 @@ async function loadSponsorsForUser(userId: string) {
   const selectCtaLabel = hasCtaLabel ? "s.cta_label as cta_label" : "null::text as cta_label";
   const selectDisplayOrder = hasDisplayOrder ? "s.display_order::int as display_order" : "0::int as display_order";
   const selectSponsorCardStyle = hasSponsorCardStyle ? "s.sponsor_card_style::text as sponsor_card_style" : "null::text as sponsor_card_style";
+  const hasSponsorBannerColors = hasSponsorBannerBackgroundColor && hasSponsorBannerTextColor;
+  const selectSponsorBannerBackgroundColor = hasSponsorBannerColors
+    ? "s.sponsor_banner_background_color::text as sponsor_banner_background_color"
+    : "null::text as sponsor_banner_background_color";
+  const selectSponsorBannerTextColor = hasSponsorBannerColors
+    ? "s.sponsor_banner_text_color::text as sponsor_banner_text_color"
+    : "null::text as sponsor_banner_text_color";
   const joinCategories = hasCategoryId && hasSponsorCategories ? "left join public.sponsor_categories sc on sc.id = s.category_id" : "";
   const sponsorOrderBy = hasDisplayOrder ? "order by s.display_order asc, s.created_at desc" : "order by s.created_at desc";
   const normalizeSponsorRow = (sponsor: {
@@ -198,6 +222,8 @@ async function loadSponsorsForUser(userId: string) {
     cta_label: string | null;
     display_order: number | string | null;
     sponsor_card_style: string | null;
+    sponsor_banner_background_color: string | null;
+    sponsor_banner_text_color: string | null;
     country_codes: string[] | null;
     video_ids: string[] | null;
   }): MapRailSponsor => {
@@ -219,6 +245,8 @@ async function loadSponsorsForUser(userId: string) {
       cta_label: sponsor.cta_label,
       display_order: Number.isFinite(displayOrder) ? displayOrder : 0,
       sponsor_card_style: normalizeSponsorCardStyle(sponsor.sponsor_card_style),
+      sponsor_banner_background_color: normalizeOptionalHexColor(sponsor.sponsor_banner_background_color),
+      sponsor_banner_text_color: normalizeOptionalHexColor(sponsor.sponsor_banner_text_color),
       country_codes: countryCodes,
       video_ids: videoIds,
       scope,
@@ -239,6 +267,8 @@ async function loadSponsorsForUser(userId: string) {
       cta_label: string | null;
       display_order: number | string | null;
       sponsor_card_style: string | null;
+      sponsor_banner_background_color: string | null;
+      sponsor_banner_text_color: string | null;
       country_codes: string[] | null;
       video_ids: string[] | null;
     }>>(
@@ -256,6 +286,8 @@ async function loadSponsorsForUser(userId: string) {
           ${selectCtaLabel},
           ${selectDisplayOrder},
           ${selectSponsorCardStyle},
+          ${selectSponsorBannerBackgroundColor},
+          ${selectSponsorBannerTextColor},
           array_remove(array_agg(distinct sgr.country_code), null) as country_codes,
           ${selectVideoIds}
         from public.sponsors s
@@ -289,6 +321,8 @@ async function loadSponsorsForUser(userId: string) {
     cta_label: string | null;
     display_order: number | string | null;
     sponsor_card_style: string | null;
+    sponsor_banner_background_color: string | null;
+    sponsor_banner_text_color: string | null;
     country_codes: string[] | null;
     video_ids: string[] | null;
   }>>(
@@ -306,6 +340,8 @@ async function loadSponsorsForUser(userId: string) {
         ${selectCtaLabel},
         ${selectDisplayOrder},
         ${selectSponsorCardStyle},
+        ${selectSponsorBannerBackgroundColor},
+        ${selectSponsorBannerTextColor},
         array_remove(array_agg(distinct sgr.country_code), null) as country_codes,
         ${selectVideoIds}
       from public.sponsors s

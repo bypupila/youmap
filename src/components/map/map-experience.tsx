@@ -64,6 +64,7 @@ import type { MapRailSponsor, MapViewerContext } from "@/lib/map-types";
 import { buildPublicMapUrl } from "@/lib/map-urls";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { SPONSOR_INQUIRY_STATUSES, type SponsorInquiryStatus } from "@/lib/sponsor-inquiries";
+import type { SponsorBannerColors } from "@/lib/sponsor-banner-colors";
 import { normalizeExternalSponsorUrl } from "@/lib/sponsor-url";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -488,6 +489,26 @@ export function MapExperience({
       }
 
       return Array.from(names);
+    },
+    [sponsorItems]
+  );
+  const resolveVideoSponsorBannerColors = useCallback(
+    (video: TravelVideoLocation | null | undefined): SponsorBannerColors | null => {
+      const youtubeVideoId = String(video?.youtube_video_id || "").trim();
+      if (!youtubeVideoId) return null;
+      const videoRecordId = String(video?.id || "").trim();
+      const matchedSponsors = sponsorItems.filter((sponsor) => {
+        if (!sponsor.brand_name || sponsor.scope !== "video") return false;
+        const assignedVideoIds = (sponsor.video_ids || []).map((id) => String(id || "").trim()).filter(Boolean);
+        return assignedVideoIds.includes(videoRecordId) || assignedVideoIds.includes(youtubeVideoId);
+      });
+      if (matchedSponsors.length !== 1) return null;
+      const [sponsor] = matchedSponsors;
+      if (!sponsor.sponsor_banner_background_color || !sponsor.sponsor_banner_text_color) return null;
+      return {
+        backgroundColor: sponsor.sponsor_banner_background_color,
+        textColor: sponsor.sponsor_banner_text_color,
+      };
     },
     [sponsorItems]
   );
@@ -1700,6 +1721,7 @@ export function MapExperience({
           watchedVideoIds={videoActivity.seenIds}
           videoWatchStatusById={videoActivity.watchStatusById}
           resolveSponsorNames={resolveVideoSponsorNames}
+          resolveSponsorBannerColors={resolveVideoSponsorBannerColors}
           isDemoMode={isDemoMode}
           command={globeCommand}
           rotationEnabled={globeRotationEnabled}
@@ -1732,6 +1754,7 @@ export function MapExperience({
         watchedVideoIds={videoActivity.seenIds}
         videoWatchStatusById={videoActivity.watchStatusById}
         resolveSponsorNames={resolveVideoSponsorNames}
+        resolveSponsorBannerColors={resolveVideoSponsorBannerColors}
         isDemoMode={isDemoMode}
         command={globeCommand}
         rotationEnabled={globeRotationEnabled}

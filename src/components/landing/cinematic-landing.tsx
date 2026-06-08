@@ -104,7 +104,7 @@ export async function CinematicLanding() {
   const previewVideos = buildPreviewVideos(videoLocations);
 
   return (
-    <main className="creator-landing min-h-[100dvh] overflow-hidden bg-[#070a0d] text-[#f5f2ed]">
+    <main className="creator-landing min-h-[100dvh] overflow-x-clip bg-[#070a0d] text-[#f5f2ed]">
       <div className="pointer-events-none fixed inset-0 z-0 creator-noise" />
       <div className="relative z-[1] mx-auto w-full max-w-[1500px] px-5 py-4 sm:px-8 lg:px-14">
         <CreatorNav />

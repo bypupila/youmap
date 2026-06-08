@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowsClockwise, CaretDown, CaretUp, Check, Copy, GlobeHemisphereWest, MapPin, Plus, Trash, Video } from "@phosphor-icons/react";
 import { AnalyticsDashboard } from "@/components/analytics-dashboard";
 import { SponsorStylePreview } from "@/components/creator/sponsor-style-preview";
+import { SponsorVideoPreview } from "@/components/creator/sponsor-video-preview";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,13 @@ import type { MapRailSponsor } from "@/lib/map-types";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { normalizeExternalSponsorUrl, normalizeSponsorLogoUrl } from "@/lib/sponsor-url";
 import { getSponsorCardStyleLabel, type SponsorCardStyle } from "@/lib/sponsor-card-style";
+import {
+  getDefaultSponsorBannerColors,
+  hasReadableSponsorBannerContrast,
+  normalizeHexColor,
+  type SponsorBannerColors,
+} from "@/lib/sponsor-banner-colors";
+import type { MapVideoCardActivity } from "@/components/map/map-video-card";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -84,10 +92,13 @@ export function CreatorAdminPanel({
   const [sponsorCategoryName, setSponsorCategoryName] = useState("");
   const [sponsorCtaLabel, setSponsorCtaLabel] = useState("");
   const [sponsorCardStyle, setSponsorCardStyle] = useState<SponsorCardStyle>("cta_red");
+  const [sponsorBannerBackgroundColor, setSponsorBannerBackgroundColor] = useState(getDefaultSponsorBannerColors("cta_red").backgroundColor);
+  const [sponsorBannerTextColor, setSponsorBannerTextColor] = useState(getDefaultSponsorBannerColors("cta_red").textColor);
   const [sponsorScope, setSponsorScope] = useState<"global" | "country" | "video">("country");
   const [sponsorActionType, setSponsorActionType] = useState<"link" | "coupon">("link");
   const [selectedCountryCodes, setSelectedCountryCodes] = useState<string[]>([]);
   const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([]);
+  const [sponsorPreviewVideoId, setSponsorPreviewVideoId] = useState("");
   const [creatingSponsor, setCreatingSponsor] = useState(false);
   const [sponsorError, setSponsorError] = useState<string | null>(null);
   const [deletingSponsorId, setDeletingSponsorId] = useState<string | null>(null);
@@ -119,7 +130,17 @@ export function CreatorAdminPanel({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [videos]);
   const sponsorVideoOptions = useMemo(() => {
-    return videos.filter((video) => Boolean(String(video.id || "").trim())).slice(0, 180);
+    return videos
+      .map((video) => ({
+        video,
+        videoId: String(video.id || video.youtube_video_id || "").trim(),
+      }))
+      .filter((entry) => Boolean(entry.videoId))
+      .slice(0, 180)
+      .map((entry) => ({
+        ...entry.video,
+        id: entry.videoId,
+      }));
   }, [videos]);
   const sponsorVideoTitleById = useMemo(() => {
     const map = new Map<string, string>();
@@ -153,6 +174,146 @@ export function CreatorAdminPanel({
       .filter(Boolean);
     return Array.from(new Set([...SPONSOR_CATEGORY_PRESETS, ...dynamicOptions]));
   }, [sponsors]);
+  const videosById = useMemo(() => {
+    const map = new Map<string, TravelVideoLocation>();
+    for (const video of videos) {
+      const primaryId = String(video.id || "").trim();
+      const fallbackId = String(video.youtube_video_id || "").trim();
+      if (primaryId) map.set(primaryId, video);
+      if (fallbackId) map.set(fallbackId, video);
+    }
+    return map;
+  }, [videos]);
+  const normalizedSelectedVideoIds = useMemo(() => normalizeIdList(selectedVideoIds), [selectedVideoIds]);
+  const normalizedSelectedCountryCodes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedCountryCodes
+            .map((countryCode) => String(countryCode || "").trim().toUpperCase())
+            .filter((countryCode) => countryCode.length === 2)
+        )
+      ),
+    [selectedCountryCodes]
+  );
+  const sponsorPreviewCandidateIds = useMemo(() => {
+    if (sponsorScope === "video") return normalizedSelectedVideoIds;
+
+    if (sponsorScope === "country") {
+      const selectedCountries = new Set(normalizedSelectedCountryCodes);
+      if (selectedCountries.size === 0) {
+        return sponsorVideoOptions
+          .slice(0, 12)
+          .map((video) => String(video.id || video.youtube_video_id || "").trim())
+          .filter(Boolean);
+      }
+      return sponsorVideoOptions
+        .filter((video) => selectedCountries.has(String(video.country_code || "").trim().toUpperCase()))
+        .map((video) => String(video.id || video.youtube_video_id || "").trim())
+        .filter(Boolean);
+    }
+
+    return sponsorVideoOptions
+      .slice(0, 12)
+      .map((video) => String(video.id || video.youtube_video_id || "").trim())
+      .filter(Boolean);
+  }, [normalizedSelectedCountryCodes, normalizedSelectedVideoIds, sponsorScope, sponsorVideoOptions]);
+  const sponsorPreviewVideoOptions = useMemo(
+    () =>
+      sponsorPreviewCandidateIds
+        .map((videoId) => {
+          const video = videosById.get(videoId);
+          if (!video) return null;
+          return {
+            value: videoId,
+            label: video.title,
+          };
+        })
+        .filter((option): option is { value: string; label: string } => Boolean(option)),
+    [sponsorPreviewCandidateIds, videosById]
+  );
+  const sponsorPreviewSeed = useMemo(() => [...sponsorPreviewCandidateIds].sort((a, b) => a.localeCompare(b)).join("|"), [sponsorPreviewCandidateIds]);
+
+  useEffect(() => {
+    if (sponsorPreviewCandidateIds.length === 0) {
+      setSponsorPreviewVideoId("");
+      return;
+    }
+
+    setSponsorPreviewVideoId((current) => {
+      if (current && sponsorPreviewCandidateIds.includes(current)) return current;
+      return pickStableVideoId(sponsorPreviewCandidateIds, sponsorPreviewSeed);
+    });
+  }, [sponsorPreviewCandidateIds, sponsorPreviewSeed]);
+
+  const sponsorPreviewVideo = sponsorPreviewVideoId ? videosById.get(sponsorPreviewVideoId) || null : null;
+  const sponsorBannerColors = useMemo<SponsorBannerColors | null>(() => {
+    const backgroundColor = normalizeHexColor(sponsorBannerBackgroundColor);
+    const textColor = normalizeHexColor(sponsorBannerTextColor);
+    if (!backgroundColor || !textColor) return null;
+    return { backgroundColor, textColor };
+  }, [sponsorBannerBackgroundColor, sponsorBannerTextColor]);
+  const sponsorBannerContrastOk = Boolean(
+    sponsorBannerColors && hasReadableSponsorBannerContrast(sponsorBannerColors.backgroundColor, sponsorBannerColors.textColor)
+  );
+  const sponsorPreviewNames = useMemo(() => {
+    if (!sponsorPreviewVideo) return [];
+
+    const candidateIds = new Set([
+      String(sponsorPreviewVideo.id || "").trim(),
+      String(sponsorPreviewVideo.youtube_video_id || "").trim(),
+    ]);
+    const names = new Set<string>();
+
+    const draftName = sponsorBrandName.trim() || "Marca";
+    if (sponsorScope === "global") {
+      names.add(draftName);
+    } else if (sponsorScope === "country") {
+      const previewCountryCode = String(sponsorPreviewVideo.country_code || "").trim().toUpperCase();
+      if (normalizedSelectedCountryCodes.length === 0 || normalizedSelectedCountryCodes.includes(previewCountryCode)) {
+        names.add(draftName);
+      }
+    } else if (candidateIds.size > 0) {
+      const selectedDraftIds = new Set(normalizedSelectedVideoIds);
+      if (selectedDraftIds.has(String(sponsorPreviewVideo.id || "").trim()) || selectedDraftIds.has(String(sponsorPreviewVideo.youtube_video_id || "").trim())) {
+        names.add(draftName);
+      }
+    }
+
+    for (const sponsor of sponsors) {
+      const assignedIds = new Set(
+        (sponsor.video_ids || [])
+          .map((videoId) => String(videoId || "").trim())
+          .filter(Boolean)
+      );
+      for (const candidateId of candidateIds) {
+        if (assignedIds.has(candidateId)) {
+          names.add(sponsor.brand_name);
+          break;
+        }
+      }
+    }
+
+    return Array.from(names);
+  }, [normalizedSelectedCountryCodes, normalizedSelectedVideoIds, sponsorBrandName, sponsorPreviewVideo, sponsorScope, sponsors]);
+  const sponsorPreviewActivity = useMemo<MapVideoCardActivity>(() => {
+    if (!sponsorPreviewVideoId) return {};
+
+    const hash = hashString(sponsorPreviewVideoId);
+    const states: Array<"watched" | "not_finished" | "watch_later"> = [
+      "watched",
+      "not_finished",
+      "watch_later",
+    ];
+    const watchStatus = states[hash % states.length];
+    const featured = hash % 5 === 0;
+
+    return {
+      seenIds: new Set([sponsorPreviewVideoId]),
+      featuredIds: featured ? new Set([sponsorPreviewVideoId]) : new Set(),
+      watchStatusById: { [sponsorPreviewVideoId]: watchStatus },
+    };
+  }, [sponsorPreviewVideoId]);
 
   function resetSponsorForm() {
     setSponsorError(null);
@@ -164,10 +325,20 @@ export function CreatorAdminPanel({
     setSponsorCategoryName("");
     setSponsorCtaLabel("");
     setSponsorCardStyle("cta_red");
+    setSponsorBannerBackgroundColor(getDefaultSponsorBannerColors("cta_red").backgroundColor);
+    setSponsorBannerTextColor(getDefaultSponsorBannerColors("cta_red").textColor);
     setSponsorScope("country");
     setSponsorActionType("link");
     setSelectedCountryCodes([]);
     setSelectedVideoIds([]);
+    setSponsorPreviewVideoId("");
+  }
+
+  function selectSponsorCardStyle(style: SponsorCardStyle) {
+    const defaults = getDefaultSponsorBannerColors(style);
+    setSponsorCardStyle(style);
+    setSponsorBannerBackgroundColor(defaults.backgroundColor);
+    setSponsorBannerTextColor(defaults.textColor);
   }
 
   const bulkRows = useMemo(() => {
@@ -310,6 +481,16 @@ export function CreatorAdminPanel({
       setSponsorError("Selecciona al menos un video para scope video.");
       return;
     }
+    const normalizedBannerBackgroundColor = normalizeHexColor(sponsorBannerBackgroundColor);
+    const normalizedBannerTextColor = normalizeHexColor(sponsorBannerTextColor);
+    if (!normalizedBannerBackgroundColor || !normalizedBannerTextColor) {
+      setSponsorError("Usa colores hex válidos para el sponsor banner.");
+      return;
+    }
+    if (!hasReadableSponsorBannerContrast(normalizedBannerBackgroundColor, normalizedBannerTextColor)) {
+      setSponsorError("El texto del sponsor banner necesita más contraste con el fondo.");
+      return;
+    }
 
     setCreatingSponsor(true);
     setSponsorError(null);
@@ -328,6 +509,8 @@ export function CreatorAdminPanel({
         action_value: sponsorActionType === "coupon" ? discount_code : null,
         cta_label,
         sponsor_card_style: sponsorCardStyle,
+        sponsor_banner_background_color: normalizedBannerBackgroundColor,
+        sponsor_banner_text_color: normalizedBannerTextColor,
       };
 
       if (isDemoMode) {
@@ -349,6 +532,8 @@ export function CreatorAdminPanel({
             video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
             scope: sponsorScope,
             sponsor_card_style: sponsorCardStyle,
+            sponsor_banner_background_color: normalizedBannerBackgroundColor,
+            sponsor_banner_text_color: normalizedBannerTextColor,
             isExample: true,
             click_count: 0,
             start_date: null,
@@ -396,6 +581,8 @@ export function CreatorAdminPanel({
           video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
           scope: sponsorScope,
           sponsor_card_style: sponsorCardStyle,
+          sponsor_banner_background_color: normalizedBannerBackgroundColor,
+          sponsor_banner_text_color: normalizedBannerTextColor,
           click_count: 0,
           start_date: null,
           end_date: null,
@@ -784,15 +971,41 @@ export function CreatorAdminPanel({
               </div>
 
               <SponsorStylePreview
-                brandName={sponsorBrandName.trim() || "Marca"}
-                logoUrl={normalizeSponsorLogoUrl(sponsorLogoUrl)}
-                description={sponsorDescription.trim() || null}
-                ctaLabel={sponsorCtaLabel.trim() || null}
-                actionType={sponsorActionType}
-                actionValue={(sponsorActionType === "coupon" ? sponsorDiscountCode : sponsorAffiliateUrl).trim() || null}
                 selectedStyle={sponsorCardStyle}
-                onSelectStyle={setSponsorCardStyle}
+                onSelectStyle={selectSponsorCardStyle}
               />
+
+              <section className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#9da5ae]">Colores del sponsor banner</p>
+                    <p className="mt-1 text-[12px] leading-4 text-[#c6ccd4]">
+                      Personaliza solo la franja del sponsor con colores de marca.
+                    </p>
+                  </div>
+                  <div className="flex overflow-hidden rounded-lg border border-white/10">
+                    <span className="h-8 w-10" style={{ backgroundColor: sponsorBannerBackgroundColor }} />
+                    <span className="h-8 w-10" style={{ backgroundColor: sponsorBannerTextColor }} />
+                  </div>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <ColorField
+                    label="Banner background"
+                    value={sponsorBannerBackgroundColor}
+                    onChange={setSponsorBannerBackgroundColor}
+                  />
+                  <ColorField
+                    label="Banner text"
+                    value={sponsorBannerTextColor}
+                    onChange={setSponsorBannerTextColor}
+                  />
+                </div>
+                {!sponsorBannerContrastOk ? (
+                  <p className="rounded-lg border border-[#ff5a3d]/25 bg-[#ff5a3d]/10 px-3 py-2 text-[11px] leading-4 text-[#ffc8bf]">
+                    El texto del sponsor banner necesita más contraste con el fondo para poder guardarse.
+                  </p>
+                ) : null}
+              </section>
 
               {sponsorScope === "country" ? (
                 <select
@@ -825,8 +1038,20 @@ export function CreatorAdminPanel({
                   })}
                 </select>
               ) : null}
+              {sponsorPreviewVideo && sponsorPreviewVideoOptions.length > 0 ? (
+                <SponsorVideoPreview
+                  previewVideoOptions={sponsorPreviewVideoOptions}
+                  selectedPreviewVideoId={sponsorPreviewVideoId}
+                  onSelectPreviewVideoId={setSponsorPreviewVideoId}
+                  previewVideo={sponsorPreviewVideo}
+                  previewVideoSponsorNames={sponsorPreviewNames}
+                  previewActivity={sponsorPreviewActivity}
+                  selectedStyle={sponsorCardStyle}
+                  sponsorBannerColors={sponsorBannerColors}
+                />
+              ) : null}
               <div className="flex items-center gap-2">
-                <Button type="submit" size="sm" disabled={creatingSponsor}>
+                <Button type="submit" size="sm" disabled={creatingSponsor || !sponsorBannerContrastOk}>
                   <Plus size={14} />
                   {creatingSponsor ? "Guardando..." : "Agregar sponsor"}
                 </Button>
@@ -1117,6 +1342,40 @@ function formatSponsorStatus(status: "confirmado" | "detectado_automaticamente" 
   }
 }
 
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const safeColorValue = normalizeHexColor(value) || "#000000";
+
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8f98a4]">{label}</span>
+      <span className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+        <input
+          type="color"
+          value={safeColorValue}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-10 w-11 cursor-pointer rounded-lg border border-white/10 bg-white/[0.03] p-1"
+          aria-label={label}
+        />
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="#ffffff"
+          maxLength={7}
+          className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 font-mono text-[13px] text-[#f5f7fb] outline-none"
+        />
+      </span>
+    </label>
+  );
+}
+
 function formatSponsorCoverage(sponsor: MapRailSponsor, videoTitleById: Map<string, string>) {
   const scope = sponsor.scope || ((sponsor.video_ids || []).length > 0 ? "video" : (sponsor.country_codes || []).length > 0 ? "country" : "global");
   if (scope === "video") {
@@ -1132,4 +1391,31 @@ function formatSponsorCoverage(sponsor: MapRailSponsor, videoTitleById: Map<stri
     return `PAIS · ${countryCodes.join(", ") || "sin países"}`;
   }
   return "GLOBAL";
+}
+
+function normalizeIdList(values: string[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function pickStableVideoId(videoIds: string[], seed: string) {
+  const normalized = normalizeIdList(videoIds);
+  if (normalized.length === 0) return "";
+  const sorted = [...normalized].sort((a, b) => a.localeCompare(b));
+  const index = hashString(`${seed}|${sorted.join("|")}`) % sorted.length;
+  return sorted[index] || "";
+}
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }

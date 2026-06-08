@@ -2,6 +2,7 @@ import Image from "next/image";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { getDemoMapPreviewImage } from "@/lib/demo-video-previews";
+import type { SponsorBannerColors } from "@/lib/sponsor-banner-colors";
 import { resolveSponsorCardVariant } from "@/lib/sponsor-card-style";
 import { formatVideoDuration, getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 
@@ -17,6 +18,7 @@ type MapVideoCardProps = {
   video: TravelVideoLocation;
   activity?: MapVideoCardActivity;
   sponsorNames?: string[];
+  sponsorBannerColors?: SponsorBannerColors | null;
   highlightedVideoId?: string | null;
   isDemoMode?: boolean;
   className?: string;
@@ -28,6 +30,7 @@ export function MapVideoCard({
   video,
   activity,
   sponsorNames = [],
+  sponsorBannerColors = null,
   highlightedVideoId = null,
   isDemoMode = false,
   className,
@@ -51,6 +54,15 @@ export function MapVideoCard({
   const thumbnailSrc = isDemoMode
     ? getDemoMapPreviewImage(video.youtube_video_id)
     : video.thumbnail_url || "/creators/final-cta-map-mockup.png";
+  const hasSponsorBanner = sponsorNames.length > 0;
+  const sponsorBannerStyle =
+    sponsorBannerColors && sponsorNames.length === 1
+      ? {
+          backgroundColor: sponsorBannerColors.backgroundColor,
+          color: sponsorBannerColors.textColor,
+          borderColor: sponsorBannerColors.backgroundColor,
+        }
+      : undefined;
 
   const cardShellClassName = cn(
     "group relative w-[260px] shrink-0 overflow-hidden rounded-xl border-2 bg-[#050505] transition-all duration-300 cursor-pointer flex flex-col",
@@ -95,15 +107,19 @@ export function MapVideoCard({
   }
 
   const sponsorBanner = (() => {
-    if (sponsorNames.length === 0) return null;
+    if (!hasSponsorBanner) return null;
     if (sponsorVariant === "multi_bar") {
       return (
-        <div className="shrink-0 bg-white/[0.05] border-b border-white/[0.05] p-2 flex items-center justify-between z-20">
-          <span className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-widest">Sponsored by</span>
-          <div className="flex gap-1">
-            {sponsorNames.map((name) => (
-              <span key={name} className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase">{name}</span>
-            ))}
+        <div className="shrink-0 border-b border-white/[0.06] bg-white/[0.05] p-2 text-white">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[7.5px] font-bold uppercase tracking-widest text-zinc-500">Sponsored by</span>
+            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
+              {sponsorNames.map((name) => (
+                <span key={name} className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[8px] font-black uppercase text-black">
+                  {name}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       );
@@ -111,11 +127,13 @@ export function MapVideoCard({
 
     if (sponsorVariant === "coupon_yellow") {
       return (
-        <div className="shrink-0 bg-zinc-900 border-b-2 border-dashed border-zinc-600 p-1.5 flex items-center justify-between z-20 text-yellow-400">
-          <span className="text-[8px] font-black uppercase">{sponsorNames[0]}</span>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px]">✂</span>
-            <span className="text-[8px] font-mono font-bold tracking-widest uppercase border border-yellow-500/50 px-1">CODE: GURU20</span>
+        <div className="shrink-0 border-b border-[#5f531f] bg-[#15120a] p-1.5 text-yellow-400" style={sponsorBannerStyle}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[8px] font-black uppercase">{sponsorNames[0]}</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px]">✂</span>
+              <span className="border border-yellow-500/50 px-1 text-[8px] font-mono font-bold uppercase tracking-widest">CODE: GURU20</span>
+            </div>
           </div>
         </div>
       );
@@ -123,15 +141,20 @@ export function MapVideoCard({
 
     if (sponsorVariant === "premium_strip") {
       return (
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 px-4 py-0.5 rounded-b-xl bg-white text-black shadow-md border-b-2 border-x-2 border-zinc-200">
-          <p className="text-[8px] font-black uppercase">{sponsorNames[0]}</p>
+        <div
+          className="shrink-0 border-b border-white/10 bg-white px-4 py-1 text-black shadow-[0_6px_20px_-14px_rgba(255,255,255,0.45)]"
+          style={sponsorBannerStyle}
+        >
+          <p className="truncate text-center text-[8px] font-black uppercase">{sponsorNames[0]}</p>
         </div>
       );
     }
 
     return (
-      <div className="shrink-0 bg-red-600 hover:bg-red-500 transition-colors p-2 flex items-center justify-center z-20 text-white gap-2">
-        <span className="text-[9px] font-black uppercase tracking-widest">[ {sponsorNames[0]} ] 50% OFF ➔</span>
+      <div className="shrink-0 border-b border-red-500/35 bg-red-600 p-2 text-white transition-colors hover:bg-red-500" style={sponsorBannerStyle}>
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-[9px] font-black uppercase tracking-widest">[ {sponsorNames[0]} ] 50% OFF ➔</span>
+        </div>
       </div>
     );
   })();
@@ -151,6 +174,18 @@ export function MapVideoCard({
     >
       {sponsorBanner}
 
+      {hasSponsorBanner && badges.length > 0 ? (
+        <div className="shrink-0 border-b border-white/[0.05] bg-black/75 px-2 py-1">
+          <div className="flex flex-wrap gap-1.5">
+            {badges.map((badge) => (
+              <span key={badge.text} className={cn("px-1.5 py-0.5 text-[8px] font-bold uppercase rounded shadow-sm border", badge.color)}>
+                {badge.text}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="relative flex-1 w-full overflow-hidden">
         <Image
           src={thumbnailSrc}
@@ -161,13 +196,15 @@ export function MapVideoCard({
           className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500"
         />
 
-        <div className="absolute top-2 left-2 z-20 flex gap-1.5 justify-start">
-          {badges.map((badge) => (
-            <span key={badge.text} className={cn("px-1.5 py-0.5 text-[8px] font-bold uppercase rounded shadow-sm border", badge.color)}>
-              {badge.text}
-            </span>
-          ))}
-        </div>
+        {!hasSponsorBanner && badges.length > 0 ? (
+          <div className="absolute top-2 left-2 z-20 flex gap-1.5 justify-start">
+            {badges.map((badge) => (
+              <span key={badge.text} className={cn("px-1.5 py-0.5 text-[8px] font-bold uppercase rounded shadow-sm border", badge.color)}>
+                {badge.text}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="absolute bottom-0 left-0 right-0 z-20 bg-black/50 backdrop-blur-sm p-2">
           <p className="text-[11px] font-semibold text-white leading-tight drop-shadow-[0_2px_3px_rgba(0,0,0,1)]">

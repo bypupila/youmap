@@ -12,6 +12,7 @@ import { SponsorBanner } from "@/components/sponsors/sponsor-banner";
 import { createCountryFlagElement, getCountryFlagClassName } from "@/lib/country-flags";
 import { getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
 import { MapVideoCard } from "@/components/map/map-video-card";
+import type { SponsorBannerColors } from "@/lib/sponsor-banner-colors";
 
 type PointKind = "country" | "video";
 
@@ -64,6 +65,7 @@ interface TravelGlobeProps {
   watchedVideoIds?: Set<string>;
   videoWatchStatusById?: Record<string, "not_started" | "not_finished" | "watched" | "watch_later">;
   resolveSponsorNames?: (video: TravelVideoLocation | null | undefined) => string[];
+  resolveSponsorBannerColors?: (video: TravelVideoLocation | null | undefined) => SponsorBannerColors | null;
   isDemoMode?: boolean;
   interactive?: boolean;
   showControls?: boolean;
@@ -98,6 +100,7 @@ export function TravelGlobe({
   watchedVideoIds,
   videoWatchStatusById,
   resolveSponsorNames,
+  resolveSponsorBannerColors,
   isDemoMode = false,
   interactive = true,
   showControls = true,
@@ -929,6 +932,7 @@ export function TravelGlobe({
                     video={video}
                     activity={{ seenIds: watchedVideoIds, watchStatusById: videoWatchStatusById }}
                     sponsorNames={resolveSponsorNames?.(video) || []}
+                    sponsorBannerColors={resolveSponsorBannerColors?.(video) || null}
                     isDemoMode={isDemoMode}
                     onSelect={() => onPinnedVideoChange?.(video)}
                   />
@@ -962,6 +966,7 @@ export function TravelGlobe({
             video={hoveredPoint.videos[0]}
             activity={{ seenIds: watchedVideoIds, watchStatusById: videoWatchStatusById }}
             sponsorNames={resolveSponsorNames?.(hoveredPoint.videos[0]) || []}
+            sponsorBannerColors={resolveSponsorBannerColors?.(hoveredPoint.videos[0]) || null}
             isDemoMode={isDemoMode}
             imagePriority
             onSelect={(video) => onPinnedVideoChange?.(video)}

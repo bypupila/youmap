@@ -4,6 +4,7 @@ import { sql } from "@/lib/neon";
 import type { TravelChannel } from "@/lib/types";
 import { buildPublicMapUrl } from "@/lib/map-urls";
 import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
+import { normalizeOptionalHexColor } from "@/lib/sponsor-banner-colors";
 
 export type CreatorAdminTab = "resumen" | "videos" | "paises" | "votaciones" | "sponsors" | "audiencia" | "actividad";
 export type CreatorAdminUiStatus = "auto" | "manual" | "pending" | "unlocated";
@@ -57,6 +58,8 @@ export interface CreatorAdminSponsor {
   video_ids: string[];
   scope: "global" | "country" | "video";
   sponsor_card_style: "cta_red" | "coupon_yellow" | "premium_strip" | null;
+  sponsor_banner_background_color: string | null;
+  sponsor_banner_text_color: string | null;
   click_count: number;
   start_date: string | null;
   end_date: string | null;
@@ -227,6 +230,8 @@ interface SponsorRow {
   discount_code: string | null;
   description: string | null;
   sponsor_card_style: string | null;
+  sponsor_banner_background_color: string | null;
+  sponsor_banner_text_color: string | null;
   active: boolean;
   country_codes: string[] | null;
   video_ids: string[] | null;
@@ -264,6 +269,7 @@ interface CreatorAdminSchemaFeatures {
   hasVideoSponsorCardStyle: boolean;
   hasVideoLocationInternalNotes: boolean;
   hasSponsorCardStyle: boolean;
+  hasSponsorBannerColors: boolean;
   hasSponsorDates: boolean;
   hasSponsorInternalNotes: boolean;
   hasPollVisibility: boolean;
@@ -317,6 +323,8 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     hasVideoSponsorCardStyle,
     hasVideoLocationInternalNotes,
     hasSponsorCardStyle,
+    hasSponsorBannerBackgroundColor,
+    hasSponsorBannerTextColor,
     hasSponsorStartDate,
     hasSponsorEndDate,
     hasSponsorInternalNotes,
@@ -335,6 +343,8 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     columnExists("public", "videos", "sponsor_card_style"),
     columnExists("public", "video_locations", "internal_notes"),
     columnExists("public", "sponsors", "sponsor_card_style"),
+    columnExists("public", "sponsors", "sponsor_banner_background_color"),
+    columnExists("public", "sponsors", "sponsor_banner_text_color"),
     columnExists("public", "sponsors", "start_date"),
     columnExists("public", "sponsors", "end_date"),
     columnExists("public", "sponsors", "internal_notes"),
@@ -355,6 +365,7 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     hasVideoSponsorCardStyle,
     hasVideoLocationInternalNotes,
     hasSponsorCardStyle,
+    hasSponsorBannerColors: hasSponsorBannerBackgroundColor && hasSponsorBannerTextColor,
     hasSponsorDates: hasSponsorStartDate && hasSponsorEndDate,
     hasSponsorInternalNotes,
     hasPollVisibility,
@@ -530,6 +541,12 @@ async function loadAdminSponsors(ownerUserId: string, features: CreatorAdminSche
   const selectEndDate = features.hasSponsorDates ? "s.end_date" : "null::timestamptz as end_date";
   const selectInternalNotes = features.hasSponsorInternalNotes ? "s.internal_notes" : "null::text as internal_notes";
   const selectSponsorCardStyle = features.hasSponsorCardStyle ? "s.sponsor_card_style::text as sponsor_card_style" : "null::text as sponsor_card_style";
+  const selectSponsorBannerBackgroundColor = features.hasSponsorBannerColors
+    ? "s.sponsor_banner_background_color::text as sponsor_banner_background_color"
+    : "null::text as sponsor_banner_background_color";
+  const selectSponsorBannerTextColor = features.hasSponsorBannerColors
+    ? "s.sponsor_banner_text_color::text as sponsor_banner_text_color"
+    : "null::text as sponsor_banner_text_color";
   const selectVideoIds = hasVideoSponsorRules
     ? "coalesce(array_remove(array_agg(distinct svr.video_id::text), null), '{}'::text[]) as video_ids"
     : "'{}'::text[] as video_ids";
@@ -546,6 +563,8 @@ async function loadAdminSponsors(ownerUserId: string, features: CreatorAdminSche
         s.discount_code,
         s.description,
         ${selectSponsorCardStyle},
+        ${selectSponsorBannerBackgroundColor},
+        ${selectSponsorBannerTextColor},
         s.active,
         ${selectStartDate},
         ${selectEndDate},
@@ -716,6 +735,8 @@ function normalizeSponsorRow(row: SponsorRow): CreatorAdminSponsor {
     discount_code: row.discount_code,
     description: row.description,
     sponsor_card_style: normalizeSponsorCardStyle(row.sponsor_card_style),
+    sponsor_banner_background_color: normalizeOptionalHexColor(row.sponsor_banner_background_color),
+    sponsor_banner_text_color: normalizeOptionalHexColor(row.sponsor_banner_text_color),
     active: row.active,
     country_codes: countryCodes,
     video_ids: videoIds,

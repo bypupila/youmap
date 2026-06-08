@@ -26,5 +26,7 @@ export interface MapRailSponsor {
   video_ids?: string[];
   scope?: "global" | "country" | "video";
   sponsor_card_style?: SponsorCardStyle | null;
+  sponsor_banner_background_color?: string | null;
+  sponsor_banner_text_color?: string | null;
   isExample?: boolean;
 }
