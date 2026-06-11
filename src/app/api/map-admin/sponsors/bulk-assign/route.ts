@@ -34,10 +34,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });
     }
 
-    if (!payload.preview && !String(payload.reason || "").trim()) {
-      return NextResponse.json({ error: "El motivo es obligatorio para asignacion masiva." }, { status: 400 });
-    }
-
     const hasSponsorVideoRules = await tableExists("public", "sponsor_video_rules");
     if (!hasSponsorVideoRules) {
       return NextResponse.json({ error: "La tabla sponsor_video_rules no existe en este entorno." }, { status: 400 });
@@ -83,6 +79,7 @@ export async function POST(request: Request) {
         sponsorName: sponsor.brand_name,
         requested: uniqueVideoIds.length,
         applicable: validVideoIds.length,
+        applied: validVideoIds.length,
         skipped: skippedVideoIds.length,
         skippedVideoIds,
       });
@@ -99,7 +96,7 @@ export async function POST(request: Request) {
       requestedVideoIds: uniqueVideoIds,
       validVideoIds,
       skippedVideoIds,
-      reason: String(payload.reason || "").trim(),
+      reason: String(payload.reason || "").trim() || null,
       setPrimary: payload.setPrimary,
     });
     if (!job) {

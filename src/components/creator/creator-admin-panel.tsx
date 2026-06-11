@@ -1,11 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowsClockwise, CaretDown, CaretUp, Check, Copy, GlobeHemisphereWest, MapPin, Plus, Trash, Video } from "@phosphor-icons/react";
+import { useMemo, useRef, useState } from "react";
+import { ArrowsClockwise, CaretDown, CaretUp, Check, Copy, GlobeHemisphereWest, MapPin, PencilSimple, Sparkle, Trash, Video } from "@phosphor-icons/react";
 import { AnalyticsDashboard } from "@/components/analytics-dashboard";
-import { SponsorStylePreview } from "@/components/creator/sponsor-style-preview";
-import { SponsorVideoPreview } from "@/components/creator/sponsor-video-preview";
+import { SponsorCreatorWizard, type SponsorWizardPayload } from "@/components/creator/sponsor-creator-wizard";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,15 +13,7 @@ import type { MapSummary } from "@/lib/map-data";
 import type { MapPollRecord } from "@/lib/map-polls";
 import type { MapRailSponsor } from "@/lib/map-types";
 import { copyTextToClipboard } from "@/lib/clipboard";
-import { normalizeExternalSponsorUrl, normalizeSponsorLogoUrl } from "@/lib/sponsor-url";
-import { getSponsorCardStyleLabel, type SponsorCardStyle } from "@/lib/sponsor-card-style";
-import {
-  getDefaultSponsorBannerColors,
-  hasReadableSponsorBannerContrast,
-  normalizeHexColor,
-  type SponsorBannerColors,
-} from "@/lib/sponsor-banner-colors";
-import type { MapVideoCardActivity } from "@/components/map/map-video-card";
+import { getSponsorCardStyleLabel } from "@/lib/sponsor-card-style";
 import type { TravelVideoLocation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -84,29 +75,17 @@ export function CreatorAdminPanel({
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [pollState, setPollState] = useState<MapPollRecord | null>(initialPoll);
   const [sponsors, setSponsors] = useState<MapRailSponsor[]>(initialSponsors);
-  const [sponsorBrandName, setSponsorBrandName] = useState("");
-  const [sponsorLogoUrl, setSponsorLogoUrl] = useState("");
-  const [sponsorAffiliateUrl, setSponsorAffiliateUrl] = useState("");
-  const [sponsorDiscountCode, setSponsorDiscountCode] = useState("");
-  const [sponsorDescription, setSponsorDescription] = useState("");
-  const [sponsorCategoryName, setSponsorCategoryName] = useState("");
-  const [sponsorCtaLabel, setSponsorCtaLabel] = useState("");
-  const [sponsorCardStyle, setSponsorCardStyle] = useState<SponsorCardStyle>("cta_red");
-  const [sponsorBannerBackgroundColor, setSponsorBannerBackgroundColor] = useState(getDefaultSponsorBannerColors("cta_red").backgroundColor);
-  const [sponsorBannerTextColor, setSponsorBannerTextColor] = useState(getDefaultSponsorBannerColors("cta_red").textColor);
-  const [sponsorScope, setSponsorScope] = useState<"global" | "country" | "video">("country");
-  const [sponsorActionType, setSponsorActionType] = useState<"link" | "coupon">("link");
-  const [selectedCountryCodes, setSelectedCountryCodes] = useState<string[]>([]);
-  const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([]);
-  const [sponsorPreviewVideoId, setSponsorPreviewVideoId] = useState("");
+  // Wizard state
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [creatingSponsor, setCreatingSponsor] = useState(false);
   const [sponsorError, setSponsorError] = useState<string | null>(null);
+  const [editingSponsorId, setEditingSponsorId] = useState<string | null>(null);
   const [deletingSponsorId, setDeletingSponsorId] = useState<string | null>(null);
+  const [confirmingSponsorRemovalId, setConfirmingSponsorRemovalId] = useState<string | null>(null);
   const [bulkCountryFilter, setBulkCountryFilter] = useState<string>("all");
   const [bulkTitleFilter, setBulkTitleFilter] = useState("");
   const [bulkStatusFilter, setBulkStatusFilter] = useState<"all" | "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible">("all");
   const [bulkSelectedSponsorId, setBulkSelectedSponsorId] = useState<string>("");
-  const [bulkReason, setBulkReason] = useState("");
   const [bulkSelectedVideoIds, setBulkSelectedVideoIds] = useState<string[]>([]);
   const [bulkPage, setBulkPage] = useState(1);
   const [bulkBusy, setBulkBusy] = useState<"idle" | "preview" | "assign">("idle");
@@ -114,6 +93,7 @@ export function CreatorAdminPanel({
   const [bulkJobId, setBulkJobId] = useState<string | null>(null);
   const [bulkJobStatus, setBulkJobStatus] = useState<string | null>(null);
   const [bulkUndoAvailable, setBulkUndoAvailable] = useState(false);
+  const [bulkLastAssignment, setBulkLastAssignment] = useState<{ sponsorId: string; videoIds: string[] } | null>(null);
   const bulkPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const totalVotes = initialFanVotes?.total_votes || 0;
@@ -174,171 +154,252 @@ export function CreatorAdminPanel({
       .filter(Boolean);
     return Array.from(new Set([...SPONSOR_CATEGORY_PRESETS, ...dynamicOptions]));
   }, [sponsors]);
-  const videosById = useMemo(() => {
-    const map = new Map<string, TravelVideoLocation>();
-    for (const video of videos) {
-      const primaryId = String(video.id || "").trim();
-      const fallbackId = String(video.youtube_video_id || "").trim();
-      if (primaryId) map.set(primaryId, video);
-      if (fallbackId) map.set(fallbackId, video);
-    }
-    return map;
-  }, [videos]);
-  const normalizedSelectedVideoIds = useMemo(() => normalizeIdList(selectedVideoIds), [selectedVideoIds]);
-  const normalizedSelectedCountryCodes = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          selectedCountryCodes
-            .map((countryCode) => String(countryCode || "").trim().toUpperCase())
-            .filter((countryCode) => countryCode.length === 2)
-        )
-      ),
-    [selectedCountryCodes]
+  const editingSponsor = useMemo(
+    () => sponsors.find((sponsor) => sponsor.id === editingSponsorId) || null,
+    [editingSponsorId, sponsors]
   );
-  const sponsorPreviewCandidateIds = useMemo(() => {
-    if (sponsorScope === "video") return normalizedSelectedVideoIds;
 
-    if (sponsorScope === "country") {
-      const selectedCountries = new Set(normalizedSelectedCountryCodes);
-      if (selectedCountries.size === 0) {
-        return sponsorVideoOptions
-          .slice(0, 12)
-          .map((video) => String(video.id || video.youtube_video_id || "").trim())
-          .filter(Boolean);
-      }
-      return sponsorVideoOptions
-        .filter((video) => selectedCountries.has(String(video.country_code || "").trim().toUpperCase()))
-        .map((video) => String(video.id || video.youtube_video_id || "").trim())
-        .filter(Boolean);
-    }
-
-    return sponsorVideoOptions
-      .slice(0, 12)
-      .map((video) => String(video.id || video.youtube_video_id || "").trim())
-      .filter(Boolean);
-  }, [normalizedSelectedCountryCodes, normalizedSelectedVideoIds, sponsorScope, sponsorVideoOptions]);
-  const sponsorPreviewVideoOptions = useMemo(
-    () =>
-      sponsorPreviewCandidateIds
-        .map((videoId) => {
-          const video = videosById.get(videoId);
-          if (!video) return null;
-          return {
-            value: videoId,
-            label: video.title,
-          };
-        })
-        .filter((option): option is { value: string; label: string } => Boolean(option)),
-    [sponsorPreviewCandidateIds, videosById]
-  );
-  const sponsorPreviewSeed = useMemo(() => [...sponsorPreviewCandidateIds].sort((a, b) => a.localeCompare(b)).join("|"), [sponsorPreviewCandidateIds]);
-
-  useEffect(() => {
-    if (sponsorPreviewCandidateIds.length === 0) {
-      setSponsorPreviewVideoId("");
-      return;
-    }
-
-    setSponsorPreviewVideoId((current) => {
-      if (current && sponsorPreviewCandidateIds.includes(current)) return current;
-      return pickStableVideoId(sponsorPreviewCandidateIds, sponsorPreviewSeed);
-    });
-  }, [sponsorPreviewCandidateIds, sponsorPreviewSeed]);
-
-  const sponsorPreviewVideo = sponsorPreviewVideoId ? videosById.get(sponsorPreviewVideoId) || null : null;
-  const sponsorBannerColors = useMemo<SponsorBannerColors | null>(() => {
-    const backgroundColor = normalizeHexColor(sponsorBannerBackgroundColor);
-    const textColor = normalizeHexColor(sponsorBannerTextColor);
-    if (!backgroundColor || !textColor) return null;
-    return { backgroundColor, textColor };
-  }, [sponsorBannerBackgroundColor, sponsorBannerTextColor]);
-  const sponsorBannerContrastOk = Boolean(
-    sponsorBannerColors && hasReadableSponsorBannerContrast(sponsorBannerColors.backgroundColor, sponsorBannerColors.textColor)
-  );
-  const sponsorPreviewNames = useMemo(() => {
-    if (!sponsorPreviewVideo) return [];
-
-    const candidateIds = new Set([
-      String(sponsorPreviewVideo.id || "").trim(),
-      String(sponsorPreviewVideo.youtube_video_id || "").trim(),
-    ]);
-    const names = new Set<string>();
-
-    const draftName = sponsorBrandName.trim() || "Marca";
-    if (sponsorScope === "global") {
-      names.add(draftName);
-    } else if (sponsorScope === "country") {
-      const previewCountryCode = String(sponsorPreviewVideo.country_code || "").trim().toUpperCase();
-      if (normalizedSelectedCountryCodes.length === 0 || normalizedSelectedCountryCodes.includes(previewCountryCode)) {
-        names.add(draftName);
-      }
-    } else if (candidateIds.size > 0) {
-      const selectedDraftIds = new Set(normalizedSelectedVideoIds);
-      if (selectedDraftIds.has(String(sponsorPreviewVideo.id || "").trim()) || selectedDraftIds.has(String(sponsorPreviewVideo.youtube_video_id || "").trim())) {
-        names.add(draftName);
-      }
-    }
-
-    for (const sponsor of sponsors) {
-      const assignedIds = new Set(
-        (sponsor.video_ids || [])
-          .map((videoId) => String(videoId || "").trim())
-          .filter(Boolean)
-      );
-      for (const candidateId of candidateIds) {
-        if (assignedIds.has(candidateId)) {
-          names.add(sponsor.brand_name);
-          break;
-        }
-      }
-    }
-
-    return Array.from(names);
-  }, [normalizedSelectedCountryCodes, normalizedSelectedVideoIds, sponsorBrandName, sponsorPreviewVideo, sponsorScope, sponsors]);
-  const sponsorPreviewActivity = useMemo<MapVideoCardActivity>(() => {
-    if (!sponsorPreviewVideoId) return {};
-
-    const hash = hashString(sponsorPreviewVideoId);
-    const states: Array<"watched" | "not_finished" | "watch_later"> = [
-      "watched",
-      "not_finished",
-      "watch_later",
-    ];
-    const watchStatus = states[hash % states.length];
-    const featured = hash % 5 === 0;
-
-    return {
-      seenIds: new Set([sponsorPreviewVideoId]),
-      featuredIds: featured ? new Set([sponsorPreviewVideoId]) : new Set(),
-      watchStatusById: { [sponsorPreviewVideoId]: watchStatus },
-    };
-  }, [sponsorPreviewVideoId]);
-
-  function resetSponsorForm() {
+  function openCreateSponsor() {
+    setEditingSponsorId(null);
     setSponsorError(null);
-    setSponsorBrandName("");
-    setSponsorLogoUrl("");
-    setSponsorAffiliateUrl("");
-    setSponsorDiscountCode("");
-    setSponsorDescription("");
-    setSponsorCategoryName("");
-    setSponsorCtaLabel("");
-    setSponsorCardStyle("cta_red");
-    setSponsorBannerBackgroundColor(getDefaultSponsorBannerColors("cta_red").backgroundColor);
-    setSponsorBannerTextColor(getDefaultSponsorBannerColors("cta_red").textColor);
-    setSponsorScope("country");
-    setSponsorActionType("link");
-    setSelectedCountryCodes([]);
-    setSelectedVideoIds([]);
-    setSponsorPreviewVideoId("");
+    setWizardOpen((current) => !current || Boolean(editingSponsorId));
   }
 
-  function selectSponsorCardStyle(style: SponsorCardStyle) {
-    const defaults = getDefaultSponsorBannerColors(style);
-    setSponsorCardStyle(style);
-    setSponsorBannerBackgroundColor(defaults.backgroundColor);
-    setSponsorBannerTextColor(defaults.textColor);
+  function openEditSponsor(sponsorId: string) {
+    setEditingSponsorId(sponsorId);
+    setSponsorError(null);
+    setWizardOpen(true);
+  }
+
+  function closeSponsorWizard() {
+    setWizardOpen(false);
+    setEditingSponsorId(null);
+    setSponsorError(null);
+  }
+
+  function getSponsorWizardInitialValues(sponsor: MapRailSponsor): SponsorWizardPayload {
+    const fallbackStyle = sponsor.sponsor_card_style || "cta_red";
+    return {
+      brand_name: sponsor.brand_name,
+      logo_url: sponsor.logo_url,
+      affiliate_url: sponsor.affiliate_url,
+      discount_code: sponsor.discount_code,
+      description: sponsor.description,
+      category_name: sponsor.category_name || null,
+      cta_label: sponsor.cta_label || null,
+      action_type: sponsor.action_type || (sponsor.discount_code ? "coupon" : "link"),
+      scope: sponsor.scope || ((sponsor.video_ids || []).length > 0 ? "video" : (sponsor.country_codes || []).length > 0 ? "country" : "global"),
+      country_codes: sponsor.country_codes || [],
+      video_ids: sponsor.video_ids || [],
+      sponsor_card_style: fallbackStyle,
+      sponsor_banner_background_color:
+        sponsor.sponsor_banner_background_color || "#dc2626",
+      sponsor_banner_text_color:
+        sponsor.sponsor_banner_text_color || "#ffffff",
+    };
+  }
+
+  async function createSponsorFromWizard(payload: SponsorWizardPayload) {
+    setCreatingSponsor(true);
+    setSponsorError(null);
+    try {
+      const nextDisplayOrder =
+        Math.max(0, ...sponsors.map((s) => (Number.isFinite(Number(s.display_order)) ? Number(s.display_order) : 100))) + 10;
+
+      if (isDemoMode) {
+        setSponsors((current) => [
+          {
+            id: `demo-sponsor-${Date.now()}`,
+            brand_name: payload.brand_name,
+            logo_url: payload.logo_url,
+            website_url: null,
+            description: payload.description,
+            discount_code: payload.discount_code,
+            affiliate_url: payload.affiliate_url,
+            category_name: payload.category_name,
+            action_type: payload.action_type,
+            action_value: payload.action_type === "coupon" ? payload.discount_code : null,
+            cta_label: payload.cta_label,
+            display_order: nextDisplayOrder,
+            country_codes: payload.country_codes,
+            video_ids: payload.video_ids,
+            scope: payload.scope,
+            sponsor_card_style: payload.sponsor_card_style,
+            sponsor_banner_background_color: payload.sponsor_banner_background_color,
+            sponsor_banner_text_color: payload.sponsor_banner_text_color,
+            isExample: true,
+            click_count: 0,
+            start_date: null,
+            end_date: null,
+            internal_notes: null,
+          },
+          ...current,
+        ]);
+        setWizardOpen(false);
+        return;
+      }
+
+      const response = await fetch("/api/map-admin/sponsors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId,
+          sponsorId: null,
+          brand_name: payload.brand_name,
+          logo_url: payload.logo_url,
+          website_url: null,
+          affiliate_url: payload.affiliate_url,
+          discount_code: payload.discount_code,
+          description: payload.description,
+          category_name: payload.category_name,
+          action_type: payload.action_type,
+          action_value: payload.action_type === "coupon" ? payload.discount_code : null,
+          cta_label: payload.cta_label,
+          sponsor_card_style: payload.sponsor_card_style,
+          sponsor_banner_background_color: payload.sponsor_banner_background_color,
+          sponsor_banner_text_color: payload.sponsor_banner_text_color,
+          display_order: nextDisplayOrder,
+          scope: payload.scope,
+          country_codes: payload.country_codes,
+          video_ids: payload.video_ids,
+          active: true,
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
+      if (!response.ok || !body?.id) throw new Error(body?.error || "No se pudo crear el sponsor.");
+
+      setSponsors((current) => [
+        {
+          id: body.id!,
+          brand_name: payload.brand_name,
+          logo_url: payload.logo_url,
+          website_url: null,
+          description: payload.description,
+          discount_code: payload.discount_code,
+          affiliate_url: payload.affiliate_url,
+          category_name: payload.category_name,
+          action_type: payload.action_type,
+          action_value: payload.action_type === "coupon" ? payload.discount_code : null,
+          cta_label: payload.cta_label,
+          display_order: nextDisplayOrder,
+          country_codes: payload.country_codes,
+          video_ids: payload.video_ids,
+          scope: payload.scope,
+          sponsor_card_style: payload.sponsor_card_style,
+          sponsor_banner_background_color: payload.sponsor_banner_background_color,
+          sponsor_banner_text_color: payload.sponsor_banner_text_color,
+          click_count: 0,
+          start_date: null,
+          end_date: null,
+          internal_notes: null,
+        },
+        ...current,
+      ]);
+      setWizardOpen(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo crear el sponsor.";
+      setSponsorError(message);
+      throw new Error(message);
+    } finally {
+      setCreatingSponsor(false);
+    }
+  }
+
+  async function updateSponsorFromWizard(payload: SponsorWizardPayload) {
+    if (!editingSponsor) return;
+    setCreatingSponsor(true);
+    setSponsorError(null);
+    try {
+      if (isDemoMode) {
+        setSponsors((current) =>
+          current.map((entry) =>
+            entry.id === editingSponsor.id
+              ? {
+                  ...entry,
+                  brand_name: payload.brand_name,
+                  logo_url: payload.logo_url,
+                  description: payload.description,
+                  discount_code: payload.discount_code,
+                  affiliate_url: payload.affiliate_url,
+                  category_name: payload.category_name,
+                  action_type: payload.action_type,
+                  action_value: payload.action_type === "coupon" ? payload.discount_code : null,
+                  cta_label: payload.cta_label,
+                  country_codes: payload.country_codes,
+                  video_ids: payload.video_ids,
+                  scope: payload.scope,
+                  sponsor_card_style: payload.sponsor_card_style,
+                  sponsor_banner_background_color: payload.sponsor_banner_background_color,
+                  sponsor_banner_text_color: payload.sponsor_banner_text_color,
+                }
+              : entry
+          )
+        );
+        closeSponsorWizard();
+        return;
+      }
+
+      const response = await fetch("/api/map-admin/sponsors", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId,
+          sponsorId: editingSponsor.id,
+          brand_name: payload.brand_name,
+          logo_url: payload.logo_url,
+          website_url: null,
+          affiliate_url: payload.affiliate_url,
+          discount_code: payload.discount_code,
+          description: payload.description,
+          category_name: payload.category_name,
+          action_type: payload.action_type,
+          action_value: payload.action_type === "coupon" ? payload.discount_code : null,
+          cta_label: payload.cta_label,
+          sponsor_card_style: payload.sponsor_card_style,
+          sponsor_banner_background_color: payload.sponsor_banner_background_color,
+          sponsor_banner_text_color: payload.sponsor_banner_text_color,
+          display_order: editingSponsor.display_order ?? 100,
+          scope: payload.scope,
+          country_codes: payload.country_codes,
+          video_ids: payload.video_ids,
+          active: true,
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
+      if (!response.ok || !body?.id) throw new Error(body?.error || "No se pudo editar el sponsor.");
+
+      setSponsors((current) =>
+        current.map((entry) =>
+          entry.id === editingSponsor.id
+            ? {
+                ...entry,
+                brand_name: payload.brand_name,
+                logo_url: payload.logo_url,
+                description: payload.description,
+                discount_code: payload.discount_code,
+                affiliate_url: payload.affiliate_url,
+                category_name: payload.category_name,
+                action_type: payload.action_type,
+                action_value: payload.action_type === "coupon" ? payload.discount_code : null,
+                cta_label: payload.cta_label,
+                country_codes: payload.country_codes,
+                video_ids: payload.video_ids,
+                scope: payload.scope,
+                sponsor_card_style: payload.sponsor_card_style,
+                sponsor_banner_background_color: payload.sponsor_banner_background_color,
+                sponsor_banner_text_color: payload.sponsor_banner_text_color,
+              }
+            : entry
+        )
+      );
+      closeSponsorWizard();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo editar el sponsor.";
+      setSponsorError(message);
+      throw new Error(message);
+    } finally {
+      setCreatingSponsor(false);
+    }
   }
 
   const bulkRows = useMemo(() => {
@@ -364,6 +425,7 @@ export function CreatorAdminPanel({
           country: String(video.country_name || video.country_code || "-"),
           countryCode: String(video.country_code || "").toUpperCase(),
           status,
+          sponsorDetectedText: String(video.sponsor_detectado_texto || "").trim(),
           sponsorName: directSponsorByVideoId.get(videoId) || "",
           publishedAt: video.published_at || null,
           views: Number(video.view_count || 0),
@@ -380,6 +442,7 @@ export function CreatorAdminPanel({
   }, [bulkRows, safeBulkPage]);
   const bulkSelectedSet = useMemo(() => new Set(bulkSelectedVideoIds), [bulkSelectedVideoIds]);
   const bulkPageAllSelected = bulkPageRows.length > 0 && bulkPageRows.every((row) => bulkSelectedSet.has(row.id));
+  const bulkAllSelected = bulkRows.length > 0 && bulkRows.every((row) => bulkSelectedSet.has(row.id));
   const bulkCountryOptions = useMemo(() => sponsorCountryOptions, [sponsorCountryOptions]);
 
   async function copyMapUrl() {
@@ -436,172 +499,11 @@ export function CreatorAdminPanel({
     }
   }
 
-  async function createSponsor(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const brand_name = sponsorBrandName.trim();
-    const logo_url = normalizeSponsorLogoUrl(sponsorLogoUrl);
-    const affiliate_url = normalizeExternalSponsorUrl(sponsorAffiliateUrl);
-    const discount_code = sponsorDiscountCode.trim() || null;
-    const description = sponsorDescription.trim() || null;
-    const category_name = sponsorCategoryName.trim() || null;
-    const cta_label = sponsorCtaLabel.trim() || null;
-
-    const normalizedCountryCodes = Array.from(
-      new Set(
-        selectedCountryCodes
-          .map((countryCode) => String(countryCode || "").trim().toUpperCase())
-          .filter((countryCode) => countryCode.length === 2)
-      )
-    );
-    const normalizedVideoIds = Array.from(new Set(selectedVideoIds.map((videoId) => String(videoId || "").trim()).filter(Boolean)));
-
-    if (!brand_name) return;
-    if (sponsorLogoUrl.trim() && !logo_url) {
-      setSponsorError("Logo URL inválida.");
-      return;
-    }
-    if (sponsorActionType === "link" && !sponsorAffiliateUrl.trim()) {
-      setSponsorError("Escribe la URL de destino del sponsor.");
-      return;
-    }
-    if (sponsorActionType === "link" && sponsorAffiliateUrl.trim() && !affiliate_url) {
-      setSponsorError("URL del sponsor inválida.");
-      return;
-    }
-    if (sponsorActionType === "coupon" && !discount_code) {
-      setSponsorError("Escribe el código del cupón.");
-      return;
-    }
-    if (sponsorScope === "country" && normalizedCountryCodes.length === 0) {
-      setSponsorError("Selecciona al menos un país para scope país.");
-      return;
-    }
-    if (sponsorScope === "video" && normalizedVideoIds.length === 0) {
-      setSponsorError("Selecciona al menos un video para scope video.");
-      return;
-    }
-    const normalizedBannerBackgroundColor = normalizeHexColor(sponsorBannerBackgroundColor);
-    const normalizedBannerTextColor = normalizeHexColor(sponsorBannerTextColor);
-    if (!normalizedBannerBackgroundColor || !normalizedBannerTextColor) {
-      setSponsorError("Usa colores hex válidos para el sponsor banner.");
-      return;
-    }
-    if (!hasReadableSponsorBannerContrast(normalizedBannerBackgroundColor, normalizedBannerTextColor)) {
-      setSponsorError("El texto del sponsor banner necesita más contraste con el fondo.");
-      return;
-    }
-
-    setCreatingSponsor(true);
-    setSponsorError(null);
-    try {
-      const nextDisplayOrder =
-        Math.max(0, ...sponsors.map((entry) => (Number.isFinite(Number(entry.display_order)) ? Number(entry.display_order) : 100))) + 10;
-      const sponsorPayload = {
-        brand_name,
-        logo_url,
-        website_url: null,
-        affiliate_url: sponsorActionType === "link" ? affiliate_url : null,
-        discount_code: sponsorActionType === "coupon" ? discount_code : null,
-        description,
-        category_name,
-        action_type: sponsorActionType,
-        action_value: sponsorActionType === "coupon" ? discount_code : null,
-        cta_label,
-        sponsor_card_style: sponsorCardStyle,
-        sponsor_banner_background_color: normalizedBannerBackgroundColor,
-        sponsor_banner_text_color: normalizedBannerTextColor,
-      };
-
-      if (isDemoMode) {
-        setSponsors((current) => [
-          {
-            id: `demo-sponsor-${Date.now()}`,
-            brand_name,
-            logo_url,
-            website_url: null,
-            description,
-            discount_code: sponsorPayload.discount_code,
-            affiliate_url: sponsorPayload.affiliate_url,
-            category_name,
-            action_type: sponsorActionType,
-            action_value: sponsorPayload.action_value,
-            cta_label,
-            display_order: nextDisplayOrder,
-            country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
-            video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
-            scope: sponsorScope,
-            sponsor_card_style: sponsorCardStyle,
-            sponsor_banner_background_color: normalizedBannerBackgroundColor,
-            sponsor_banner_text_color: normalizedBannerTextColor,
-            isExample: true,
-            click_count: 0,
-            start_date: null,
-            end_date: null,
-            internal_notes: null,
-          },
-          ...current,
-        ]);
-        resetSponsorForm();
-        return;
-      }
-
-      const response = await fetch("/api/map-admin/sponsors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channelId,
-          sponsorId: null,
-          ...sponsorPayload,
-          display_order: nextDisplayOrder,
-          scope: sponsorScope,
-          country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
-          video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
-          active: true,
-        }),
-      });
-      const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
-      if (!response.ok || !body?.id) throw new Error(body?.error || "No se pudo crear el sponsor.");
-      const sponsorId = body.id;
-      setSponsors((current) => [
-        {
-          id: sponsorId,
-          brand_name,
-          logo_url,
-          website_url: null,
-          description,
-          discount_code: sponsorPayload.discount_code,
-          affiliate_url: sponsorPayload.affiliate_url,
-          category_name,
-          action_type: sponsorActionType,
-          action_value: sponsorPayload.action_value,
-          cta_label,
-          display_order: nextDisplayOrder,
-          country_codes: sponsorScope === "country" ? normalizedCountryCodes : [],
-          video_ids: sponsorScope === "video" ? normalizedVideoIds : [],
-          scope: sponsorScope,
-          sponsor_card_style: sponsorCardStyle,
-          sponsor_banner_background_color: normalizedBannerBackgroundColor,
-          sponsor_banner_text_color: normalizedBannerTextColor,
-          click_count: 0,
-          start_date: null,
-          end_date: null,
-          internal_notes: null,
-        },
-        ...current,
-      ]);
-      resetSponsorForm();
-    } catch (error) {
-      setSponsorError(error instanceof Error ? error.message : "No se pudo crear el sponsor.");
-    } finally {
-      setCreatingSponsor(false);
-    }
-  }
-
   async function removeSponsor(sponsorId: string) {
     if (!sponsorId) return;
     if (isDemoMode) {
       setSponsors((current) => current.filter((entry) => entry.id !== sponsorId));
+      setConfirmingSponsorRemovalId(null);
       return;
     }
 
@@ -610,10 +512,11 @@ export function CreatorAdminPanel({
     try {
       const response = await fetch(`/api/map-admin/sponsors?channelId=${encodeURIComponent(channelId)}&sponsorId=${encodeURIComponent(sponsorId)}`, { method: "DELETE" });
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) throw new Error(body?.error || "No se pudo eliminar el sponsor.");
+      if (!response.ok) throw new Error(body?.error || "No se pudo pausar el sponsor.");
       setSponsors((current) => current.filter((entry) => entry.id !== sponsorId));
+      setConfirmingSponsorRemovalId(null);
     } catch (error) {
-      setSponsorError(error instanceof Error ? error.message : "No se pudo eliminar el sponsor.");
+      setSponsorError(error instanceof Error ? error.message : "No se pudo pausar el sponsor.");
     } finally {
       setDeletingSponsorId(null);
     }
@@ -640,6 +543,18 @@ export function CreatorAdminPanel({
     });
   }
 
+  function toggleBulkAll(checked: boolean) {
+    const ids = bulkRows.map((row) => row.id);
+    setBulkSelectedVideoIds((current) => {
+      const set = new Set(current);
+      for (const id of ids) {
+        if (checked) set.add(id);
+        else set.delete(id);
+      }
+      return Array.from(set);
+    });
+  }
+
   async function runBulkAssign(preview: boolean) {
     if (!bulkSelectedSponsorId) {
       setBulkMessage("Selecciona un sponsor para la asignación masiva.");
@@ -647,10 +562,6 @@ export function CreatorAdminPanel({
     }
     if (bulkSelectedVideoIds.length === 0) {
       setBulkMessage("Selecciona al menos un video para continuar.");
-      return;
-    }
-    if (!preview && !bulkReason.trim()) {
-      setBulkMessage("Escribe un motivo para auditar la asignación masiva.");
       return;
     }
 
@@ -686,7 +597,7 @@ export function CreatorAdminPanel({
           sponsorId: bulkSelectedSponsorId,
           videoIds: bulkSelectedVideoIds,
           preview,
-          reason: bulkReason.trim() || null,
+          reason: null,
           setPrimary: true,
         }),
       });
@@ -695,6 +606,7 @@ export function CreatorAdminPanel({
             error?: string;
             requested?: number;
             applied?: number;
+            applicable?: number;
             skipped?: number;
             preview?: boolean;
             queued?: boolean;
@@ -704,7 +616,7 @@ export function CreatorAdminPanel({
       if (!response.ok) throw new Error(body?.error || "No se pudo ejecutar la asignación masiva.");
 
       if (preview) {
-        setBulkMessage(`Preview listo: ${body?.requested || 0} seleccionados, ${body?.applied || 0} aplicables, ${body?.skipped || 0} omitidos.`);
+        setBulkMessage(`Preview listo: ${body?.requested || 0} seleccionados, ${body?.applicable ?? body?.applied ?? 0} aplicables, ${body?.skipped || 0} omitidos.`);
       } else {
         if (body?.job?.id) {
           setBulkJobId(body.job.id);
@@ -718,6 +630,7 @@ export function CreatorAdminPanel({
           } else {
             setBulkMessage(`Asignación completada: ${body?.applied || 0} videos actualizados, ${body?.skipped || 0} omitidos.`);
             setBulkUndoAvailable(Boolean(body?.job?.reversibleUntil));
+            setBulkLastAssignment({ sponsorId: bulkSelectedSponsorId, videoIds: bulkSelectedVideoIds });
             const sponsor = sponsors.find((entry) => entry.id === bulkSelectedSponsorId);
             if (sponsor) {
               setSponsors((current) =>
@@ -778,6 +691,16 @@ export function CreatorAdminPanel({
     if (status === "completed") {
       setBulkUndoAvailable(Boolean(body.job.reversibleUntil));
       setBulkMessage(`Asignación completada: ${body.job.appliedCount || 0} videos actualizados, ${body.job.skippedCount || 0} omitidos.`);
+      setBulkLastAssignment({ sponsorId: bulkSelectedSponsorId, videoIds: bulkSelectedVideoIds });
+      if (bulkSelectedSponsorId && bulkSelectedVideoIds.length > 0) {
+        setSponsors((current) =>
+          current.map((entry) =>
+            entry.id === bulkSelectedSponsorId
+              ? { ...entry, video_ids: Array.from(new Set([...(entry.video_ids || []), ...bulkSelectedVideoIds])), scope: "video" }
+              : entry
+          )
+        );
+      }
       return;
     }
     if (status === "failed") {
@@ -803,7 +726,18 @@ export function CreatorAdminPanel({
       if (!response.ok) throw new Error(body?.error || "No se pudo deshacer el job.");
       setBulkJobStatus(body?.job?.status || "reverted");
       setBulkUndoAvailable(false);
-      setBulkMessage("Deshacer aplicado. Recarga el panel para ver todos los cambios reflejados.");
+      if (bulkLastAssignment) {
+        const revertedIds = new Set(bulkLastAssignment.videoIds);
+        setSponsors((current) =>
+          current.map((entry) =>
+            entry.id === bulkLastAssignment.sponsorId
+              ? { ...entry, video_ids: (entry.video_ids || []).filter((videoId) => !revertedIds.has(videoId)) }
+              : entry
+          )
+        );
+      }
+      setBulkMessage("Deshacer aplicado. La tabla ya refleja la asignación revertida.");
+      setBulkLastAssignment(null);
     } catch (error) {
       setBulkMessage(error instanceof Error ? error.message : "No se pudo deshacer el job.");
     } finally {
@@ -878,189 +812,182 @@ export function CreatorAdminPanel({
       </section>
 
       <section className={cn(activeTab === "sponsors" ? "block" : "hidden")}>
-        <Card className="tm-surface-strong rounded-xl border-white/10">
-          <CardHeader className="px-4 pb-2 pt-3">
-            <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Sponsors</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 px-4 pb-4 pt-1">
-            <form className="space-y-4" onSubmit={createSponsor}>
-              <div className="grid gap-2 md:grid-cols-2">
-                <input
-                  name="brand_name"
-                  required
-                  value={sponsorBrandName}
-                  onChange={(event) => setSponsorBrandName(event.target.value)}
-                  placeholder="Marca"
-                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-                />
-                <input
-                  name="logo_url"
-                  value={sponsorLogoUrl}
-                  onChange={(event) => setSponsorLogoUrl(event.target.value)}
-                  placeholder="Logo URL opcional"
-                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-                />
-                <select
-                  name="scope"
-                  value={sponsorScope}
-                  onChange={(event) => {
-                    const nextScope = event.target.value as "global" | "country" | "video";
-                    setSponsorScope(nextScope);
-                    if (nextScope !== "country") setSelectedCountryCodes([]);
-                    if (nextScope !== "video") setSelectedVideoIds([]);
-                  }}
-                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-                >
-                  <option value="global">Scope global</option>
-                  <option value="country">Scope país</option>
-                  <option value="video">Scope video</option>
-                </select>
-                <input
-                  name="category_name"
-                  list="sponsor-category-options"
-                  value={sponsorCategoryName}
-                  onChange={(event) => setSponsorCategoryName(event.target.value)}
-                  placeholder="Categoría del servicio (ej: Dónde dormir)"
-                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-                />
-                <datalist id="sponsor-category-options">
-                  {sponsorCategoryOptions.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
-                <select
-                  name="action_type"
-                  value={sponsorActionType}
-                  onChange={(event) => setSponsorActionType(event.target.value === "coupon" ? "coupon" : "link")}
-                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-                >
-                  <option value="link">Redirigir a URL</option>
-                  <option value="coupon">Copiar cupón</option>
-                </select>
-                {sponsorActionType === "coupon" ? (
-                  <input
-                    name="discount_code"
-                    value={sponsorDiscountCode}
-                    onChange={(event) => setSponsorDiscountCode(event.target.value)}
-                    placeholder="Código del cupón"
-                    className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-                  />
-                ) : (
-                  <input
-                    name="affiliate_url"
-                    value={sponsorAffiliateUrl}
-                    onChange={(event) => setSponsorAffiliateUrl(event.target.value)}
-                    placeholder="URL del sponsor (se normaliza automáticamente)"
-                    className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-                  />
+        <Card className="tm-surface-strong !overflow-visible rounded-xl border-white/10">
+          <CardHeader className="border-b border-white/[0.06] px-4 pb-3 pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Sponsors</CardTitle>
+                <p className="mt-0.5 text-[12px] text-[#7a8490]">
+                  {sponsors.length === 0 ? "Sin sponsors activos" : `${sponsors.length} sponsor${sponsors.length !== 1 ? "s" : ""} activo${sponsors.length !== 1 ? "s" : ""}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openCreateSponsor}
+                className={cn(
+                  "inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[13px] font-semibold transition-all duration-200",
+                  wizardOpen && !editingSponsorId
+                    ? "border-white/15 bg-white/[0.06] text-[#c4cbd4] hover:bg-white/[0.09]"
+                    : "border-[#ff5a3d]/30 bg-[#ff5a3d]/10 text-[#ff8d74] hover:bg-[#ff5a3d]/20 shadow-[0_4px_20px_-8px_rgba(255,90,61,0.35)]"
                 )}
-                <input
-                  name="cta_label"
-                  value={sponsorCtaLabel}
-                  onChange={(event) => setSponsorCtaLabel(event.target.value)}
-                  placeholder="Texto del CTA (ej: Ver oferta)"
-                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none"
-                />
-                <input
-                  name="description"
-                  value={sponsorDescription}
-                  onChange={(event) => setSponsorDescription(event.target.value)}
-                  placeholder="Descripción corta"
-                  className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-[13px] text-[#f5f7fb] outline-none md:col-span-2"
-                />
+              >
+                {wizardOpen && !editingSponsorId ? (
+                  <>
+                    <span className="text-lg leading-none">×</span> Cerrar wizard
+                  </>
+                ) : (
+                  <>
+                    <Sparkle size={15} weight="fill" />
+                    Nuevo sponsor
+                  </>
+                )}
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5 px-4 pb-4 pt-4">
+            {/* ── Wizard ─────────────────────────────────────────────────── */}
+            {wizardOpen && (
+              <div className="relative">
+                {/* Animated entry */}
+                <div className="animate-in fade-in duration-300">
+                  <SponsorCreatorWizard
+                    key={editingSponsor ? `edit-${editingSponsor.id}` : "create"}
+                    channelId={channelId}
+                    isDemoMode={isDemoMode}
+                    mode={editingSponsor ? "edit" : "create"}
+                    initialValues={editingSponsor ? getSponsorWizardInitialValues(editingSponsor) : null}
+                    videos={videos}
+                    countryOptions={sponsorCountryOptions}
+                    videoOptions={sponsorVideoOptions}
+                    categoryOptions={sponsorCategoryOptions}
+                    onSubmit={editingSponsor ? updateSponsorFromWizard : createSponsorFromWizard}
+                    onCancel={closeSponsorWizard}
+                    isSubmitting={creatingSponsor}
+                    error={sponsorError}
+                  />
+                </div>
               </div>
-
-              <SponsorStylePreview
-                selectedStyle={sponsorCardStyle}
-                onSelectStyle={selectSponsorCardStyle}
-              />
-
-              <section className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#9da5ae]">Colores del sponsor banner</p>
-                    <p className="mt-1 text-[12px] leading-4 text-[#c6ccd4]">
-                      Personaliza solo la franja del sponsor con colores de marca.
-                    </p>
-                  </div>
-                  <div className="flex overflow-hidden rounded-lg border border-white/10">
-                    <span className="h-8 w-10" style={{ backgroundColor: sponsorBannerBackgroundColor }} />
-                    <span className="h-8 w-10" style={{ backgroundColor: sponsorBannerTextColor }} />
-                  </div>
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <ColorField
-                    label="Banner background"
-                    value={sponsorBannerBackgroundColor}
-                    onChange={setSponsorBannerBackgroundColor}
-                  />
-                  <ColorField
-                    label="Banner text"
-                    value={sponsorBannerTextColor}
-                    onChange={setSponsorBannerTextColor}
-                  />
-                </div>
-                {!sponsorBannerContrastOk ? (
-                  <p className="rounded-lg border border-[#ff5a3d]/25 bg-[#ff5a3d]/10 px-3 py-2 text-[11px] leading-4 text-[#ffc8bf]">
-                    El texto del sponsor banner necesita más contraste con el fondo para poder guardarse.
+            )}
+            {sponsorError && !wizardOpen ? <p className="text-[12px] text-[#ffb4b4]">{sponsorError}</p> : null}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#c4cbd4]">Sponsors activos</p>
+                  <p className="mt-1 text-[11px] text-[#7a8490]">
+                    Edita, ordena o pausa sponsors sin perder métricas ni historial.
                   </p>
-                ) : null}
-              </section>
-
-              {sponsorScope === "country" ? (
-                <select
-                  multiple
-                  value={selectedCountryCodes}
-                  onChange={(event) => setSelectedCountryCodes(Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
-                  className="min-h-[116px] w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-[#f5f7fb] outline-none"
-                >
-                  {sponsorCountryOptions.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.name} ({country.code})
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              {sponsorScope === "video" ? (
-                <select
-                  multiple
-                  value={selectedVideoIds}
-                  onChange={(event) => setSelectedVideoIds(Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
-                  className="min-h-[146px] w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-[#f5f7fb] outline-none"
-                >
-                  {sponsorVideoOptions.map((video) => {
-                    const videoId = String(video.id || "");
-                    return (
-                      <option key={videoId} value={videoId}>
-                        {video.title}
-                      </option>
-                    );
-                  })}
-                </select>
-              ) : null}
-              {sponsorPreviewVideo && sponsorPreviewVideoOptions.length > 0 ? (
-                <SponsorVideoPreview
-                  previewVideoOptions={sponsorPreviewVideoOptions}
-                  selectedPreviewVideoId={sponsorPreviewVideoId}
-                  onSelectPreviewVideoId={setSponsorPreviewVideoId}
-                  previewVideo={sponsorPreviewVideo}
-                  previewVideoSponsorNames={sponsorPreviewNames}
-                  previewActivity={sponsorPreviewActivity}
-                  selectedStyle={sponsorCardStyle}
-                  sponsorBannerColors={sponsorBannerColors}
-                />
-              ) : null}
-              <div className="flex items-center gap-2">
-                <Button type="submit" size="sm" disabled={creatingSponsor || !sponsorBannerContrastOk}>
-                  <Plus size={14} />
-                  {creatingSponsor ? "Guardando..." : "Agregar sponsor"}
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={resetSponsorForm} disabled={creatingSponsor}>
-                  Limpiar
-                </Button>
+                </div>
+                <p className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] text-[#9da5ae]">
+                  Multi sponsor se muestra con 2 o más sponsors por card.
+                </p>
               </div>
-            </form>
-            {sponsorError ? <p className="text-[12px] text-[#ffb4b4]">{sponsorError}</p> : null}
+              {sortedSponsors.map((sponsor, index) => (
+                <div key={sponsor.id} className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
+                      {sponsor.logo_url ? (
+                        <Image src={sponsor.logo_url} alt={sponsor.brand_name} fill sizes="44px" className="object-contain p-1.5" unoptimized />
+                      ) : (
+                        <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#f5f7fb]">
+                          {sponsor.brand_name.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-[13px] font-medium text-[#f5f7fb]">{sponsor.brand_name}</p>
+                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#d8dfe6]">
+                          {getSponsorCardStyleLabel(sponsor.sponsor_card_style, (sponsor.video_ids?.length || 0) || sponsor.country_codes.length)}
+                        </span>
+                        {sponsor.action_type === "coupon" && sponsor.discount_code ? (
+                          <span className="rounded-full border border-[#ffd66f]/25 bg-[#ffd66f]/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase text-[#ffd66f]">
+                            {sponsor.discount_code}
+                          </span>
+                        ) : null}
+                      </div>
+                      {sponsor.category_name ? <p className="truncate text-[11px] text-[#d8dfe8]">{sponsor.category_name}</p> : null}
+                      <p className="truncate text-[11px] text-[#9da5ae]">{formatSponsorCoverage(sponsor, sponsorVideoTitleById)}</p>
+                      {sponsor.cta_label ? <p className="truncate text-[11px] text-[#7a8490]">CTA: {sponsor.cta_label}</p> : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 md:justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openEditSponsor(sponsor.id)}
+                      aria-label={`Editar sponsor ${sponsor.brand_name}`}
+                    >
+                      <PencilSimple size={14} />
+                      Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => void moveSponsor(sponsor.id, -1)}
+                      disabled={index === 0}
+                      aria-label={`Subir sponsor ${sponsor.brand_name}`}
+                    >
+                      <CaretUp size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => void moveSponsor(sponsor.id, 1)}
+                      disabled={index === sortedSponsors.length - 1}
+                      aria-label={`Bajar sponsor ${sponsor.brand_name}`}
+                    >
+                      <CaretDown size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (confirmingSponsorRemovalId === sponsor.id) {
+                          void removeSponsor(sponsor.id);
+                          return;
+                        }
+                        setConfirmingSponsorRemovalId(sponsor.id);
+                      }}
+                      disabled={deletingSponsorId === sponsor.id}
+                      aria-label={
+                        confirmingSponsorRemovalId === sponsor.id
+                          ? `Confirmar pausa de ${sponsor.brand_name}`
+                          : `Pausar sponsor ${sponsor.brand_name}`
+                      }
+                      className={cn(
+                        "px-3",
+                        confirmingSponsorRemovalId === sponsor.id
+                          ? "border-[#ff5a3d]/35 bg-[#ff5a3d]/10 text-[#ff9a84]"
+                          : ""
+                      )}
+                    >
+                      {deletingSponsorId === sponsor.id ? <ArrowsClockwise size={14} className="animate-spin" /> : <Trash size={14} />}
+                      {deletingSponsorId === sponsor.id
+                        ? "Pausando..."
+                        : confirmingSponsorRemovalId === sponsor.id
+                          ? "Confirmar pausa"
+                          : "Pausar"}
+                    </Button>
+                    {confirmingSponsorRemovalId === sponsor.id && deletingSponsorId !== sponsor.id ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setConfirmingSponsorRemovalId(null)}
+                        aria-label={`Cancelar pausa de ${sponsor.brand_name}`}
+                      >
+                        Cancelar
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              {sponsors.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-[12px] text-[#9da5ae]">No hay sponsors cargados. Crea el primero para activar el preview y asignaciones.</p> : null}
+            </div>
             <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
               <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#c4cbd4]">Asignación masiva por video</p>
               <div className="mt-2 grid gap-2 md:grid-cols-4">
@@ -1115,13 +1042,32 @@ export function CreatorAdminPanel({
                   ))}
                 </select>
               </div>
-              <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto_auto]">
-                <input
-                  value={bulkReason}
-                  onChange={(event) => setBulkReason(event.target.value)}
-                  placeholder="Motivo de asignación (auditoría)"
-                  className="h-9 rounded-lg border border-white/10 bg-white/[0.03] px-2 text-[12px] text-[#f5f7fb] outline-none"
-                />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] text-[#9da5ae]">
+                  Selecciona videos filtrados por estado, país o búsqueda para asignar o revisar en lote.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => toggleBulkAll(true)}
+                    disabled={bulkRows.length === 0 || bulkAllSelected}
+                  >
+                    Seleccionar todo
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setBulkSelectedVideoIds([])}
+                    disabled={bulkSelectedVideoIds.length === 0}
+                  >
+                    Quitar selección
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
                 <Button type="button" size="sm" variant="outline" onClick={() => void runBulkAssign(true)} disabled={bulkBusy !== "idle"}>
                   {bulkBusy === "preview" ? "Preview..." : "Preview"}
                 </Button>
@@ -1174,10 +1120,79 @@ export function CreatorAdminPanel({
                             aria-label={`Seleccionar ${row.title}`}
                           />
                         </td>
-                        <td className="max-w-[340px] truncate px-2 py-2">{row.title}</td>
-                        <td className="px-2 py-2">{row.country}</td>
+                        <td className="max-w-[340px] px-2 py-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="min-w-0 truncate">{row.title}</span>
+                            {row.status !== "no_disponible" ? (
+                              <span
+                                className={cn(
+                                  "shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em]",
+                                  row.status === "confirmado"
+                                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                                    : row.status === "detectado_automaticamente"
+                                      ? "border-[#ffb84d]/25 bg-[#ffb84d]/10 text-[#ffd38a]"
+                                      : "border-[#ff5a3d]/25 bg-[#ff5a3d]/10 text-[#ff9a84]"
+                                )}
+                                title={row.sponsorDetectedText || "Sponsor detectado por la API de YouTube"}
+                              >
+                                {row.status === "confirmado"
+                                  ? "Sponsor"
+                                  : row.status === "detectado_automaticamente"
+                                    ? "Detectado"
+                                    : "Revisar"}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span
+                            className={cn(
+                              "inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold",
+                              getBulkPillToneClasses(row.status)
+                            )}
+                            title={`${row.country} (${row.countryCode})`}
+                          >
+                            {row.countryCode ? (
+                              <span className={`fi fi-${row.countryCode.toLowerCase()} shrink-0 text-[12px] leading-none`} />
+                            ) : (
+                              <span className="shrink-0 text-[11px] leading-none">🌍</span>
+                            )}
+                            <span className="min-w-0 truncate">{row.country}</span>
+                            <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-white/55">
+                              {row.countryCode || "--"}
+                            </span>
+                          </span>
+                        </td>
                         <td className="px-2 py-2">{formatSponsorStatus(row.status)}</td>
-                        <td className="px-2 py-2">{row.sponsorName || "Vacío"}</td>
+                        <td className="px-2 py-2">
+                          {row.sponsorName ? (
+                            <span
+                              className={cn(
+                                "inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold",
+                                getBulkSponsorPillClasses(row.status)
+                              )}
+                              title={row.sponsorName}
+                            >
+                              <span
+                                className={cn(
+                                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-black uppercase tracking-[0.08em]",
+                                  row.status === "confirmado"
+                                    ? "bg-emerald-400/15 text-emerald-300"
+                                    : row.status === "detectado_automaticamente"
+                                      ? "bg-amber-400/15 text-amber-300"
+                                      : "bg-[#ff5a3d]/15 text-[#ff9a84]"
+                                )}
+                              >
+                                SP
+                              </span>
+                              <span className="min-w-0 truncate">{row.sponsorName}</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold text-[#8f98a4]">
+                              Vacío
+                            </span>
+                          )}
+                        </td>
                         <td className="px-2 py-2">{formatDateShort(row.publishedAt)}</td>
                         <td className="px-2 py-2">{formatNumber(row.views)}</td>
                         <td className="px-2 py-2">{formatDateShort(row.updatedAt)}</td>
@@ -1221,66 +1236,6 @@ export function CreatorAdminPanel({
                   </Button>
                 </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              {sortedSponsors.map((sponsor, index) => (
-                <div key={sponsor.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
-                      {sponsor.logo_url ? (
-                        <Image src={sponsor.logo_url} alt={sponsor.brand_name} fill sizes="44px" className="object-contain p-1.5" unoptimized />
-                      ) : (
-                        <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#f5f7fb]">
-                          {sponsor.brand_name.slice(0, 2).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-[13px] font-medium text-[#f5f7fb]">{sponsor.brand_name}</p>
-                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#d8dfe6]">
-                          {getSponsorCardStyleLabel(sponsor.sponsor_card_style, (sponsor.video_ids?.length || 0) || sponsor.country_codes.length)}
-                        </span>
-                      </div>
-                      {sponsor.category_name ? <p className="truncate text-[11px] text-[#d8dfe8]">{sponsor.category_name}</p> : null}
-                      <p className="truncate text-[11px] text-[#9da5ae]">{formatSponsorCoverage(sponsor, sponsorVideoTitleById)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => void moveSponsor(sponsor.id, -1)}
-                      disabled={index === 0}
-                      aria-label={`Subir sponsor ${sponsor.brand_name}`}
-                    >
-                      <CaretUp size={14} />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => void moveSponsor(sponsor.id, 1)}
-                      disabled={index === sortedSponsors.length - 1}
-                      aria-label={`Bajar sponsor ${sponsor.brand_name}`}
-                    >
-                      <CaretDown size={14} />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => void removeSponsor(sponsor.id)}
-                      disabled={deletingSponsorId === sponsor.id}
-                      aria-label={`Eliminar sponsor ${sponsor.brand_name}`}
-                    >
-                      {deletingSponsorId === sponsor.id ? <ArrowsClockwise size={14} className="animate-spin" /> : <Trash size={14} />}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {sponsors.length === 0 ? <p className="text-[12px] text-[#9da5ae]">No hay sponsors cargados.</p> : null}
             </div>
           </CardContent>
         </Card>
@@ -1342,40 +1297,6 @@ function formatSponsorStatus(status: "confirmado" | "detectado_automaticamente" 
   }
 }
 
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const safeColorValue = normalizeHexColor(value) || "#000000";
-
-  return (
-    <label className="grid gap-1.5">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8f98a4]">{label}</span>
-      <span className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
-        <input
-          type="color"
-          value={safeColorValue}
-          onChange={(event) => onChange(event.target.value)}
-          className="h-10 w-11 cursor-pointer rounded-lg border border-white/10 bg-white/[0.03] p-1"
-          aria-label={label}
-        />
-        <input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="#ffffff"
-          maxLength={7}
-          className="h-10 rounded-lg border border-white/10 bg-white/[0.03] px-3 font-mono text-[13px] text-[#f5f7fb] outline-none"
-        />
-      </span>
-    </label>
-  );
-}
-
 function formatSponsorCoverage(sponsor: MapRailSponsor, videoTitleById: Map<string, string>) {
   const scope = sponsor.scope || ((sponsor.video_ids || []).length > 0 ? "video" : (sponsor.country_codes || []).length > 0 ? "country" : "global");
   if (scope === "video") {
@@ -1393,29 +1314,28 @@ function formatSponsorCoverage(sponsor: MapRailSponsor, videoTitleById: Map<stri
   return "GLOBAL";
 }
 
-function normalizeIdList(values: string[]) {
-  return Array.from(
-    new Set(
-      values
-        .map((value) => String(value || "").trim())
-        .filter(Boolean)
-    )
-  );
-}
-
-function pickStableVideoId(videoIds: string[], seed: string) {
-  const normalized = normalizeIdList(videoIds);
-  if (normalized.length === 0) return "";
-  const sorted = [...normalized].sort((a, b) => a.localeCompare(b));
-  const index = hashString(`${seed}|${sorted.join("|")}`) % sorted.length;
-  return sorted[index] || "";
-}
-
-function hashString(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
+function getBulkPillToneClasses(status: "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible") {
+  switch (status) {
+    case "confirmado":
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-200";
+    case "detectado_automaticamente":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-100";
+    case "pendiente_revision":
+      return "border-[#ff5a3d]/20 bg-[#ff5a3d]/10 text-[#ffd0c6]";
+    default:
+      return "border-white/10 bg-white/[0.03] text-[#d8dfe6]";
   }
-  return hash >>> 0;
+}
+
+function getBulkSponsorPillClasses(status: "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible") {
+  switch (status) {
+    case "confirmado":
+      return "border-emerald-500/20 bg-emerald-500/8 text-emerald-100";
+    case "detectado_automaticamente":
+      return "border-amber-500/20 bg-amber-500/8 text-amber-50";
+    case "pendiente_revision":
+      return "border-[#ff5a3d]/20 bg-[#ff5a3d]/8 text-[#ffd0c6]";
+    default:
+      return "border-white/10 bg-white/[0.03] text-[#d8dfe6]";
+  }
 }

@@ -436,9 +436,9 @@ export async function DELETE(request: Request) {
   } catch (error) {
     console.error("[api/map-admin/sponsors DELETE]", error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid sponsor delete payload", details: error.issues }, { status: 400 });
+      return NextResponse.json({ error: "Invalid sponsor pause payload", details: error.issues }, { status: 400 });
     }
-    return NextResponse.json({ error: "Could not delete sponsor" }, { status: 500 });
+    return NextResponse.json({ error: "Could not pause sponsor" }, { status: 500 });
   }
 }
 

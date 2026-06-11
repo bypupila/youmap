@@ -110,7 +110,7 @@ export async function createSponsorBulkAssignJob(input: {
   requestedVideoIds: string[];
   validVideoIds: string[];
   skippedVideoIds: string[];
-  reason: string;
+  reason: string | null;
   setPrimary: boolean;
 }) {
   await ensureJobsTable();

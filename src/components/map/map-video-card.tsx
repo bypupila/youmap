@@ -18,6 +18,11 @@ type MapVideoCardProps = {
   video: TravelVideoLocation;
   activity?: MapVideoCardActivity;
   sponsorNames?: string[];
+  sponsorDisplay?: {
+    actionType?: "link" | "coupon" | null;
+    ctaLabel?: string | null;
+    couponCode?: string | null;
+  };
   sponsorBannerColors?: SponsorBannerColors | null;
   highlightedVideoId?: string | null;
   isDemoMode?: boolean;
@@ -30,6 +35,7 @@ export function MapVideoCard({
   video,
   activity,
   sponsorNames = [],
+  sponsorDisplay,
   sponsorBannerColors = null,
   highlightedVideoId = null,
   isDemoMode = false,
@@ -55,6 +61,11 @@ export function MapVideoCard({
     ? getDemoMapPreviewImage(video.youtube_video_id)
     : video.thumbnail_url || "/creators/final-cta-map-mockup.png";
   const hasSponsorBanner = sponsorNames.length > 0;
+  const ctaLabel = String(sponsorDisplay?.ctaLabel || "").trim();
+  const couponCode = String(sponsorDisplay?.couponCode || "").trim();
+  const actionType = sponsorDisplay?.actionType || null;
+  const resolvedCtaLabel =
+    ctaLabel || (actionType === "coupon" || couponCode ? "Copiar" : "Ver oferta");
   const sponsorBannerStyle =
     sponsorBannerColors && sponsorNames.length === 1
       ? {
@@ -65,7 +76,7 @@ export function MapVideoCard({
       : undefined;
 
   const cardShellClassName = cn(
-    "group relative w-[260px] shrink-0 overflow-hidden rounded-xl border-2 bg-[#050505] transition-all duration-300 cursor-pointer flex flex-col",
+    "group relative w-[260px] shrink-0 overflow-hidden rounded-xl border-2 bg-transparent transition-all duration-300 cursor-pointer flex flex-col",
     isWatched
       ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
       : isWatchLater
@@ -131,8 +142,9 @@ export function MapVideoCard({
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-[8px] font-black uppercase">{sponsorNames[0]}</span>
             <div className="flex items-center gap-1">
-              <span className="text-[10px]">✂</span>
-              <span className="border border-yellow-500/50 px-1 text-[8px] font-mono font-bold uppercase tracking-widest">CODE: GURU20</span>
+              <span className="border border-yellow-500/50 px-1 text-[8px] font-mono font-bold uppercase tracking-widest">
+                {couponCode ? `CODE: ${couponCode}` : resolvedCtaLabel}
+              </span>
             </div>
           </div>
         </div>
@@ -152,8 +164,14 @@ export function MapVideoCard({
 
     return (
       <div className="shrink-0 border-b border-red-500/35 bg-red-600 p-2 text-white transition-colors hover:bg-red-500" style={sponsorBannerStyle}>
-        <div className="flex items-center justify-center gap-2">
-          <span className="text-[9px] font-black uppercase tracking-widest">[ {sponsorNames[0]} ] 50% OFF ➔</span>
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span className="min-w-0 truncate text-[9px] font-black uppercase tracking-widest">
+            [ {sponsorNames[0]} ]
+          </span>
+          <span className="inline-flex max-w-[58%] shrink-0 items-center justify-end gap-1 whitespace-nowrap text-right text-[9px] font-black uppercase tracking-widest">
+            <span className="min-w-0 truncate">{resolvedCtaLabel}</span>
+            <span aria-hidden="true">-&gt;</span>
+          </span>
         </div>
       </div>
     );
@@ -172,30 +190,30 @@ export function MapVideoCard({
         onSelect?.(video);
       }}
     >
-      {sponsorBanner}
+      <Image
+        src={thumbnailSrc}
+        alt={video.title}
+        fill
+        priority={imagePriority}
+        sizes="260px"
+        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
 
-      {hasSponsorBanner && badges.length > 0 ? (
-        <div className="shrink-0 border-b border-white/[0.05] bg-black/75 px-2 py-1">
-          <div className="flex flex-wrap gap-1.5">
-            {badges.map((badge) => (
-              <span key={badge.text} className={cn("px-1.5 py-0.5 text-[8px] font-bold uppercase rounded shadow-sm border", badge.color)}>
-                {badge.text}
-              </span>
-            ))}
+      <div className="relative z-20 flex h-full min-h-0 flex-col">
+        {sponsorBanner}
+        {hasSponsorBanner && badges.length > 0 ? (
+          <div className="shrink-0 px-2 py-1">
+            <div className="flex flex-wrap gap-1.5">
+              {badges.map((badge) => (
+                <span key={badge.text} className={cn("px-1.5 py-0.5 text-[8px] font-bold uppercase rounded shadow-sm border", badge.color)}>
+                  {badge.text}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
       <div className="relative flex-1 w-full overflow-hidden">
-        <Image
-          src={thumbnailSrc}
-          alt={video.title}
-          fill
-          priority={imagePriority}
-          sizes="260px"
-          className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500"
-        />
-
         {!hasSponsorBanner && badges.length > 0 ? (
           <div className="absolute top-2 left-2 z-20 flex gap-1.5 justify-start">
             {badges.map((badge) => (
@@ -206,15 +224,15 @@ export function MapVideoCard({
           </div>
         ) : null}
 
-        <div className="absolute bottom-0 left-0 right-0 z-20 bg-black/50 backdrop-blur-sm p-2">
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.58)_100%)] p-2 pt-8">
           <p className="text-[11px] font-semibold text-white leading-tight drop-shadow-[0_2px_3px_rgba(0,0,0,1)]">
             {video.title}
           </p>
         </div>
       </div>
 
-      <div className="shrink-0 bg-black border-t border-zinc-800 p-1.5 flex items-center justify-between z-20 relative">
-        <div className="flex gap-1.5 items-center text-[8px] font-mono text-zinc-400 w-1/3 justify-start">
+      <div className="relative z-20 shrink-0 border-t border-white/10 bg-[linear-gradient(180deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18))] p-1.5 flex items-center justify-between">
+        <div className="flex gap-1.5 items-center text-[8px] font-mono text-white/78 w-1/3 justify-start drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="12"
@@ -232,12 +250,12 @@ export function MapVideoCard({
           <span>{formatCompactMetric(videoViews)}</span>
         </div>
 
-        <div className="flex gap-1.5 items-center text-[8px] font-mono text-zinc-400 justify-center w-1/3 absolute left-1/2 -translate-x-1/2">
+        <div className="flex gap-1.5 items-center text-[8px] font-mono text-white/78 justify-center w-1/3 absolute left-1/2 -translate-x-1/2 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           <span className="text-[10px]">{countryCodeToFlag(countryCode)}</span>
           <span className="truncate">{countryName}</span>
         </div>
 
-        <div className="flex gap-1.5 items-center text-[8px] font-mono text-zinc-400 w-1/3 justify-end">
+        <div className="flex gap-1.5 items-center text-[8px] font-mono text-white/78 w-1/3 justify-end drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="12"
@@ -254,6 +272,7 @@ export function MapVideoCard({
           </svg>
           <span>{durationLabel}</span>
         </div>
+      </div>
       </div>
     </div>
   );
