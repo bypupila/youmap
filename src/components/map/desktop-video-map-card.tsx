@@ -157,11 +157,10 @@ export function DesktopVideoMapCard({
     orderedVideos.findIndex((video) => video.youtube_video_id === selectedVideo.youtube_video_id)
   );
   const youtubeHref = getYouTubeHref(selectedVideo);
-  const isSeen = activity.seenIds.has(selectedVideo.youtube_video_id);
   const isOpenedInYoutube = activity.openedIds.has(selectedVideo.youtube_video_id);
   const isSaved = activity.savedIds.has(selectedVideo.youtube_video_id);
   const isFeatured = activity.featuredIds.has(selectedVideo.youtube_video_id);
-  const watchStatus = activity.watchStatusById[selectedVideo.youtube_video_id] || (isSeen ? "not_finished" : undefined);
+  const watchStatus = activity.watchStatusById[selectedVideo.youtube_video_id];
   const watchBadgeLabel = getVideoWatchStateLabel({
     openedInYoutube: isOpenedInYoutube,
     watchStatus,
@@ -172,7 +171,7 @@ export function DesktopVideoMapCard({
   });
   const isWatched = watchStatus === "watched";
   const isWatchLater = watchStatus === "watch_later";
-  const isIncomplete = watchStatus === "not_finished" || isOpenedInYoutube;
+  const isIncomplete = watchStatus === "not_finished";
   const cardBorderClassName = isWatched
     ? "border-2 border-emerald-500/55 shadow-[0_30px_90px_-30px_rgba(16,185,129,0.28)]"
     : isWatchLater
@@ -360,7 +359,7 @@ export function DesktopVideoMapCard({
         country_name: selectedVideo.country_name,
       });
     }
-    activity.markVideoStarted(selectedVideo.youtube_video_id);
+    activity.markVideoOpened(selectedVideo.youtube_video_id);
     onOpenInYouTube?.(selectedVideo);
     window.open(youtubeHref, "_blank", "noopener");
   }

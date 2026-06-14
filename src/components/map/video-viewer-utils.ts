@@ -140,7 +140,8 @@ export function getVideoWatchStateLabel(input: {
   if (input.watchStatus === "watched") return "COMPLETADO";
   if (input.watchStatus === "watch_later") return "VER MÁS TARDE";
   if (input.watchStatus === "not_started") return "SIN INICIAR";
-  if (input.watchStatus === "not_finished" || input.openedInYoutube) return "INCOMPLETO";
+  if (input.watchStatus === "not_finished") return "INCOMPLETO";
+  if (input.openedInYoutube) return "ABIERTO EN YOUTUBE";
   return "SIN INICIAR";
 }
 
@@ -151,7 +152,8 @@ export function getVideoWatchStateTone(input: {
   if (input.watchStatus === "watched") return "success" as const;
   if (input.watchStatus === "watch_later") return "watch_later" as const;
   if (input.watchStatus === "not_started") return "idle" as const;
-  if (input.watchStatus === "not_finished" || input.openedInYoutube) return "danger" as const;
+  if (input.watchStatus === "not_finished") return "danger" as const;
+  if (input.openedInYoutube) return "idle" as const;
   return "idle" as const;
 }
 

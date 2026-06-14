@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getValidSessionUserIdFromRequest } from "@/lib/current-user";
+import { runDueSponsorReportSchedules } from "@/lib/sponsor-reports";
 import { invalidateExpiredYouTubeStatistics } from "@/lib/youtube-data-governance";
 
 export const dynamic = "force-dynamic";
@@ -39,9 +40,27 @@ async function handle(request: Request) {
     }
 
     const result = await invalidateExpiredYouTubeStatistics();
+    let sponsorReportSchedules: Awaited<ReturnType<typeof runDueSponsorReportSchedules>> | { processed: number; results: unknown[]; error: string } = {
+      processed: 0,
+      results: [],
+    };
+    try {
+      const url = new URL(request.url);
+      sponsorReportSchedules = await runDueSponsorReportSchedules({
+        origin: `${url.protocol}//${url.host}`,
+        limit: 20,
+      });
+    } catch (error) {
+      sponsorReportSchedules = {
+        processed: 0,
+        results: [],
+        error: error instanceof Error ? error.message : "Could not run sponsor report schedules",
+      };
+    }
     return NextResponse.json({
       ok: true,
       ...result,
+      sponsor_report_schedules: sponsorReportSchedules,
     });
   } catch (error) {
     console.error("[api/youtube/data-expiry/sweep]", error);

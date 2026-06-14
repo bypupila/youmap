@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ShieldCheck, ListChecks, CheckCircle, Warning, XCircle, HandPointing, ArrowsClockwise } from "@phosphor-icons/react";
 
 type ReleaseCheckStatus = "pass" | "fail" | "warn" | "manual";
 
@@ -20,24 +21,33 @@ type ReleasePayload = {
   }>;
 };
 
-const statusLabel: Record<ReleaseCheckStatus, string> = {
-  pass: "Pass",
-  fail: "Blocker",
-  warn: "Warning",
-  manual: "Manual",
+const statusMeta: Record<ReleaseCheckStatus, { label: string; className: string; icon: any }> = {
+  pass: {
+    label: "Pasa",
+    className: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
+    icon: CheckCircle,
+  },
+  fail: {
+    label: "Bloqueante",
+    className: "border-rose-500/25 bg-rose-500/10 text-rose-300",
+    icon: XCircle,
+  },
+  warn: {
+    label: "Advertencia",
+    className: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+    icon: Warning,
+  },
+  manual: {
+    label: "Manual",
+    className: "border-slate-500/25 bg-slate-500/10 text-slate-300",
+    icon: HandPointing,
+  },
 };
 
-const statusClass: Record<ReleaseCheckStatus, string> = {
-  pass: "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
-  fail: "border-rose-400/30 bg-rose-500/10 text-rose-200",
-  warn: "border-amber-400/30 bg-amber-500/10 text-amber-200",
-  manual: "border-slate-400/30 bg-slate-500/10 text-slate-200",
-};
-
-const overallLabel: Record<ReleasePayload["overall_status"], string> = {
-  go: "GO",
-  go_with_warnings: "GO con advertencias",
-  no_go: "NO GO",
+const overallMeta: Record<ReleasePayload["overall_status"], { label: string; className: string }> = {
+  go: { label: "Listo (GO)", className: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25" },
+  go_with_warnings: { label: "GO con Advertencias", className: "text-amber-400 bg-amber-500/10 border-amber-500/25" },
+  no_go: { label: "NO GO (Bloqueado)", className: "text-rose-400 bg-rose-500/10 border-rose-500/25" },
 };
 
 export function ReleaseReadinessPanel() {
@@ -65,71 +75,99 @@ export function ReleaseReadinessPanel() {
   }, [load]);
 
   return (
-    <section className="tm-surface-strong rounded-[2rem] border border-white/10 p-5 shadow-[0_24px_100px_-56px_rgba(0,0,0,0.9)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="tm-surface-strong rounded-[2rem] border border-white/10 p-6 shadow-[0_24px_100px_-56px_rgba(0,0,0,0.9)] bg-white/[0.01] backdrop-blur-md transition-all duration-300 hover:border-white/15">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="tym-overline text-[#8ff0ff]">Release Gate</p>
-          <h2 className="mt-1 text-lg font-semibold text-[#f5f7fb]">Checklist go/no-go ejecutable</h2>
+          <p className="tym-overline text-[#8ff0ff] flex items-center gap-1.5">
+            <ShieldCheck size={14} className="text-[#8ff0ff]" weight="duotone" />
+            Release Gate
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-[#f5f7fb]">Checklist de Producción Go/No-Go</h2>
         </div>
         <button
           type="button"
           onClick={() => void load()}
-          className="inline-flex h-9 items-center rounded-lg border border-white/15 bg-white/[0.03] px-3 text-[12px] text-[#d8dee6] hover:bg-white/[0.07]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 text-[12px] font-semibold text-[#d8dee6] hover:bg-white/[0.07] hover:text-white transition-all active:scale-95 disabled:opacity-50"
           disabled={loading}
         >
+          <ArrowsClockwise size={13} className={loading ? "animate-spin" : ""} />
           {loading ? "Actualizando..." : "Actualizar"}
         </button>
       </div>
 
-      {error ? <p className="mt-4 text-sm text-[#ffb0a7]">{error}</p> : null}
+      {error ? (
+        <p className="mt-4 text-sm text-[#ffb0a7] flex items-center gap-1.5">
+          <Warning size={16} />
+          {error}
+        </p>
+      ) : null}
 
       {!error && data ? (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-4">
-            <MetricCard label="Estado" value={overallLabel[data.overall_status]} />
-            <MetricCard label="Blockers" value={String(data.blockers)} />
-            <MetricCard label="Warnings" value={String(data.warnings)} />
-            <MetricCard label="Manual" value={String(data.manual)} />
+          <div className="mt-5 grid gap-3 sm:grid-cols-4">
+            <div className={`rounded-xl border p-4 transition-all duration-300 hover:bg-white/[0.02] ${overallMeta[data.overall_status].className}`}>
+              <p className="text-[10px] uppercase tracking-wider opacity-70">Decisión General</p>
+              <p className="mt-1.5 text-lg font-bold tracking-tight">{overallMeta[data.overall_status].label}</p>
+            </div>
+            <MetricCard label="Bloqueadores" value={String(data.blockers)} tone={data.blockers > 0 ? "error" : "success"} />
+            <MetricCard label="Advertencias" value={String(data.warnings)} tone={data.warnings > 0 ? "warning" : "success"} />
+            <MetricCard label="Manuales" value={String(data.manual)} tone="neutral" />
           </div>
-          <p className="mt-3 text-[12px] text-[#9aa3af]">Generado: {new Date(data.generated_at).toLocaleString("es-AR")}</p>
 
-          <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
-            <table className="min-w-full text-left text-[12px]">
-              <thead className="bg-white/[0.03] text-[#9aa3af]">
-                <tr>
-                  <th className="px-2 py-2">Grupo</th>
-                  <th className="px-2 py-2">Check</th>
-                  <th className="px-2 py-2">Estado</th>
-                  <th className="px-2 py-2">Detalle</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.checks.map((check) => (
-                  <tr key={check.id} className="border-t border-white/10 text-[#d8dee6]">
-                    <td className="px-2 py-2">{check.group}</td>
-                    <td className="px-2 py-2">{check.label}</td>
-                    <td className="px-2 py-2">
-                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${statusClass[check.status]}`}>
-                        {statusLabel[check.status]}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2">{check.detail}</td>
+          <div className="mt-6 overflow-hidden rounded-xl border border-white/5 bg-white/[0.01]">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-[12px]">
+                <thead className="border-b border-white/5 bg-white/[0.02] text-[#9aa3af]">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-wider text-[10px]">Grupo</th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-wider text-[10px]">Verificación</th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-wider text-[10px]">Estado</th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-wider text-[10px]">Detalle técnico</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {data.checks.map((check) => {
+                    const meta = statusMeta[check.status];
+                    const Icon = meta.icon;
+                    return (
+                      <tr key={check.id} className="text-[#d8dee6] hover:bg-white/[0.02] transition-colors">
+                        <td className="px-4 py-3.5 font-mono text-[11px] text-[#8ff0ff]/70">{check.group}</td>
+                        <td className="px-4 py-3.5 font-semibold text-[#f5f7fb]">{check.label}</td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.06em] ${meta.className}`}>
+                            <Icon size={10} weight="fill" />
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-[#b8c0cb] font-sans leading-relaxed">{check.detail}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
+          <p className="mt-3 text-[10px] text-[#8f98a6] text-right font-mono">
+            Generado: {new Date(data.generated_at).toLocaleString("es-AR")}
+          </p>
         </>
       ) : null}
     </section>
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({ label, value, tone }: { label: string; value: string; tone: "success" | "error" | "warning" | "neutral" }) {
+  const toneClasses = {
+    success: "border-emerald-500/10 bg-emerald-500/[0.02] text-emerald-400",
+    error: "border-rose-500/20 bg-rose-500/[0.03] text-rose-400",
+    warning: "border-amber-500/20 bg-amber-500/[0.03] text-amber-400",
+    neutral: "border-white/10 bg-white/[0.02] text-zinc-400",
+  };
+
   return (
-    <div className="rounded-[1rem] border border-white/10 bg-white/[0.03] p-3">
-      <p className="text-[11px] uppercase tracking-[0.12em] text-[#9aa3af]">{label}</p>
-      <p className="mt-1 text-[20px] font-semibold text-[#f5f7fb]">{value}</p>
+    <div className={`rounded-xl border p-4 transition-all duration-300 hover:bg-white/[0.02] ${toneClasses[tone]}`}>
+      <p className="text-[10px] uppercase tracking-wider opacity-70">{label}</p>
+      <p className="mt-1.5 text-2xl font-bold tracking-tight text-[#f5f7fb]">{value}</p>
     </div>
   );
 }

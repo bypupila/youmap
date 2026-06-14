@@ -114,9 +114,9 @@ function AuthPageContent() {
           </div>
 
           <div className="mb-6 flex flex-wrap gap-2">
-            <button type="button" className="tym-nav-pill" data-active="true" aria-current="true">
+            <span className="tym-nav-pill" data-active="true" aria-current="true">
               Iniciar sesión
-            </button>
+            </span>
           </div>
 
           <form className="grid gap-4" onSubmit={handleLogin}>

@@ -1022,9 +1022,9 @@ function renderStepBody(
             </div>
             <p className="text-[16px] font-medium text-[#f1f1f1]">{sponsor.brand}</p>
             <p className="onboarding-description mt-2 text-[13px] leading-5">{ctx.copy.sponsorsDescription}</p>
-            <button type="button" className="tym-btn-secondary mt-5 w-full border border-black/10 bg-white text-black hover:bg-white hover:text-black">
+            <span className="tym-btn-secondary mt-5 w-full border border-black/10 bg-white text-black hover:bg-white hover:text-black">
               {ctx.copy.sponsorsConnect}
-            </button>
+            </span>
           </div>
         ))}
       </div>

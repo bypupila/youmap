@@ -143,7 +143,7 @@ function CreatorNav() {
           <Link href="/explore" className="transition hover:text-white">Explorar</Link>
         </div>
         <div className="flex items-center gap-2 text-[13px] font-semibold">
-          <button className="hidden rounded-full border border-[#ff473b]/65 px-3 py-2 text-white/85 transition hover:border-[#ff5b50] hover:text-white md:inline-flex" type="button">ES</button>
+          <span className="hidden rounded-full border border-[#ff473b]/65 px-3 py-2 text-white/85 md:inline-flex">ES</span>
           <Link href="/auth" className="hidden rounded-full px-4 py-2 text-white/75 transition hover:text-white md:inline-flex">Iniciar sesión</Link>
           <Link href="/onboarding?lang=es" className="rounded-full bg-[#ff473b] px-5 py-3 text-white shadow-[0_18px_38px_-22px_rgba(255,71,59,0.85)] transition hover:-translate-y-0.5 hover:bg-[#ff594e] active:translate-y-0 active:scale-[0.98]">
             Crear mi mapa

@@ -277,22 +277,12 @@ export function useLocalVideoActivity(options: UseVideoActivityOptions = {}): Vi
       if (next !== current) writeStoredIds(VIDEO_ACTIVITY_STORAGE_KEYS.opened, LEGACY_VIDEO_ACTIVITY_STORAGE_KEYS.opened, next);
       return next;
     });
-    if (normalized) {
-      setWatchStatusById((current) => {
-        if (current[normalized] === "watched") return current;
-        if (current[normalized] === "not_finished") return current;
-        const next = { ...current, [normalized]: "not_finished" as VideoWatchStatus };
-        writeWatchStatusById(next);
-        return next;
-      });
-      if (shouldPersistToProfile) {
-        syncViewerVideoActivity(persistedChannelId, [{
-          youtubeVideoId: normalized,
-          watchStatus: "not_finished",
-          markSeen: true,
-          markOpened: true,
-        }]);
-      }
+    if (normalized && shouldPersistToProfile) {
+      syncViewerVideoActivity(persistedChannelId, [{
+        youtubeVideoId: normalized,
+        markSeen: true,
+        markOpened: true,
+      }]);
     }
   }, [persistedChannelId, shouldPersistToProfile]);
 

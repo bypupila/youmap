@@ -53,7 +53,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
   const currentSection = sections.find((section) => section.country_code === currentCountryCode) || sections[0] || null;
   const currentSeen = Boolean(currentVideo?.youtube_video_id && activity.seenIds.has(currentVideo.youtube_video_id));
   const currentOpenedInYoutube = Boolean(currentVideo?.youtube_video_id && activity.openedIds.has(currentVideo.youtube_video_id));
-  const currentWatchStatus = currentVideo?.youtube_video_id ? activity.watchStatusById[currentVideo.youtube_video_id] || (currentSeen ? "not_finished" : undefined) : undefined;
+  const currentWatchStatus = currentVideo?.youtube_video_id ? activity.watchStatusById[currentVideo.youtube_video_id] : undefined;
   const currentWatchBadgeLabel = getVideoWatchStateLabel({
     openedInYoutube: currentOpenedInYoutube,
     watchStatus: currentWatchStatus,
@@ -84,7 +84,7 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
         country_name: currentVideo.country_name,
       });
     }
-    activity.markVideoStarted(currentVideo.youtube_video_id);
+    activity.markVideoOpened(currentVideo.youtube_video_id);
     onOpenInYouTube?.(currentVideo);
     window.open(youtubeHref, "_blank", "noopener");
   }

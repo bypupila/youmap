@@ -6,7 +6,7 @@ import { buildPublicMapUrl } from "@/lib/map-urls";
 import { normalizeSponsorCardStyle } from "@/lib/sponsor-card-style";
 import { normalizeOptionalHexColor } from "@/lib/sponsor-banner-colors";
 
-export type CreatorAdminTab = "resumen" | "videos" | "paises" | "votaciones" | "sponsors" | "audiencia" | "actividad";
+export type CreatorAdminTab = "resumen" | "videos" | "paises" | "votaciones" | "sponsors" | "media-kit" | "negocio" | "audiencia" | "actividad";
 export type CreatorAdminUiStatus = "auto" | "manual" | "pending" | "unlocated";
 export type CreatorAdminSeverity = "info" | "warning" | "error";
 
@@ -53,6 +53,11 @@ export interface CreatorAdminSponsor {
   affiliate_url: string | null;
   discount_code: string | null;
   description: string | null;
+  category_name: string | null;
+  action_type: "link" | "coupon" | null;
+  action_value: string | null;
+  cta_label: string | null;
+  display_order: number | null;
   active: boolean;
   country_codes: string[];
   video_ids: string[];
@@ -156,6 +161,22 @@ export interface CreatorAdminSummary {
   active_vote_count: number;
 }
 
+export interface CreatorBusinessReadinessCheck {
+  key: string;
+  label: string;
+  status: "ready" | "missing";
+  detail: string;
+  required: boolean;
+}
+
+export interface CreatorBusinessReadiness {
+  ready: boolean;
+  ready_count: number;
+  total_count: number;
+  missing_required_count: number;
+  checks: CreatorBusinessReadinessCheck[];
+}
+
 export interface CreatorAdminPayload {
   channel: TravelChannel & { canonicalHandle: string | null };
   mapUrl: string;
@@ -169,6 +190,7 @@ export interface CreatorAdminPayload {
   syncStatus: CreatorAdminSyncStatus;
   quickAction: CreatorAdminQuickAction;
   summary: CreatorAdminSummary;
+  businessReadiness: CreatorBusinessReadiness;
 }
 
 interface LoadCreatorAdminPayloadInput {
@@ -229,6 +251,11 @@ interface SponsorRow {
   affiliate_url: string | null;
   discount_code: string | null;
   description: string | null;
+  category_name: string | null;
+  action_type: string | null;
+  action_value: string | null;
+  cta_label: string | null;
+  display_order: number | string | null;
   sponsor_card_style: string | null;
   sponsor_banner_background_color: string | null;
   sponsor_banner_text_color: string | null;
@@ -270,6 +297,12 @@ interface CreatorAdminSchemaFeatures {
   hasVideoLocationInternalNotes: boolean;
   hasSponsorCardStyle: boolean;
   hasSponsorBannerColors: boolean;
+  hasSponsorCategoryId: boolean;
+  hasSponsorCategories: boolean;
+  hasSponsorActionType: boolean;
+  hasSponsorActionValue: boolean;
+  hasSponsorCtaLabel: boolean;
+  hasSponsorDisplayOrder: boolean;
   hasSponsorDates: boolean;
   hasSponsorInternalNotes: boolean;
   hasPollVisibility: boolean;
@@ -283,6 +316,8 @@ export const CREATOR_ADMIN_TABS: CreatorAdminTab[] = [
   "paises",
   "votaciones",
   "sponsors",
+  "media-kit",
+  "negocio",
   "audiencia",
   "actividad",
 ];
@@ -325,6 +360,12 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     hasSponsorCardStyle,
     hasSponsorBannerBackgroundColor,
     hasSponsorBannerTextColor,
+    hasSponsorCategoryId,
+    hasSponsorCategories,
+    hasSponsorActionType,
+    hasSponsorActionValue,
+    hasSponsorCtaLabel,
+    hasSponsorDisplayOrder,
     hasSponsorStartDate,
     hasSponsorEndDate,
     hasSponsorInternalNotes,
@@ -345,6 +386,12 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     columnExists("public", "sponsors", "sponsor_card_style"),
     columnExists("public", "sponsors", "sponsor_banner_background_color"),
     columnExists("public", "sponsors", "sponsor_banner_text_color"),
+    columnExists("public", "sponsors", "category_id"),
+    tableExists("public", "sponsor_categories"),
+    columnExists("public", "sponsors", "action_type"),
+    columnExists("public", "sponsors", "action_value"),
+    columnExists("public", "sponsors", "cta_label"),
+    columnExists("public", "sponsors", "display_order"),
     columnExists("public", "sponsors", "start_date"),
     columnExists("public", "sponsors", "end_date"),
     columnExists("public", "sponsors", "internal_notes"),
@@ -366,11 +413,128 @@ async function detectCreatorAdminSchemaFeatures(): Promise<CreatorAdminSchemaFea
     hasVideoLocationInternalNotes,
     hasSponsorCardStyle,
     hasSponsorBannerColors: hasSponsorBannerBackgroundColor && hasSponsorBannerTextColor,
+    hasSponsorCategoryId,
+    hasSponsorCategories,
+    hasSponsorActionType,
+    hasSponsorActionValue,
+    hasSponsorCtaLabel,
+    hasSponsorDisplayOrder,
     hasSponsorDates: hasSponsorStartDate && hasSponsorEndDate,
     hasSponsorInternalNotes,
     hasPollVisibility,
     hasPollWinnerFields: hasPollWinnerCountryCode && hasPollWinnerCity && hasPollConvertedToDestination,
     hasPollSponsorFields: hasPollSponsorId && hasPollSponsorUrl,
+  };
+}
+
+async function buildCreatorBusinessReadiness(): Promise<CreatorBusinessReadiness> {
+  const [
+    hasSponsorReportLinks,
+    hasMediaKitSettings,
+    hasSponsorCampaigns,
+    hasSponsorCampaignDeliverables,
+    hasSponsorCampaignPayments,
+    hasBrandPortalLinks,
+    hasBrandPortalRequireAccessCode,
+    hasBrandPortalAccessEmail,
+    hasBrandPortalAccessCodeHash,
+    hasSponsorReportSchedules,
+    hasCampaignAgreementType,
+    hasCampaignBalanceItems,
+  ] = await Promise.all([
+    tableExists("public", "sponsor_report_links"),
+    tableExists("public", "media_kit_settings"),
+    tableExists("public", "sponsor_campaigns"),
+    tableExists("public", "sponsor_campaign_deliverables"),
+    tableExists("public", "sponsor_campaign_payments"),
+    tableExists("public", "brand_portal_links"),
+    columnExists("public", "brand_portal_links", "require_access_code"),
+    columnExists("public", "brand_portal_links", "access_email"),
+    columnExists("public", "brand_portal_links", "access_code_hash"),
+    tableExists("public", "sponsor_report_schedules"),
+    columnExists("public", "sponsor_campaigns", "agreement_type"),
+    tableExists("public", "sponsor_campaign_balance_items"),
+  ]);
+
+  const hasEmailProvider = Boolean(process.env.RESEND_API_KEY && (process.env.REPORT_EMAIL_FROM || process.env.RESEND_FROM_EMAIL));
+  const checks: CreatorBusinessReadinessCheck[] = [
+    {
+      key: "sponsor_reports",
+      label: "Reportes por sponsor",
+      status: hasSponsorReportLinks ? "ready" : "missing",
+      detail: hasSponsorReportLinks ? "Links privados y revocables disponibles." : "Falta aplicar la migracion de sponsor_report_links.",
+      required: true,
+    },
+    {
+      key: "media_kit",
+      label: "Media Kit publico",
+      status: hasMediaKitSettings ? "ready" : "missing",
+      detail: hasMediaKitSettings ? "Configuracion editable del Media Kit disponible." : "Falta aplicar la migracion de media_kit_settings.",
+      required: true,
+    },
+    {
+      key: "sponsor_crm",
+      label: "CRM comercial",
+      status: hasSponsorCampaigns && hasSponsorCampaignDeliverables && hasSponsorCampaignPayments ? "ready" : "missing",
+      detail:
+        hasSponsorCampaigns && hasSponsorCampaignDeliverables && hasSponsorCampaignPayments
+          ? "Campanas, entregables y pagos disponibles."
+          : "Faltan tablas del CRM: campanas, entregables o pagos.",
+      required: true,
+    },
+    {
+      key: "collaborations",
+      label: "Colaboraciones",
+      status: hasCampaignAgreementType && hasCampaignBalanceItems ? "ready" : "missing",
+      detail:
+        hasCampaignAgreementType && hasCampaignBalanceItems
+          ? "Evaluacion, balance privado y agenda de colaboraciones disponibles."
+          : "Falta aplicar la migracion 0026_sponsor_campaign_collaborations.sql para colaboraciones y balance privado.",
+      required: true,
+    },
+    {
+      key: "brand_portal",
+      label: "Portal de marca",
+      status: hasBrandPortalLinks ? "ready" : "missing",
+      detail: hasBrandPortalLinks ? "Links privados por campana disponibles." : "Falta aplicar la migracion de brand_portal_links.",
+      required: true,
+    },
+    {
+      key: "brand_access",
+      label: "Acceso de marca",
+      status: hasBrandPortalRequireAccessCode && hasBrandPortalAccessEmail && hasBrandPortalAccessCodeHash ? "ready" : "missing",
+      detail:
+        hasBrandPortalRequireAccessCode && hasBrandPortalAccessEmail && hasBrandPortalAccessCodeHash
+          ? "Portales protegidos por email y codigo disponibles."
+          : "Faltan columnas de acceso por email/codigo en brand_portal_links.",
+      required: true,
+    },
+    {
+      key: "report_schedules",
+      label: "Reportes programados",
+      status: hasSponsorReportSchedules ? "ready" : "missing",
+      detail: hasSponsorReportSchedules ? "Agendas de envio y ejecucion manual disponibles." : "Falta aplicar la migracion de sponsor_report_schedules.",
+      required: true,
+    },
+    {
+      key: "transactional_email",
+      label: "Email automatico",
+      status: hasEmailProvider ? "ready" : "missing",
+      detail: hasEmailProvider
+        ? "Resend y remitente configurados."
+        : "Opcional: sin RESEND_API_KEY o remitente, se genera el link del reporte pero el envio queda sin automatizar.",
+      required: false,
+    },
+  ];
+  const readyCount = checks.filter((check) => check.status === "ready").length;
+  const missingRequiredCount = checks.filter((check) => check.required && check.status === "missing").length;
+
+  return {
+    ready: missingRequiredCount === 0,
+    ready_count: readyCount,
+    total_count: checks.length,
+    missing_required_count: missingRequiredCount,
+    checks,
   };
 }
 
@@ -394,7 +558,10 @@ export async function loadCreatorAdminPayload({ channelId, baseUrl }: LoadCreato
   const channelRow = channelRows[0] || null;
   if (!channelRow) return null;
 
-  const features = await detectCreatorAdminSchemaFeatures();
+  const [features, businessReadiness] = await Promise.all([
+    detectCreatorAdminSchemaFeatures(),
+    buildCreatorBusinessReadiness(),
+  ]);
 
   const [videoRows, sponsorRows, pollRows, activityRows, syncRows, audienceRows, topVideoRows, sponsorClickRows] = await Promise.all([
     loadAdminVideos(channelId, features),
@@ -461,6 +628,7 @@ export async function loadCreatorAdminPayload({ channelId, baseUrl }: LoadCreato
     syncStatus,
     quickAction,
     summary,
+    businessReadiness,
   };
 }
 
@@ -541,6 +709,11 @@ async function loadAdminSponsors(ownerUserId: string, features: CreatorAdminSche
   const selectEndDate = features.hasSponsorDates ? "s.end_date" : "null::timestamptz as end_date";
   const selectInternalNotes = features.hasSponsorInternalNotes ? "s.internal_notes" : "null::text as internal_notes";
   const selectSponsorCardStyle = features.hasSponsorCardStyle ? "s.sponsor_card_style::text as sponsor_card_style" : "null::text as sponsor_card_style";
+  const selectCategoryName = features.hasSponsorCategoryId && features.hasSponsorCategories ? "max(scg.name)::text as category_name" : "null::text as category_name";
+  const selectActionType = features.hasSponsorActionType ? "s.action_type::text as action_type" : "null::text as action_type";
+  const selectActionValue = features.hasSponsorActionValue ? "s.action_value::text as action_value" : "null::text as action_value";
+  const selectCtaLabel = features.hasSponsorCtaLabel ? "s.cta_label::text as cta_label" : "null::text as cta_label";
+  const selectDisplayOrder = features.hasSponsorDisplayOrder ? "s.display_order" : "null::int as display_order";
   const selectSponsorBannerBackgroundColor = features.hasSponsorBannerColors
     ? "s.sponsor_banner_background_color::text as sponsor_banner_background_color"
     : "null::text as sponsor_banner_background_color";
@@ -551,6 +724,7 @@ async function loadAdminSponsors(ownerUserId: string, features: CreatorAdminSche
     ? "coalesce(array_remove(array_agg(distinct svr.video_id::text), null), '{}'::text[]) as video_ids"
     : "'{}'::text[] as video_ids";
   const joinVideoSponsorRules = hasVideoSponsorRules ? "left join public.sponsor_video_rules svr on svr.sponsor_id = s.id" : "";
+  const joinSponsorCategory = features.hasSponsorCategoryId && features.hasSponsorCategories ? "left join public.sponsor_categories scg on scg.id = s.category_id" : "";
 
   return sql.query<SponsorRow[]>(
     `
@@ -562,6 +736,11 @@ async function loadAdminSponsors(ownerUserId: string, features: CreatorAdminSche
         s.affiliate_url,
         s.discount_code,
         s.description,
+        ${selectCategoryName},
+        ${selectActionType},
+        ${selectActionValue},
+        ${selectCtaLabel},
+        ${selectDisplayOrder},
         ${selectSponsorCardStyle},
         ${selectSponsorBannerBackgroundColor},
         ${selectSponsorBannerTextColor},
@@ -575,6 +754,7 @@ async function loadAdminSponsors(ownerUserId: string, features: CreatorAdminSche
       from public.sponsors s
       left join public.sponsor_geo_rules sgr on sgr.sponsor_id = s.id
       ${joinVideoSponsorRules}
+      ${joinSponsorCategory}
       left join public.sponsor_clicks sc on sc.sponsor_id = s.id
       where s.user_id = $1
       group by s.id
@@ -734,6 +914,11 @@ function normalizeSponsorRow(row: SponsorRow): CreatorAdminSponsor {
     affiliate_url: row.affiliate_url,
     discount_code: row.discount_code,
     description: row.description,
+    category_name: row.category_name || null,
+    action_type: row.action_type === "coupon" || row.action_type === "link" ? row.action_type : null,
+    action_value: row.action_value || null,
+    cta_label: row.cta_label || null,
+    display_order: row.display_order === null ? null : Number(row.display_order),
     sponsor_card_style: normalizeSponsorCardStyle(row.sponsor_card_style),
     sponsor_banner_background_color: normalizeOptionalHexColor(row.sponsor_banner_background_color),
     sponsor_banner_text_color: normalizeOptionalHexColor(row.sponsor_banner_text_color),

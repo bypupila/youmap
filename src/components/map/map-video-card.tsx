@@ -196,10 +196,11 @@ export function MapVideoCard({
         fill
         priority={imagePriority}
         sizes="260px"
-        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        style={{ objectPosition: "center 78%" }}
+        className="absolute inset-0 h-full w-full scale-[1.07] object-cover object-center transition-transform duration-500 group-hover:scale-[1.11]"
       />
 
-      <div className="relative z-20 flex h-full min-h-0 flex-col">
+      <div className="absolute inset-0 z-20 flex min-h-0 flex-col">
         {sponsorBanner}
         {hasSponsorBanner && badges.length > 0 ? (
           <div className="shrink-0 px-2 py-1">
@@ -213,25 +214,25 @@ export function MapVideoCard({
           </div>
         ) : null}
 
-      <div className="relative flex-1 w-full overflow-hidden">
-        {!hasSponsorBanner && badges.length > 0 ? (
-          <div className="absolute top-2 left-2 z-20 flex gap-1.5 justify-start">
-            {badges.map((badge) => (
-              <span key={badge.text} className={cn("px-1.5 py-0.5 text-[8px] font-bold uppercase rounded shadow-sm border", badge.color)}>
-                {badge.text}
+        <div className="relative flex-1 w-full overflow-hidden">
+          {!hasSponsorBanner && badges.length > 0 ? (
+            <div className="absolute top-2 left-2 z-20 flex gap-1.5 justify-start">
+              {badges.map((badge) => (
+                <span key={badge.text} className={cn("px-1.5 py-0.5 text-[8px] font-bold uppercase rounded shadow-sm border", badge.color)}>
+                  {badge.text}
               </span>
             ))}
           </div>
         ) : null}
 
-        <div className="absolute bottom-0 left-0 right-0 z-20 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.58)_100%)] p-2 pt-8">
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.78)_70%,rgba(0,0,0,0.94)_100%)] p-2 pt-8">
           <p className="text-[11px] font-semibold text-white leading-tight drop-shadow-[0_2px_3px_rgba(0,0,0,1)]">
             {video.title}
           </p>
         </div>
       </div>
 
-      <div className="relative z-20 shrink-0 border-t border-white/10 bg-[linear-gradient(180deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18))] p-1.5 flex items-center justify-between">
+      <div className="absolute inset-x-0 bottom-0 z-30 flex h-[30px] items-center justify-between border-t border-white/10 bg-black px-2 py-1.5">
         <div className="flex gap-1.5 items-center text-[8px] font-mono text-white/78 w-1/3 justify-start drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           <svg
             xmlns="http://www.w3.org/2000/svg"

@@ -610,7 +610,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
       }
 
       const watchStatus = videoActivity.watchStatusById[videoId];
-      const hasStarted = watchStatus === "not_finished" || watchStatus === "watch_later" || videoActivity.seenIds.has(videoId) || videoActivity.openedIds.has(videoId);
+      const hasStarted = watchStatus === "not_finished" || watchStatus === "watch_later";
       const shouldPrompt =
         hasStarted &&
         watchStatus !== "watched" &&
@@ -630,7 +630,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
         action,
       });
     },
-    [getPlaybackElapsedMs, pinnedVideo, videoActivity.openedIds, videoActivity.seenIds, videoActivity.watchStatusById]
+    [getPlaybackElapsedMs, pinnedVideo, videoActivity.watchStatusById]
   );
 
   function confirmVideoExitComplete() {
@@ -698,7 +698,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
   const handleOpenInYouTube = useCallback((video: TravelVideoLocation) => {
     const videoId = String(video.youtube_video_id || "").trim();
     if (!videoId) return;
-    videoActivity.markVideoStarted(videoId);
+    videoActivity.markVideoOpened(videoId);
     externalYoutubeOpenRef.current = {
       videoId,
       title: video.title,
@@ -715,7 +715,8 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     externalYoutubeOpenRef.current = null;
     const elapsedMs = Math.max(0, Date.now() - externalOpen.openedAtMs);
     if (elapsedMs < VIDEO_EXIT_PROMPT_THRESHOLD_MS) return;
-    if (videoActivity.watchStatusById[externalOpen.videoId] === "watched") return;
+    const watchStatus = videoActivity.watchStatusById[externalOpen.videoId];
+    if (watchStatus !== "not_finished" && watchStatus !== "watch_later") return;
 
     setVideoPlaybackCommand({ id: Date.now(), action: "pause" });
     setVideoExitPrompt({
@@ -995,7 +996,6 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                 totalVideos={railVideoTotal}
                 highlightedVideoId={String(pinnedVideo?.youtube_video_id || "").trim() || null}
                 isDemoMode={useDemoMapEmbedPreviews}
-                onOpenAllVideos={() => setShowAllVideosModal(true)}
                 onSelect={(video) => {
                   requestVideoExit(() => openMapVideo(video));
                 }}
@@ -1880,20 +1880,19 @@ function VideoInspirationRail2({
   totalVideos,
   highlightedVideoId,
   isDemoMode,
-  onOpenAllVideos,
   onSelect
 }: {
   videos: TravelVideoLocation[];
   selectedCountryCode: string | null;
   resolveSponsorNames: (video: TravelVideoLocation | null | undefined) => string[];
   resolveSponsorBannerColors: (video: TravelVideoLocation | null | undefined) => SponsorBannerColors | null;
-  activity: Pick<VideoActivityController, "seenIds" | "watchStatusById">;
+  activity: Pick<VideoActivityController, "seenIds" | "featuredIds" | "watchStatusById">;
   totalVideos: number;
   highlightedVideoId: string | null;
   isDemoMode: boolean;
-  onOpenAllVideos: () => void;
   onSelect: (video: TravelVideoLocation) => void;
 }) {
+  const [railFilter, setRailFilter] = useState<"all" | "favorites" | "watched" | "incomplete">("all");
   const selectedCountryName =
     selectedCountryCode
       ? getCountryNameInSpanish(
@@ -1901,30 +1900,63 @@ function VideoInspirationRail2({
           videos.find((video) => String(video.country_code || "").toUpperCase() === selectedCountryCode)?.country_name
         )
       : null;
-  const railVideos = videos.slice(0, 14);
+  const countryVideos = useMemo(() => {
+    const normalizedCountry = String(selectedCountryCode || "").toUpperCase().trim();
+    if (!normalizedCountry) return videos;
+    const sameCountryVideos = videos.filter((video) => String(video.country_code || "").toUpperCase() === normalizedCountry);
+    return sameCountryVideos.length > 0 ? sameCountryVideos : videos;
+  }, [selectedCountryCode, videos]);
+  const railVideos = useMemo(() => {
+    if (railFilter === "all") return countryVideos;
+    return countryVideos.filter((video) => {
+      const videoId = String(video.youtube_video_id || "").trim();
+      if (!videoId) return false;
+      if (railFilter === "favorites") return activity.featuredIds?.has(videoId) === true;
+      const watchState = getProposalVideoWatchState(videoId, activity);
+      if (railFilter === "watched") return watchState === "watched";
+      return watchState === "incomplete";
+    });
+  }, [activity, countryVideos, railFilter]);
 
   return (
     <section data-component="VideoInspirationRail2" className="bg-[#03060a]/50 p-4 border border-white/[0.06] rounded-xl shrink-0 h-[230px]">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[14px] font-black uppercase tracking-wider text-white">
-          {selectedCountryCode ? (
-            <>
-              Videos en {countryCodeToFlag(selectedCountryCode)}{" "}
-              <span className="text-[#ff5a3d]">{selectedCountryName || selectedCountryCode}</span>
-            </>
-          ) : (
-            "Videos para inspirarte"
-          )}
-        </h2>
-        <div className="flex items-center gap-3">
-          <span className="text-[14px] font-black uppercase tracking-wider text-[#ff5a3d]">{totalVideos} videos</span>
-          <button
-            type="button"
-            className="h-7 rounded-full border border-white/15 bg-white/[0.04] px-3 text-[10px] font-black uppercase tracking-[0.1em] text-white transition hover:bg-white/[0.1]"
-            onClick={onOpenAllVideos}
-          >
-            Ver todos
-          </button>
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-black uppercase tracking-wider text-white">
+            {selectedCountryCode ? (
+              <>
+                Videos en {countryCodeToFlag(selectedCountryCode)}{" "}
+                <span className="text-[#ff5a3d]">{selectedCountryName || selectedCountryCode}</span>
+              </>
+            ) : (
+              "Videos para inspirarte"
+            )}
+          </h2>
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#7f8894]">
+            {railVideos.length} de {countryVideos.length || totalVideos} videos
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {[
+            { id: "all" as const, label: "Todo" },
+            { id: "favorites" as const, label: "Favoritos" },
+            { id: "watched" as const, label: "Completados" },
+            { id: "incomplete" as const, label: "Incompletos" },
+          ].map((filterOption) => (
+            <button
+              key={filterOption.id}
+              type="button"
+              onClick={() => setRailFilter((current) => (current === filterOption.id ? "all" : filterOption.id))}
+              className={cn(
+                "h-7 rounded-full border px-3 text-[10px] font-black uppercase tracking-[0.1em] transition",
+                railFilter === filterOption.id
+                  ? "border-[#ff5a3d]/35 bg-[#ff5a3d]/12 text-[#ffb6a8]"
+                  : "border-white/15 bg-white/[0.04] text-white hover:bg-white/[0.1]"
+              )}
+            >
+              {filterOption.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1946,20 +1978,9 @@ function VideoInspirationRail2({
             />
           );
         })}
-        
-        {videos.length > railVideos.length ? (
-          <div className="flex items-center justify-center pl-2 shrink-0">
-            <button
-              type="button"
-              className="flex h-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#050b10]/60 px-3 text-[10px] font-black uppercase tracking-[0.08em] text-white transition shadow-lg hover:border-white/20 hover:bg-[#050b10]/95"
-              onClick={() => {
-                const first = railVideos[0];
-                if (first) onSelect(first);
-              }}
-              aria-label="Ver más videos"
-            >
-              Ver más videos
-            </button>
+        {railVideos.length === 0 ? (
+          <div className="flex min-h-[165px] items-center justify-center rounded-xl border border-dashed border-white/10 px-6 text-center text-[12px] text-[#8f98a4]">
+            No hay videos para este filtro.
           </div>
         ) : null}
       </div>

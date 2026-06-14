@@ -16,23 +16,35 @@ function installExtensionHydrationGuard() {
   if (typeof window === "undefined" || typeof document === "undefined") return;
 
   const selectors = ["#heurio-app", ".heurio-overlay", "[class*='heurio-']", "[id*='heurio-']"];
+  // Some cursor/feedback extensions annotate existing nodes before hydration.
+  const attributes = ["data-cursor-element-id"];
 
-  const removeInjectedNodes = () => {
+  const removeInjectedArtifacts = () => {
     selectors.forEach((selector) => {
       document.querySelectorAll(selector).forEach((node) => {
         node.parentNode?.removeChild(node);
       });
     });
+    attributes.forEach((attribute) => {
+      document.querySelectorAll(`[${attribute}]`).forEach((node) => {
+        node.removeAttribute(attribute);
+      });
+    });
   };
 
-  removeInjectedNodes();
+  removeInjectedArtifacts();
 
-  const observer = new MutationObserver(removeInjectedNodes);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  const observer = new MutationObserver(removeInjectedArtifacts);
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: attributes,
+  });
 
   window.addEventListener("load", () => {
     window.setTimeout(() => {
-      removeInjectedNodes();
+      removeInjectedArtifacts();
       observer.disconnect();
     }, 2500);
   });

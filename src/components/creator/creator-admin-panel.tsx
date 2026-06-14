@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
-import { ArrowsClockwise, CaretDown, CaretUp, Check, Copy, GlobeHemisphereWest, MapPin, PencilSimple, Sparkle, Trash, Video } from "@phosphor-icons/react";
+import { ArrowsClockwise, CaretDown, CaretUp, Check, Copy, GlobeHemisphereWest, MapPin, PencilSimple, Sparkle, Trash, Video, MonitorPlay, Users, WarningCircle, Eye, HandPointing, DotsThreeVertical } from "@phosphor-icons/react";
 import { AnalyticsDashboard } from "@/components/analytics-dashboard";
 import { SponsorCreatorWizard, type SponsorWizardPayload } from "@/components/creator/sponsor-creator-wizard";
 import { FanVoteCard } from "@/components/map/fan-vote-card";
@@ -747,56 +747,94 @@ export function CreatorAdminPanel({
 
   const summaryCards = useMemo(
     () => [
-      { label: "Videos", value: formatNumber(summary.total_videos), icon: Video },
-      { label: "Paises", value: formatNumber(summary.total_countries), icon: GlobeHemisphereWest },
-      { label: "Pendientes", value: formatNumber(summary.needs_manual), icon: MapPin },
-      { label: "Votos audiencia", value: formatNumber(totalVotes), icon: Check },
+      { label: "Videos", value: formatNumber(summary.total_videos), icon: Video, color: "text-blue-400", bg: "bg-blue-400/10" },
+      { label: "Países", value: formatNumber(summary.total_countries), icon: GlobeHemisphereWest, color: "text-emerald-400", bg: "bg-emerald-400/10" },
+      { label: "Pendientes", value: formatNumber(summary.needs_manual), icon: MapPin, color: "text-[#ff5a3d]", bg: "bg-[#ff5a3d]/10" },
+      { label: "Votos", value: formatNumber(totalVotes), icon: Users, color: "text-purple-400", bg: "bg-purple-400/10" },
     ],
     [summary, totalVotes]
   );
 
   return (
-    <div className="space-y-4">
-      <Card className="tm-surface-strong rounded-xl border-white/10">
-        <CardHeader className="border-b border-white/10 px-4 pb-3 pt-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-[16px] font-semibold text-[#f5f7fb]">{channelName}</CardTitle>
-              <p className="mt-1 text-[12px] text-[#9da5ae]">{isDemoMode ? "Panel demo sin persistencia" : "Panel real de creador"}</p>
+    <div className="space-y-6">
+      {/* HEADER CARD */}
+      <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-white/[0.01] shadow-2xl backdrop-blur-xl">
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-5 md:p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.04] border border-white/5 shadow-inner">
+              <span className="text-xl font-black text-white">{channelName.slice(0,1).toUpperCase()}</span>
             </div>
-            <Button type="button" size="sm" onClick={copyMapUrl}>
-              {copyState === "copied" ? <Check size={14} /> : <Copy size={14} />}
-              {copyState === "copied" ? "Copiado" : "Compartir"}
-            </Button>
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-white">{channelName}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="relative flex h-2 w-2">
+                  <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", isDemoMode ? "bg-amber-400" : "bg-emerald-400")} />
+                  <span className={cn("relative inline-flex rounded-full h-2 w-2", isDemoMode ? "bg-amber-500" : "bg-emerald-500")} />
+                </span>
+                <p className="text-[13px] font-medium text-[#8f98a4]">{isDemoMode ? "Modo Demo" : "Panel en vivo"}</p>
+              </div>
+            </div>
           </div>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-2 px-4 pb-4 pt-4 md:grid-cols-4">
+          <Button 
+            type="button" 
+            variant="outline" 
+            className="rounded-full border-white/10 bg-white/[0.02] hover:bg-white/[0.05] transition-all" 
+            onClick={copyMapUrl}
+          >
+            {copyState === "copied" ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+            {copyState === "copied" ? "Copiado" : "Copiar Enlace"}
+          </Button>
+        </div>
+
+        {/* METRICS ROW */}
+        <div className="grid grid-cols-2 gap-px bg-white/5 md:grid-cols-4 border-t border-white/5">
           {summaryCards.map((item) => {
             const Icon = item.icon;
             return (
-              <div key={item.label} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] uppercase tracking-[0.1em] text-[#9da5ae]">{item.label}</span>
-                  <Icon size={14} className="text-[#ff3b30]" />
+              <div key={item.label} className="bg-[#0a0a0b] p-5 md:p-6 group hover:bg-white/[0.02] transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-110", item.bg)}>
+                    <Icon size={20} className={item.color} weight="duotone" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7a8490]">{item.label}</p>
+                    <p className="mt-0.5 text-2xl font-bold tracking-tight text-white">{item.value}</p>
+                  </div>
                 </div>
-                <p className="mt-2 text-[18px] font-semibold text-[#f5f7fb]">{item.value}</p>
               </div>
             );
           })}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <section className={cn(activeTab === "summary" ? "block" : "hidden")}>
-        <Card className="tm-surface-strong rounded-xl border-white/10">
-          <CardHeader className="px-4 pb-2 pt-3">
-            <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Resumen técnico</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 px-4 pb-4 pt-1 text-[13px] text-[#c4cbd4]">
-            <p>Auto-verificados: <span className="font-semibold text-[#f5f7fb]">{formatNumber(summary.verified_auto)}</span></p>
-            <p>Manuales: <span className="font-semibold text-[#f5f7fb]">{formatNumber(summary.verified_manual)}</span></p>
-            <p>Pendientes manual: <span className="font-semibold text-[#f5f7fb]">{formatNumber(summary.needs_manual)}</span></p>
-          </CardContent>
-        </Card>
+      <section className={cn("animate-in fade-in slide-in-from-bottom-2 duration-300", activeTab === "summary" ? "block" : "hidden")}>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="tm-surface-strong rounded-2xl border-white/5 bg-white/[0.01]">
+            <CardHeader className="px-5 pb-2 pt-5">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-[#7a8490]">Verificados Auto</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <p className="text-3xl font-bold text-emerald-400">{formatNumber(summary.verified_auto)}</p>
+            </CardContent>
+          </Card>
+          <Card className="tm-surface-strong rounded-2xl border-white/5 bg-white/[0.01]">
+            <CardHeader className="px-5 pb-2 pt-5">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-[#7a8490]">Manuales</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <p className="text-3xl font-bold text-blue-400">{formatNumber(summary.verified_manual)}</p>
+            </CardContent>
+          </Card>
+          <Card className="tm-surface-strong rounded-2xl border-white/5 bg-[#ff5a3d]/[0.02] border-[#ff5a3d]/10">
+            <CardHeader className="px-5 pb-2 pt-5">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-[#ff8d74]">Pendientes Manual</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <p className="text-3xl font-bold text-[#ff5a3d]">{formatNumber(summary.needs_manual)}</p>
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       <section className={cn(activeTab === "polls" ? "block" : "hidden")}>
@@ -811,44 +849,42 @@ export function CreatorAdminPanel({
         />
       </section>
 
-      <section className={cn(activeTab === "sponsors" ? "block" : "hidden")}>
-        <Card className="tm-surface-strong !overflow-visible rounded-xl border-white/10">
-          <CardHeader className="border-b border-white/[0.06] px-4 pb-3 pt-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Sponsors</CardTitle>
-                <p className="mt-0.5 text-[12px] text-[#7a8490]">
-                  {sponsors.length === 0 ? "Sin sponsors activos" : `${sponsors.length} sponsor${sponsors.length !== 1 ? "s" : ""} activo${sponsors.length !== 1 ? "s" : ""}`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={openCreateSponsor}
-                className={cn(
-                  "inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[13px] font-semibold transition-all duration-200",
-                  wizardOpen && !editingSponsorId
-                    ? "border-white/15 bg-white/[0.06] text-[#c4cbd4] hover:bg-white/[0.09]"
-                    : "border-[#ff5a3d]/30 bg-[#ff5a3d]/10 text-[#ff8d74] hover:bg-[#ff5a3d]/20 shadow-[0_4px_20px_-8px_rgba(255,90,61,0.35)]"
-                )}
-              >
-                {wizardOpen && !editingSponsorId ? (
-                  <>
-                    <span className="text-lg leading-none">×</span> Cerrar wizard
-                  </>
-                ) : (
-                  <>
-                    <Sparkle size={15} weight="fill" />
-                    Nuevo sponsor
-                  </>
-                )}
-              </button>
+      <section className={cn("animate-in fade-in slide-in-from-bottom-2 duration-300", activeTab === "sponsors" ? "block" : "hidden")}>
+        <div className="rounded-2xl border border-white/5 bg-white/[0.01] shadow-xl backdrop-blur-md">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 p-5 md:p-6">
+            <div>
+              <h3 className="text-lg font-bold tracking-tight text-white">Sponsors Activos</h3>
+              <p className="mt-1 text-sm text-[#8f98a4]">
+                {sponsors.length === 0 ? "Sin sponsors activos" : `${sponsors.length} sponsor${sponsors.length !== 1 ? "s" : ""} activo${sponsors.length !== 1 ? "s" : ""}`}
+              </p>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-5 px-4 pb-4 pt-4">
+            <Button
+              type="button"
+              onClick={openCreateSponsor}
+              className={cn(
+                "rounded-full px-5 font-semibold transition-all shadow-lg",
+                wizardOpen && !editingSponsorId
+                  ? "border border-white/10 bg-white/5 text-white hover:bg-white/10"
+                  : "bg-emerald-500 text-white hover:bg-emerald-400 hover:shadow-emerald-500/20"
+              )}
+            >
+              {wizardOpen && !editingSponsorId ? (
+                <>
+                  <span className="text-lg mr-1">×</span> Cerrar
+                </>
+              ) : (
+                <>
+                  <Sparkle size={16} weight="fill" className="mr-2" />
+                  Nuevo Sponsor
+                </>
+              )}
+            </Button>
+          </div>
+          
+          <div className="p-5 md:p-6 space-y-6">
             {/* ── Wizard ─────────────────────────────────────────────────── */}
             {wizardOpen && (
               <div className="relative">
-                {/* Animated entry */}
                 <div className="animate-in fade-in duration-300">
                   <SponsorCreatorWizard
                     key={editingSponsor ? `edit-${editingSponsor.id}` : "create"}
@@ -868,371 +904,308 @@ export function CreatorAdminPanel({
                 </div>
               </div>
             )}
-            {sponsorError && !wizardOpen ? <p className="text-[12px] text-[#ffb4b4]">{sponsorError}</p> : null}
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#c4cbd4]">Sponsors activos</p>
-                  <p className="mt-1 text-[11px] text-[#7a8490]">
-                    Edita, ordena o pausa sponsors sin perder métricas ni historial.
-                  </p>
-                </div>
-                <p className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] text-[#9da5ae]">
-                  Multi sponsor se muestra con 2 o más sponsors por card.
-                </p>
-              </div>
-              {sortedSponsors.map((sponsor, index) => (
-                <div key={sponsor.id} className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
-                      {sponsor.logo_url ? (
-                        <Image src={sponsor.logo_url} alt={sponsor.brand_name} fill sizes="44px" className="object-contain p-1.5" unoptimized />
-                      ) : (
-                        <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#f5f7fb]">
-                          {sponsor.brand_name.slice(0, 2).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-[13px] font-medium text-[#f5f7fb]">{sponsor.brand_name}</p>
-                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#d8dfe6]">
-                          {getSponsorCardStyleLabel(sponsor.sponsor_card_style, (sponsor.video_ids?.length || 0) || sponsor.country_codes.length)}
-                        </span>
-                        {sponsor.action_type === "coupon" && sponsor.discount_code ? (
-                          <span className="rounded-full border border-[#ffd66f]/25 bg-[#ffd66f]/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase text-[#ffd66f]">
-                            {sponsor.discount_code}
+            {sponsorError && !wizardOpen ? <p className="text-sm text-red-400 bg-red-400/10 p-3 rounded-lg">{sponsorError}</p> : null}
+            
+            <div className="space-y-3">
+              {sortedSponsors.map((sponsor, index) => {
+                const scope = sponsor.scope || ((sponsor.video_ids || []).length > 0 ? "video" : (sponsor.country_codes || []).length > 0 ? "country" : "global");
+                return (
+                  <div key={sponsor.id} className="group relative flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-xl border border-transparent bg-white/[0.02] p-4 transition-all hover:border-white/5 hover:bg-white/[0.04]">
+                    <div className="flex min-w-0 items-start md:items-center gap-4">
+                      {/* Logo or initial */}
+                      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] shadow-inner">
+                        {sponsor.logo_url ? (
+                          <Image src={sponsor.logo_url} alt={sponsor.brand_name} fill sizes="56px" className="object-contain p-2" unoptimized />
+                        ) : (
+                          <span className="text-lg font-black uppercase tracking-wider text-white">
+                            {sponsor.brand_name.slice(0, 2).toUpperCase()}
                           </span>
-                        ) : null}
+                        )}
                       </div>
-                      {sponsor.category_name ? <p className="truncate text-[11px] text-[#d8dfe8]">{sponsor.category_name}</p> : null}
-                      <p className="truncate text-[11px] text-[#9da5ae]">{formatSponsorCoverage(sponsor, sponsorVideoTitleById)}</p>
-                      {sponsor.cta_label ? <p className="truncate text-[11px] text-[#7a8490]">CTA: {sponsor.cta_label}</p> : null}
+                      
+                      {/* Info */}
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-base font-bold text-white">{sponsor.brand_name}</h4>
+                          <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/80">
+                            {getSponsorCardStyleLabel(sponsor.sponsor_card_style, (sponsor.video_ids?.length || 0) || sponsor.country_codes.length)}
+                          </span>
+                          {sponsor.action_type === "coupon" && sponsor.discount_code ? (
+                            <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-amber-400">
+                              🎟 {sponsor.discount_code}
+                            </span>
+                          ) : null}
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#8f98a4]">
+                          {sponsor.category_name ? <span className="font-medium text-blue-300/80">{sponsor.category_name}</span> : null}
+                          
+                          {/* Scope / Coverage with Flags */}
+                          <div className="flex items-center gap-1">
+                            {scope === "country" ? (
+                              <>
+                                <GlobeHemisphereWest size={14} className="text-emerald-400/70" />
+                                <div className="flex gap-1 ml-0.5">
+                                  {(sponsor.country_codes || []).map((code) => (
+                                    <span key={code} className={`fi fi-${code.toLowerCase()} rounded-[2px] text-[12px] shadow-sm`} title={code} />
+                                  ))}
+                                </div>
+                              </>
+                            ) : scope === "video" ? (
+                              <>
+                                <MonitorPlay size={14} className="text-purple-400/70" />
+                                <span>{(sponsor.video_ids || []).length} videos</span>
+                              </>
+                            ) : (
+                              <>
+                                <GlobeHemisphereWest size={14} className="text-white/40" />
+                                <span>Global</span>
+                              </>
+                            )}
+                          </div>
+                          
+                          {sponsor.cta_label ? <span className="flex items-center gap-1"><HandPointing size={14} className="text-white/30" /> {sponsor.cta_label}</span> : null}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5 md:justify-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openEditSponsor(sponsor.id)}
-                      aria-label={`Editar sponsor ${sponsor.brand_name}`}
-                    >
-                      <PencilSimple size={14} />
-                      Editar
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => void moveSponsor(sponsor.id, -1)}
-                      disabled={index === 0}
-                      aria-label={`Subir sponsor ${sponsor.brand_name}`}
-                    >
-                      <CaretUp size={14} />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => void moveSponsor(sponsor.id, 1)}
-                      disabled={index === sortedSponsors.length - 1}
-                      aria-label={`Bajar sponsor ${sponsor.brand_name}`}
-                    >
-                      <CaretDown size={14} />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        if (confirmingSponsorRemovalId === sponsor.id) {
-                          void removeSponsor(sponsor.id);
-                          return;
-                        }
-                        setConfirmingSponsorRemovalId(sponsor.id);
-                      }}
-                      disabled={deletingSponsorId === sponsor.id}
-                      aria-label={
-                        confirmingSponsorRemovalId === sponsor.id
-                          ? `Confirmar pausa de ${sponsor.brand_name}`
-                          : `Pausar sponsor ${sponsor.brand_name}`
-                      }
-                      className={cn(
-                        "px-3",
-                        confirmingSponsorRemovalId === sponsor.id
-                          ? "border-[#ff5a3d]/35 bg-[#ff5a3d]/10 text-[#ff9a84]"
-                          : ""
-                      )}
-                    >
-                      {deletingSponsorId === sponsor.id ? <ArrowsClockwise size={14} className="animate-spin" /> : <Trash size={14} />}
-                      {deletingSponsorId === sponsor.id
-                        ? "Pausando..."
-                        : confirmingSponsorRemovalId === sponsor.id
-                          ? "Confirmar pausa"
-                          : "Pausar"}
-                    </Button>
-                    {confirmingSponsorRemovalId === sponsor.id && deletingSponsorId !== sponsor.id ? (
+                    
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <Button
                         type="button"
-                        size="sm"
+                        size="icon"
                         variant="ghost"
-                        onClick={() => setConfirmingSponsorRemovalId(null)}
-                        aria-label={`Cancelar pausa de ${sponsor.brand_name}`}
+                        className="h-9 w-9 rounded-full bg-white/5 hover:bg-white/10 text-white"
+                        onClick={() => openEditSponsor(sponsor.id)}
+                        title="Editar"
                       >
-                        Cancelar
+                        <PencilSimple size={16} />
                       </Button>
-                    ) : null}
+                      <div className="flex flex-col gap-0.5 ml-1 mr-1">
+                        <button
+                          type="button"
+                          className="flex h-4 w-6 items-center justify-center rounded-sm bg-white/5 hover:bg-white/15 disabled:opacity-30 transition-colors"
+                          onClick={() => void moveSponsor(sponsor.id, -1)}
+                          disabled={index === 0}
+                          title="Subir"
+                        >
+                          <CaretUp size={12} weight="bold" />
+                        </button>
+                        <button
+                          type="button"
+                          className="flex h-4 w-6 items-center justify-center rounded-sm bg-white/5 hover:bg-white/15 disabled:opacity-30 transition-colors"
+                          onClick={() => void moveSponsor(sponsor.id, 1)}
+                          disabled={index === sortedSponsors.length - 1}
+                          title="Bajar"
+                        >
+                          <CaretDown size={12} weight="bold" />
+                        </button>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          if (confirmingSponsorRemovalId === sponsor.id) {
+                            void removeSponsor(sponsor.id);
+                            return;
+                          }
+                          setConfirmingSponsorRemovalId(sponsor.id);
+                        }}
+                        disabled={deletingSponsorId === sponsor.id}
+                        className={cn(
+                          "h-9 w-9 rounded-full transition-colors",
+                          confirmingSponsorRemovalId === sponsor.id
+                            ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                            : "bg-white/5 text-white/60 hover:bg-red-500/10 hover:text-red-400"
+                        )}
+                        title={confirmingSponsorRemovalId === sponsor.id ? "Confirmar pausa" : "Pausar"}
+                      >
+                        {deletingSponsorId === sponsor.id ? <ArrowsClockwise size={16} className="animate-spin" /> : <Trash size={16} />}
+                      </Button>
+                      {confirmingSponsorRemovalId === sponsor.id && deletingSponsorId !== sponsor.id ? (
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-red-400 ml-1 hover:text-red-300"
+                          onClick={() => setConfirmingSponsorRemovalId(null)}
+                        >
+                          Cancelar
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
+                );
+              })}
+              {sponsors.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 py-12 px-4 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/5 mb-3">
+                    <Sparkle size={24} className="text-white/40" />
+                  </div>
+                  <h4 className="text-base font-semibold text-white">No hay sponsors</h4>
+                  <p className="mt-1 text-sm text-[#8f98a4] max-w-sm">Crea tu primer sponsor para activar el preview interactivo y comenzar la asignación a tus videos.</p>
                 </div>
-              ))}
-              {sponsors.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-[12px] text-[#9da5ae]">No hay sponsors cargados. Crea el primero para activar el preview y asignaciones.</p> : null}
+              ) : null}
             </div>
-            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#c4cbd4]">Asignación masiva por video</p>
-              <div className="mt-2 grid gap-2 md:grid-cols-4">
-                <select
-                  value={bulkCountryFilter}
-                  onChange={(event) => {
-                    setBulkCountryFilter(event.target.value);
-                    setBulkPage(1);
-                  }}
-                  className="h-9 rounded-lg border border-white/10 bg-white/[0.03] px-2 text-[12px] text-[#f5f7fb] outline-none"
-                >
-                  <option value="all">Todos los países</option>
-                  {bulkCountryOptions.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.name} ({country.code})
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={bulkTitleFilter}
-                  onChange={(event) => {
-                    setBulkTitleFilter(event.target.value);
-                    setBulkPage(1);
-                  }}
-                  placeholder="Buscar por título"
-                  className="h-9 rounded-lg border border-white/10 bg-white/[0.03] px-2 text-[12px] text-[#f5f7fb] outline-none"
-                />
-                <select
-                  value={bulkStatusFilter}
-                  onChange={(event) => {
-                    setBulkStatusFilter(event.target.value as "all" | "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible");
-                    setBulkPage(1);
-                  }}
-                  className="h-9 rounded-lg border border-white/10 bg-white/[0.03] px-2 text-[12px] text-[#f5f7fb] outline-none"
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="confirmado">Confirmado</option>
-                  <option value="detectado_automaticamente">Detectado automáticamente</option>
-                  <option value="pendiente_revision">Pendiente revisión</option>
-                  <option value="no_disponible">No disponible</option>
-                </select>
-                <select
-                  value={bulkSelectedSponsorId}
-                  onChange={(event) => setBulkSelectedSponsorId(event.target.value)}
-                  className="h-9 rounded-lg border border-white/10 bg-white/[0.03] px-2 text-[12px] text-[#f5f7fb] outline-none"
-                >
-                  <option value="">Selecciona sponsor</option>
-                  {sponsors.map((sponsor) => (
-                    <option key={sponsor.id} value={sponsor.id}>
-                      {sponsor.brand_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11px] text-[#9da5ae]">
-                  Selecciona videos filtrados por estado, país o búsqueda para asignar o revisar en lote.
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => toggleBulkAll(true)}
-                    disabled={bulkRows.length === 0 || bulkAllSelected}
-                  >
-                    Seleccionar todo
+            <div className="mt-10">
+              <div className="mb-4 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-white/80">Asignación Masiva</h4>
+                  <p className="mt-1 text-xs text-[#8f98a4]">
+                    Filtra videos y asígnales sponsors en lote.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" size="sm" variant="ghost" className="h-8 bg-white/5 hover:bg-white/10 text-xs" onClick={() => toggleBulkAll(true)} disabled={bulkRows.length === 0 || bulkAllSelected}>
+                    Todo
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setBulkSelectedVideoIds([])}
-                    disabled={bulkSelectedVideoIds.length === 0}
-                  >
-                    Quitar selección
+                  <Button type="button" size="sm" variant="ghost" className="h-8 bg-white/5 hover:bg-white/10 text-xs" onClick={() => setBulkSelectedVideoIds([])} disabled={bulkSelectedVideoIds.length === 0}>
+                    Nada
                   </Button>
                 </div>
               </div>
-              <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={() => void runBulkAssign(true)} disabled={bulkBusy !== "idle"}>
-                  {bulkBusy === "preview" ? "Preview..." : "Preview"}
-                </Button>
-                <Button type="button" size="sm" onClick={() => void runBulkAssign(false)} disabled={bulkBusy !== "idle"}>
-                  {bulkBusy === "assign" ? "Asignando..." : "Asignar sponsor"}
-                </Button>
+
+              {/* Toolbar */}
+              <div className="flex flex-col md:flex-row items-center gap-2 mb-4 bg-white/[0.02] p-2 rounded-xl border border-white/5">
+                <div className="flex items-center px-3 py-1.5 md:border-r border-white/10 w-full md:w-auto md:flex-1">
+                  <select value={bulkCountryFilter} onChange={(e) => { setBulkCountryFilter(e.target.value); setBulkPage(1); }} className="w-full bg-transparent text-xs font-medium text-white outline-none cursor-pointer">
+                    <option value="all" className="bg-[#0a0a0b]">🌍 Todos los países</option>
+                    {bulkCountryOptions.map((c) => <option key={c.code} value={c.code} className="bg-[#0a0a0b]">{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center px-3 py-1.5 md:border-r border-white/10 w-full md:w-auto md:flex-1">
+                  <select value={bulkStatusFilter} onChange={(e) => { setBulkStatusFilter(e.target.value as any); setBulkPage(1); }} className="w-full bg-transparent text-xs font-medium text-white outline-none cursor-pointer">
+                    <option value="all" className="bg-[#0a0a0b]">⚪️ Cualquier estado</option>
+                    <option value="confirmado" className="bg-[#0a0a0b]">🟢 Confirmado</option>
+                    <option value="detectado_automaticamente" className="bg-[#0a0a0b]">🟡 Detectado</option>
+                    <option value="pendiente_revision" className="bg-[#0a0a0b]">🟠 Pendiente</option>
+                    <option value="no_disponible" className="bg-[#0a0a0b]">⚫️ Vacío</option>
+                  </select>
+                </div>
+                <div className="flex items-center px-3 py-1.5 w-full md:w-auto md:flex-[2]">
+                  <input value={bulkTitleFilter} onChange={(e) => { setBulkTitleFilter(e.target.value); setBulkPage(1); }} placeholder="Buscar video por título..." className="w-full bg-transparent text-xs font-medium text-white outline-none placeholder:text-white/20" />
+                </div>
               </div>
+
+              {/* Action Bar */}
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.03] mb-4">
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <select value={bulkSelectedSponsorId} onChange={(e) => setBulkSelectedSponsorId(e.target.value)} className="h-9 w-full md:w-56 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 text-xs font-bold text-indigo-300 outline-none cursor-pointer transition-colors hover:bg-indigo-500/20">
+                    <option value="" className="bg-[#0a0a0b] text-white">Seleccionar Sponsor...</option>
+                    {sponsors.map((s) => <option key={s.id} value={s.id} className="bg-[#0a0a0b] text-white">{s.brand_name}</option>)}
+                  </select>
+                  <span className="text-xs font-medium text-indigo-200/50 whitespace-nowrap">{bulkSelectedVideoIds.length} seleccionados</span>
+                </div>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <Button type="button" size="sm" variant="ghost" className="h-9 text-indigo-300 hover:bg-indigo-500/10 hover:text-indigo-200" onClick={() => void runBulkAssign(true)} disabled={bulkBusy !== "idle"}>
+                    <Eye size={16} className="mr-1.5" />
+                    Preview
+                  </Button>
+                  <Button type="button" size="sm" className="h-9 bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-500/20" onClick={() => void runBulkAssign(false)} disabled={bulkBusy !== "idle" || !bulkSelectedSponsorId || bulkSelectedVideoIds.length === 0}>
+                    {bulkBusy === "assign" ? <ArrowsClockwise size={16} className="animate-spin mr-1.5" /> : <Check size={16} weight="bold" className="mr-1.5" />}
+                    Asignar
+                  </Button>
+                </div>
+              </div>
+
               {bulkJobId ? (
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#9da5ae]">
-                  <span>Job: {bulkJobId}</span>
-                  <span>Estado: {bulkJobStatus || "-"}</span>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-[#9da5ae]">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1.5"><DotsThreeVertical size={14}/> Job: <span className="font-mono text-white/70">{bulkJobId}</span></span>
+                    <span className="flex items-center gap-1.5"><WarningCircle size={14}/> Estado: <span className="font-semibold text-white">{bulkJobStatus || "-"}</span></span>
+                  </div>
                   {bulkUndoAvailable ? (
-                    <Button type="button" size="sm" variant="outline" onClick={() => void undoBulkAssign()} disabled={bulkBusy !== "idle"}>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-[10px] border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => void undoBulkAssign()} disabled={bulkBusy !== "idle"}>
                       Deshacer asignación
                     </Button>
                   ) : null}
                 </div>
               ) : null}
-              {bulkMessage ? <p className="mt-2 text-[12px] text-[#b7d9ff]">{bulkMessage}</p> : null}
+              {bulkMessage ? <p className="mb-4 text-xs font-medium text-blue-300 bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">{bulkMessage}</p> : null}
 
-              <div className="mt-3 overflow-x-auto rounded-lg border border-white/10">
-                <table className="min-w-full text-left text-[12px]">
-                  <thead className="bg-white/[0.03] text-[#9da5ae]">
+              {/* Table */}
+              <div className="overflow-x-auto rounded-xl border border-white/5 bg-[#050505]/50">
+                <table className="min-w-full text-left text-xs">
+                  <thead className="border-b border-white/5 bg-white/[0.02] text-[#7a8490]">
                     <tr>
-                      <th className="px-2 py-2">
-                        <input
-                          type="checkbox"
-                          checked={bulkPageAllSelected}
-                          onChange={(event) => toggleBulkPage(event.currentTarget.checked)}
-                          aria-label="Seleccionar todos en página"
-                        />
+                      <th className="px-4 py-3 w-10">
+                        <input type="checkbox" checked={bulkPageAllSelected} onChange={(e) => toggleBulkPage(e.currentTarget.checked)} className="rounded border-white/20 bg-white/5 accent-indigo-500" />
                       </th>
-                      <th className="px-2 py-2">Título</th>
-                      <th className="px-2 py-2">País</th>
-                      <th className="px-2 py-2">Estado sponsor</th>
-                      <th className="px-2 py-2">Sponsor asignado</th>
-                      <th className="px-2 py-2">Publicado</th>
-                      <th className="px-2 py-2">Vistas</th>
-                      <th className="px-2 py-2">Actualizado</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider">Video</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider">Ubicación</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider">Sponsor</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider text-right">Métricas</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-white/5">
                     {bulkPageRows.map((row) => (
-                      <tr key={row.id} className="border-t border-white/10 text-[#dce2ea]">
-                        <td className="px-2 py-2">
-                          <input
-                            type="checkbox"
-                            checked={bulkSelectedSet.has(row.id)}
-                            onChange={(event) => toggleBulkVideo(row.id, event.currentTarget.checked)}
-                            aria-label={`Seleccionar ${row.title}`}
-                          />
+                      <tr key={row.id} className="group hover:bg-white/[0.02] transition-colors">
+                        <td className="px-4 py-3">
+                          <input type="checkbox" checked={bulkSelectedSet.has(row.id)} onChange={(e) => toggleBulkVideo(row.id, e.currentTarget.checked)} className="rounded border-white/20 bg-white/5 accent-indigo-500" />
                         </td>
-                        <td className="max-w-[340px] px-2 py-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="min-w-0 truncate">{row.title}</span>
-                            {row.status !== "no_disponible" ? (
-                              <span
-                                className={cn(
-                                  "shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em]",
-                                  row.status === "confirmado"
-                                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                                    : row.status === "detectado_automaticamente"
-                                      ? "border-[#ffb84d]/25 bg-[#ffb84d]/10 text-[#ffd38a]"
-                                      : "border-[#ff5a3d]/25 bg-[#ff5a3d]/10 text-[#ff9a84]"
-                                )}
-                                title={row.sponsorDetectedText || "Sponsor detectado por la API de YouTube"}
-                              >
-                                {row.status === "confirmado"
-                                  ? "Sponsor"
-                                  : row.status === "detectado_automaticamente"
-                                    ? "Detectado"
-                                    : "Revisar"}
-                              </span>
-                            ) : null}
+                        <td className="max-w-[280px] px-3 py-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="truncate font-medium text-white/90">{row.title}</span>
+                            <div className="flex items-center gap-2">
+                              {row.status !== "no_disponible" ? (
+                                <span className={cn("inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider", row.status === "confirmado" ? "text-emerald-400" : row.status === "detectado_automaticamente" ? "text-amber-400" : "text-[#ff5a3d]")}>
+                                  <span className={cn("h-1.5 w-1.5 rounded-full", row.status === "confirmado" ? "bg-emerald-400" : row.status === "detectado_automaticamente" ? "bg-amber-400" : "bg-[#ff5a3d]")} />
+                                  {row.status === "confirmado" ? "Confirmado" : row.status === "detectado_automaticamente" ? "Auto" : "Revisar"}
+                                </span>
+                              ) : <span className="text-[9px] text-white/20 uppercase tracking-wider">Sin Status</span>}
+                              <span className="text-[10px] text-white/30">{formatDateShort(row.publishedAt)}</span>
+                            </div>
                           </div>
                         </td>
-                        <td className="px-2 py-2">
-                          <span
-                            className={cn(
-                              "inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold",
-                              getBulkPillToneClasses(row.status)
-                            )}
-                            title={`${row.country} (${row.countryCode})`}
-                          >
-                            {row.countryCode ? (
-                              <span className={`fi fi-${row.countryCode.toLowerCase()} shrink-0 text-[12px] leading-none`} />
-                            ) : (
-                              <span className="shrink-0 text-[11px] leading-none">🌍</span>
-                            )}
-                            <span className="min-w-0 truncate">{row.country}</span>
-                            <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-white/55">
-                              {row.countryCode || "--"}
-                            </span>
-                          </span>
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            {row.countryCode ? <span className={`fi fi-${row.countryCode.toLowerCase()} rounded-[2px] text-sm shadow-sm`} /> : <GlobeHemisphereWest size={14} className="text-white/20" />}
+                            <span className="truncate text-white/70">{row.country}</span>
+                          </div>
                         </td>
-                        <td className="px-2 py-2">{formatSponsorStatus(row.status)}</td>
-                        <td className="px-2 py-2">
+                        <td className="px-3 py-3">
                           {row.sponsorName ? (
-                            <span
-                              className={cn(
-                                "inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold",
-                                getBulkSponsorPillClasses(row.status)
-                              )}
-                              title={row.sponsorName}
-                            >
-                              <span
-                                className={cn(
-                                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-black uppercase tracking-[0.08em]",
-                                  row.status === "confirmado"
-                                    ? "bg-emerald-400/15 text-emerald-300"
-                                    : row.status === "detectado_automaticamente"
-                                      ? "bg-amber-400/15 text-amber-300"
-                                      : "bg-[#ff5a3d]/15 text-[#ff9a84]"
-                                )}
-                              >
-                                SP
-                              </span>
-                              <span className="min-w-0 truncate">{row.sponsorName}</span>
+                            <span className={cn("inline-flex max-w-[150px] items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold", getBulkSponsorPillClasses(row.status))}>
+                              <Sparkle size={10} weight="fill" />
+                              <span className="truncate">{row.sponsorName}</span>
                             </span>
                           ) : (
-                            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold text-[#8f98a4]">
-                              Vacío
-                            </span>
+                            <span className="text-[10px] font-medium text-white/20">—</span>
                           )}
                         </td>
-                        <td className="px-2 py-2">{formatDateShort(row.publishedAt)}</td>
-                        <td className="px-2 py-2">{formatNumber(row.views)}</td>
-                        <td className="px-2 py-2">{formatDateShort(row.updatedAt)}</td>
+                        <td className="px-3 py-3 text-right">
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="font-mono text-white/80">{formatNumber(row.views)}</span>
+                            <span className="text-[9px] text-white/30 uppercase tracking-wider">Vistas</span>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {bulkPageRows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-2 py-4 text-center text-[#9da5ae]">
-                          No hay videos con esos filtros.
+                        <td colSpan={5} className="px-4 py-8 text-center text-[#9da5ae]">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <WarningCircle size={24} className="text-white/20" />
+                            <p>No se encontraron videos con esos filtros.</p>
+                          </div>
                         </td>
                       </tr>
                     ) : null}
                   </tbody>
                 </table>
               </div>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-[#9da5ae]">
+              <div className="mt-4 flex items-center justify-between text-xs text-[#9da5ae] px-1">
                 <span>
-                  Seleccionados: {bulkSelectedVideoIds.length} / Resultados: {bulkRows.length}
+                  {bulkSelectedVideoIds.length} seleccionados de {bulkRows.length} resultados
                 </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setBulkPage((current) => Math.max(1, current - 1))}
-                    disabled={safeBulkPage <= 1}
-                  >
-                    Anterior
+                <div className="flex items-center gap-2 bg-white/[0.02] rounded-lg p-1 border border-white/5">
+                  <Button type="button" size="sm" variant="ghost" className="h-7 px-2 hover:bg-white/5" onClick={() => setBulkPage((c) => Math.max(1, c - 1))} disabled={safeBulkPage <= 1}>
+                    <CaretDown size={14} className="rotate-90" />
                   </Button>
-                  <span>
-                    Página {safeBulkPage} / {bulkTotalPages}
+                  <span className="px-2 font-medium">
+                    {safeBulkPage} <span className="text-white/30 mx-1">/</span> {bulkTotalPages}
                   </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setBulkPage((current) => Math.min(bulkTotalPages, current + 1))}
-                    disabled={safeBulkPage >= bulkTotalPages}
-                  >
-                    Siguiente
+                  <Button type="button" size="sm" variant="ghost" className="h-7 px-2 hover:bg-white/5" onClick={() => setBulkPage((c) => Math.min(bulkTotalPages, c + 1))} disabled={safeBulkPage >= bulkTotalPages}>
+                    <CaretDown size={14} className="-rotate-90" />
                   </Button>
                 </div>
               </div>
@@ -1241,31 +1214,66 @@ export function CreatorAdminPanel({
         </Card>
       </section>
 
-      <section className={cn(activeTab === "ops" ? "block" : "hidden")}>
-        <Card className="tm-surface-strong rounded-xl border-white/10">
-          <CardHeader className="px-4 pb-2 pt-3">
-            <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Operaciones</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 px-4 pb-4 pt-1 text-[13px] text-[#c4cbd4]">
-            <p>Estado de votación live: <span className="font-semibold text-[#f5f7fb]">{activeLive ? "Activa" : "Cerrada"}</span></p>
-            <p>Videos pendientes de verificación manual: <span className="font-semibold text-[#f5f7fb]">{formatNumber(summary.needs_manual)}</span></p>
-            <a href={mapUrl} className="inline-flex text-[12px] font-medium text-[#ff6a4e] hover:text-[#ff7f66]">Abrir mapa para revisión visual</a>
-          </CardContent>
-        </Card>
+      <section className={cn("animate-in fade-in slide-in-from-bottom-2 duration-300", activeTab === "ops" ? "block" : "hidden")}>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="rounded-2xl border border-white/5 bg-white/[0.01] shadow-xl backdrop-blur-md p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
+                <GlobeHemisphereWest size={20} weight="duotone" />
+              </div>
+              <h3 className="text-lg font-bold tracking-tight text-white">Revisión y Mapa</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#8f98a4]">Estado de votación</p>
+                  <p className={cn("mt-1 text-sm font-bold", activeLive ? "text-emerald-400" : "text-white/40")}>
+                    {activeLive ? "🟢 Activa y Recibiendo Votos" : "⚫️ Cerrada"}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between rounded-xl border border-[#ff5a3d]/10 bg-[#ff5a3d]/[0.02] p-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#ff8d74]">Cola de Verificación</p>
+                  <p className="mt-1 text-sm text-white"><span className="font-bold text-[#ff5a3d]">{formatNumber(summary.needs_manual)}</span> videos requieren revisión manual.</p>
+                </div>
+                <Button type="button" size="sm" className="bg-[#ff5a3d] hover:bg-[#ff4728] text-white shadow-lg shadow-[#ff5a3d]/20" onClick={() => window.open(mapUrl, "_blank")}>
+                  Revisar en Mapa <MapPin size={14} className="ml-1.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className={cn(activeTab === "activity" ? "block" : "hidden")}>
-        <Card className="tm-surface-strong rounded-xl border-white/10">
-          <CardHeader className="px-4 pb-2 pt-3">
-            <CardTitle className="text-[15px] font-semibold text-[#f5f7fb]">Actividad</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 px-4 pb-4 pt-1 text-[13px] text-[#c4cbd4]">
-            <p>Votos acumulados: <span className="font-semibold text-[#f5f7fb]">{formatNumber(totalVotes)}</span></p>
-            <p>Paises alcanzados por videos: <span className="font-semibold text-[#f5f7fb]">{formatNumber(summary.total_countries)}</span></p>
-            <p>Videos publicados mapeados: <span className="font-semibold text-[#f5f7fb]">{formatNumber(summary.total_videos)}</span></p>
-          </CardContent>
-        </Card>
-        <div className="mt-4">
+      <section className={cn("animate-in fade-in slide-in-from-bottom-2 duration-300", activeTab === "activity" ? "block" : "hidden")}>
+        <div className="grid gap-4 md:grid-cols-3 mb-8">
+          <div className="flex flex-col justify-center rounded-2xl border border-white/5 bg-white/[0.01] p-6 shadow-xl backdrop-blur-md">
+            <div className="flex items-center gap-2 mb-2 text-purple-400">
+              <Users size={16} weight="duotone" />
+              <p className="text-xs font-semibold uppercase tracking-wider">Votos Acumulados</p>
+            </div>
+            <p className="text-3xl font-bold text-white">{formatNumber(totalVotes)}</p>
+          </div>
+          <div className="flex flex-col justify-center rounded-2xl border border-white/5 bg-white/[0.01] p-6 shadow-xl backdrop-blur-md">
+            <div className="flex items-center gap-2 mb-2 text-emerald-400">
+              <GlobeHemisphereWest size={16} weight="duotone" />
+              <p className="text-xs font-semibold uppercase tracking-wider">Países Alcanzados</p>
+            </div>
+            <p className="text-3xl font-bold text-white">{formatNumber(summary.total_countries)}</p>
+          </div>
+          <div className="flex flex-col justify-center rounded-2xl border border-white/5 bg-white/[0.01] p-6 shadow-xl backdrop-blur-md">
+            <div className="flex items-center gap-2 mb-2 text-blue-400">
+              <Video size={16} weight="duotone" />
+              <p className="text-xs font-semibold uppercase tracking-wider">Videos Mapeados</p>
+            </div>
+            <p className="text-3xl font-bold text-white">{formatNumber(summary.total_videos)}</p>
+          </div>
+        </div>
+        
+        <div className="rounded-2xl border border-white/5 bg-white/[0.01] shadow-xl backdrop-blur-md p-1 md:p-4">
           <AnalyticsDashboard channelId={channelId} />
         </div>
       </section>

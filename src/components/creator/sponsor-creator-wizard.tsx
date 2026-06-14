@@ -73,7 +73,7 @@ interface SponsorCreatorWizardProps {
   initialValues?: SponsorWizardInitialValues | null;
   videos: TravelVideoLocation[];
   countryOptions: Array<{ code: string; name: string }>;
-  videoOptions: Array<TravelVideoLocation & { id: string }>;
+  videoOptions: Array<TravelVideoLocation & { id: string; sponsor_names: string[] }>;
   categoryOptions: string[];
   onSubmit: (payload: SponsorWizardPayload) => Promise<void>;
   onCancel: () => void;
@@ -182,6 +182,46 @@ function ColorSwatch({ bg, text, label }: { bg: string; text: string; label: str
     >
       {label}
     </div>
+  );
+}
+
+function getSponsorDetectionLabel(status: TravelVideoLocation["sponsor_detection_status"], detectedText: string) {
+  if (status === "confirmado") return detectedText || "Sponsor confirmado";
+  if (status === "detectado_automaticamente") return detectedText || "Sponsor detectado";
+  if (status === "pendiente_revision") return detectedText || "Patrocinio pendiente de revisión";
+  return "";
+}
+
+function getSponsorDetectionTone(status: TravelVideoLocation["sponsor_detection_status"]) {
+  if (status === "confirmado") return "success";
+  if (status === "detectado_automaticamente") return "warning";
+  if (status === "pendiente_revision") return "danger";
+  return "neutral";
+}
+
+function VideoSponsorBadge({
+  label,
+  tone = "neutral",
+}: {
+  label: string;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em]",
+        tone === "success"
+          ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+          : tone === "warning"
+            ? "border-amber-400/25 bg-amber-400/10 text-amber-100"
+            : tone === "danger"
+              ? "border-[#ff5a3d]/25 bg-[#ff5a3d]/10 text-[#ffd0c6]"
+              : "border-white/10 bg-white/[0.03] text-[#c7cfda]"
+      )}
+      title={label}
+    >
+      <span className="truncate">{label}</span>
+    </span>
   );
 }
 
@@ -1080,6 +1120,9 @@ export function SponsorCreatorWizard({
                     {filteredVideos.slice(0, 100).map((v) => {
                       const vid = v.id;
                       const selected = selectedVideoIds.includes(vid);
+                      const sponsorNames = Array.from(new Set(v.sponsor_names || [])).filter(Boolean);
+                      const detectedText = String(v.sponsor_detectado_texto || "").trim();
+                      const sponsorDetectionLabel = getSponsorDetectionLabel(v.sponsor_detection_status, detectedText);
                       return (
                         <button
                           key={vid}
@@ -1095,15 +1138,33 @@ export function SponsorCreatorWizard({
                           }}
                           className={cn(
                             "flex w-full items-center gap-3 border-b border-white/[0.04] px-3 py-2.5 text-left text-[12px] transition-colors last:border-0",
-                            selected
-                              ? "bg-[#ff5a3d]/10 text-[#f5f7fb]"
-                              : "text-[#b0b8c4] hover:bg-white/[0.03] hover:text-[#f5f7fb]"
+                            selected ? "bg-[#ff5a3d]/10 text-[#f5f7fb]" : "text-[#b0b8c4] hover:bg-white/[0.03] hover:text-[#f5f7fb]"
                           )}
                         >
-                          <span className="flex-1 truncate font-medium">{v.title}</span>
-                          <span className="shrink-0 text-[10px] text-[#6b7480]">
-                            {v.country_name || v.country_code}
-                          </span>
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="min-w-0 truncate font-medium">{v.title}</span>
+                              {sponsorNames.length > 0 ? (
+                                <VideoSponsorBadge
+                                  tone="success"
+                                  label={`Patrocinado: ${sponsorNames.join(", ")}`}
+                                />
+                              ) : sponsorDetectionLabel ? (
+                                <VideoSponsorBadge
+                                  tone={getSponsorDetectionTone(v.sponsor_detection_status)}
+                                  label={`Detectado: ${sponsorDetectionLabel}`}
+                                />
+                              ) : null}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-[#6b7480]">
+                              <span>{v.country_name || v.country_code}</span>
+                              {sponsorNames.length > 1 ? (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-[#9da5ae]">
+                                  {sponsorNames.length} sponsors
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
                           {selected && <Check size={12} className="text-[#ff8d74]" weight="bold" />}
                         </button>
                       );

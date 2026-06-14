@@ -101,6 +101,8 @@ const SPONSOR_INQUIRY_STATUS_LABEL: Record<SponsorInquiryStatus, string> = {
   new: "Nuevo",
   reviewed: "Revisado",
   contacted: "Contactado",
+  proposal_sent: "Propuesta enviada",
+  negotiation: "Negociacion",
   won: "Ganado",
   lost: "Perdido",
 };
@@ -1506,7 +1508,7 @@ export function MapExperience({
       }
 
       const watchStatus = videoActivity.watchStatusById[videoId];
-      const hasStarted = watchStatus === "not_finished" || videoActivity.seenIds.has(videoId) || videoActivity.openedIds.has(videoId);
+      const hasStarted = watchStatus === "not_finished" || watchStatus === "watch_later";
       const shouldPrompt =
         hasStarted &&
         watchStatus !== "watched" &&
@@ -1526,7 +1528,7 @@ export function MapExperience({
         action,
       });
     },
-    [getPlaybackElapsedMs, pinnedVideo, videoActivity.openedIds, videoActivity.seenIds, videoActivity.watchStatusById]
+    [getPlaybackElapsedMs, pinnedVideo, videoActivity.watchStatusById]
   );
 
   const requestPinnedVideoChange = useCallback(

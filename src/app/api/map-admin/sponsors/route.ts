@@ -406,12 +406,25 @@ export async function DELETE(request: Request) {
     const url = new URL(request.url);
     const channelId = String(url.searchParams.get("channelId") || "");
     const sponsorId = String(url.searchParams.get("sponsorId") || "");
+    const action = z.enum(["archive", "delete"]).catch("archive").parse(url.searchParams.get("action") || "archive");
     const parsed = z.object({ channelId: z.string().uuid(), sponsorId: z.string().uuid() }).parse({ channelId, sponsorId });
     if (isDemoChannelId(parsed.channelId)) {
       return NextResponse.json({ error: "Modo demo: esta operación no persiste cambios." }, { status: 400 });
     }
     const access = await requireCreatorChannelAccess(parsed.channelId, sessionUser.id);
     if (!access?.ownerUserId) return NextResponse.json({ error: "Channel not found for this user" }, { status: 404 });
+
+    if (action === "delete") {
+      const rows = await sql<Array<{ id: string; brand_name: string }>>`
+        delete from public.sponsors
+        where id = ${parsed.sponsorId}
+          and user_id = ${access.ownerUserId}
+        returning id, brand_name
+      `;
+      const sponsor = rows[0] || null;
+      if (!sponsor) return NextResponse.json({ error: "Sponsor not found" }, { status: 404 });
+      return NextResponse.json({ ok: true, id: sponsor.id, deleted: true });
+    }
 
     const rows = await sql<Array<{ id: string; brand_name: string }>>`
       update public.sponsors
@@ -426,19 +439,19 @@ export async function DELETE(request: Request) {
     await recordCreatorActivity({
       channelId: parsed.channelId,
       actorUserId: sessionUser.id,
-      eventType: "sponsor_paused",
+      eventType: "sponsor_archived",
       entityType: "sponsor",
       entityId: sponsor.id,
-      description: `${sessionUser.username} pauso el sponsor "${sponsor.brand_name}"`,
+      description: `${sessionUser.username} archivo el sponsor "${sponsor.brand_name}"`,
     });
 
-    return NextResponse.json({ ok: true, id: sponsor.id });
+    return NextResponse.json({ ok: true, id: sponsor.id, archived: true });
   } catch (error) {
     console.error("[api/map-admin/sponsors DELETE]", error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid sponsor pause payload", details: error.issues }, { status: 400 });
+      return NextResponse.json({ error: "Invalid sponsor action payload", details: error.issues }, { status: 400 });
     }
-    return NextResponse.json({ error: "Could not pause sponsor" }, { status: 500 });
+    return NextResponse.json({ error: "Could not update sponsor state" }, { status: 500 });
   }
 }
 

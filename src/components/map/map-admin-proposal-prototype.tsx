@@ -811,7 +811,7 @@ function RecentVideosSection({ onSelectVideo }: { onSelectVideo: (title: string)
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h3 className="text-[13px] font-black uppercase tracking-wider text-white">Contenido Reciente</h3>
-        <button type="button" className="text-[10px] font-bold text-[#cbd3dc] hover:text-white transition">Ver todos</button>
+        <span className="text-[10px] font-bold text-[#cbd3dc]">Ver todos</span>
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin">
@@ -903,10 +903,10 @@ function AudienceChart() {
     <article className="rounded-xl border border-white/[0.07] bg-[#050b10]/60 p-4 shadow-sm flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[10px] font-black uppercase tracking-[0.16em] text-[#818a93]">Audiencia</h3>
-        <button type="button" className="flex h-7 items-center gap-1.5 rounded bg-white/[0.02] border border-white/5 px-2.5 text-[9px] font-bold text-slate-300">
+        <span className="flex h-7 items-center gap-1.5 rounded bg-white/[0.02] border border-white/5 px-2.5 text-[9px] font-bold text-slate-300">
           Últimos 30 días
           <CaretDown size={10} />
-        </button>
+        </span>
       </div>
 
       <div className="flex items-center gap-4 justify-between">

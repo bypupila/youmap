@@ -650,7 +650,7 @@ function VideoInspirationRail({ videos, onSelect }: { videos: TravelVideoLocatio
     <section className="absolute inset-x-0 bottom-0 z-30 border-t border-white/10 bg-[#03080d]/74 p-4 backdrop-blur-2xl">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-[18px] font-bold tracking-tight text-white">Videos para inspirarte</h2>
-        <button type="button" className="text-[12px] font-semibold text-[#cbd3dc]">Ver todos</button>
+        <span className="text-[12px] font-semibold text-[#cbd3dc]">Ver todos</span>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-1">
         {videos.slice(0, 8).map((video, index) => (
