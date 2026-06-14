@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowsLeftRight, ClockCounterClockwise, DownloadSimple, UserCircle } from "@phosphor-icons/react";
+import { ArrowLeftRight, History, Download, UserCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { UserRoleAuditRow } from "@/lib/admin-role-audit";
@@ -15,7 +15,7 @@ export function RoleAuditPanel({ items }: RoleAuditPanelProps) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="tym-overline text-[#8ff0ff] flex items-center gap-1.5">
-              <ClockCounterClockwise size={14} className="text-[#8ff0ff]" weight="duotone" />
+              <History size={14} className="text-[#8ff0ff]" />
               Trazabilidad
             </p>
             <CardTitle className="mt-1 text-[16px] font-semibold text-[#f5f7fb]">Cambios recientes de rol</CardTitle>
@@ -24,7 +24,7 @@ export function RoleAuditPanel({ items }: RoleAuditPanelProps) {
             </p>
           </div>
           <Badge variant="outline" className="border-white/10 bg-white/[0.04] text-[#d8dee6] flex items-center gap-1">
-            <ClockCounterClockwise size={12} />
+            <History size={12} />
             <span>Últimos {items.length}</span>
           </Badge>
         </div>
@@ -33,7 +33,7 @@ export function RoleAuditPanel({ items }: RoleAuditPanelProps) {
             href="/api/admin/user-role-audit/export"
             className="tym-btn-secondary inline-flex items-center gap-1.5 text-[11px] font-semibold h-8 px-3 rounded-lg border border-white/10 bg-white/[0.03] text-[#d8dee6] hover:bg-white/[0.07] hover:text-white transition-all"
           >
-            <DownloadSimple size={13} />
+            <Download size={13} />
             Exportar CSV
           </Link>
         </div>
@@ -52,7 +52,7 @@ export function RoleAuditPanel({ items }: RoleAuditPanelProps) {
             >
               <div className="flex items-start gap-3">
                 <div className="mt-0.5 rounded-full bg-white/[0.04] p-1.5 text-zinc-400 group-hover:text-white transition-colors">
-                  <UserCircle size={20} weight="duotone" />
+                  <UserCircle2 size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -60,7 +60,7 @@ export function RoleAuditPanel({ items }: RoleAuditPanelProps) {
                       {item.target_display_name}
                     </p>
                     <Badge variant="outline" className="border-white/5 bg-white/[0.04] text-[10px] text-[#b8c0cb] flex items-center gap-1">
-                      <ArrowsLeftRight size={10} />
+                      <ArrowLeftRight size={10} />
                       <span>
                         {item.previous_role} → {item.new_role}
                       </span>

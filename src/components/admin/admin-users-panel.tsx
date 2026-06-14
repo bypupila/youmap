@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { CheckCircle, MagnifyingGlass, ShieldCheck, Sparkle, UserCircle } from "@phosphor-icons/react";
+import { CheckCircle2, Search, ShieldCheck, Sparkles, UserCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { updateUserRole, type AdminAppUserRole } from "@/lib/admin-roles";
+import { cn } from "@/lib/utils";
 
 export interface AdminUserEntry {
   id: string;
@@ -26,15 +27,15 @@ interface AdminUsersPanelProps {
   totalCount: number;
 }
 
-const ROLE_META: Record<AdminAppUserRole, { label: string; icon: typeof UserCircle; className: string }> = {
+const ROLE_META: Record<AdminAppUserRole, { label: string; icon: typeof UserCircle2; className: string }> = {
   viewer: {
     label: "Viewer",
-    icon: UserCircle,
+    icon: UserCircle2,
     className: "border-sky-400/20 bg-sky-400/10 text-sky-100",
   },
   creator: {
     label: "Creator",
-    icon: Sparkle,
+    icon: Sparkles,
     className: "border-amber-400/20 bg-amber-400/10 text-amber-100",
   },
   superadmin: {
@@ -109,7 +110,7 @@ export function AdminUsersPanel({ users, query, page, totalPages, totalCount }: 
           <input type="hidden" name="page" value="1" />
           <label className="relative block">
             <span className="sr-only">Buscar usuarios</span>
-            <MagnifyingGlass
+            <Search
               size={16}
               className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7f8994]"
             />
@@ -141,7 +142,7 @@ export function AdminUsersPanel({ users, query, page, totalPages, totalCount }: 
 
         {message ? (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3.5 py-2.5 text-[11px] text-emerald-200">
-            <CheckCircle size={14} />
+            <CheckCircle2 size={14} />
             <span>{message}</span>
           </div>
         ) : null}
@@ -163,7 +164,7 @@ export function AdminUsersPanel({ users, query, page, totalPages, totalCount }: 
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="truncate text-sm font-semibold text-[#f5f7fb] group-hover:text-white transition-colors">{user.display_name}</h3>
                       <Badge variant="outline" className={`${meta.className} text-[9px] font-black uppercase tracking-wider`}>
-                        <Icon size={10} weight="fill" className="mr-1 inline" />
+                        <Icon size={10} className="mr-1 inline" />
                         {meta.label}
                       </Badge>
                     </div>

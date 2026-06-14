@@ -109,6 +109,17 @@ export function CreatorAdminPanel({
       .map(([code, name]) => ({ code, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [videos]);
+  const sponsorNamesByVideoId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const sponsor of sponsors) {
+      for (const videoId of sponsor.video_ids || []) {
+        const current = map.get(videoId) || [];
+        current.push(sponsor.brand_name);
+        map.set(videoId, current);
+      }
+    }
+    return map;
+  }, [sponsors]);
   const sponsorVideoOptions = useMemo(() => {
     return videos
       .map((video) => ({
@@ -120,8 +131,9 @@ export function CreatorAdminPanel({
       .map((entry) => ({
         ...entry.video,
         id: entry.videoId,
+        sponsor_names: Array.from(new Set(sponsorNamesByVideoId.get(entry.videoId) || [])),
       }));
-  }, [videos]);
+  }, [videos, sponsorNamesByVideoId]);
   const sponsorVideoTitleById = useMemo(() => {
     const map = new Map<string, string>();
     for (const video of videos) {
@@ -1210,8 +1222,8 @@ export function CreatorAdminPanel({
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </section>
 
       <section className={cn("animate-in fade-in slide-in-from-bottom-2 duration-300", activeTab === "ops" ? "block" : "hidden")}>

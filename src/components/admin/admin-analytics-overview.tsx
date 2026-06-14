@@ -1,46 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-type OverviewPayload = {
-  window_days: number;
-  product: {
-    registered_viewers: number;
-    registered_creators: number;
-    monthly_active_viewers: number;
-    monthly_active_creators: number;
-    map_views_30d: number;
-    video_opens_30d: number;
-    votes_30d: number;
-    sponsor_clicks_30d: number;
-    saved_30d: number;
-    favorites_30d: number;
-    watch_later_30d: number;
-    watch_time_hours_30d: number;
-  };
-  creators: Array<{
-    channel_id: string;
-    channel_name: string;
-    owner_username: string;
-    videos_count: number;
-    subscribed_viewers: number;
-    map_views_30d: number;
-    votes_30d: number;
-  }>;
-  sponsors: Array<{
-    sponsor_id: string;
-    brand_name: string;
-    videos_count: number;
-    clicks_30d: number;
-  }>;
-  geography: {
-    top_viewer_countries: Array<{ country_code: string; users: number }>;
-    top_event_countries: Array<{ country_code: string; events: number }>;
-  };
-};
-
-import { useEffect, useState } from "react";
-import { Users, Sparkle, Eye, HandPointing, BookmarkSimple, Star, Clock, Play, ChartBar, WarningCircle, CaretDown } from "@phosphor-icons/react";
+import { Users, Sparkles, Eye, HandHelping, Bookmark, Star, Clock3, Play, ChartBar, AlertCircle } from "lucide-react";
 
 type OverviewPayload = {
   window_days: number;
@@ -123,7 +84,7 @@ export function AdminAnalyticsOverview() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="tym-overline text-[#8ff0ff] flex items-center gap-1.5">
-            <ChartBar size={14} className="text-[#8ff0ff]" weight="duotone" />
+            <ChartBar size={14} className="text-[#8ff0ff]" />
             Analytics globales
           </p>
           <h2 className="mt-1 text-lg font-semibold text-[#f5f7fb]">Producto, creadores, sponsors y geografía</h2>
@@ -145,18 +106,18 @@ export function AdminAnalyticsOverview() {
       </div>
 
       {loading ? <p className="mt-6 text-sm text-[#aab2bc] animate-pulse">Cargando métricas...</p> : null}
-      {error ? <p className="mt-6 text-sm text-[#ffb0a7] flex items-center gap-1.5"><WarningCircle size={16} /> {error}</p> : null}
+      {error ? <p className="mt-6 text-sm text-[#ffb0a7] flex items-center gap-1.5"><AlertCircle size={16} /> {error}</p> : null}
 
       {!loading && !error && data ? (
         <div className="mt-6 space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Viewers registrados" value={data.product.registered_viewers} icon={Users} />
-            <MetricCard label="Creators registrados" value={data.product.registered_creators} icon={Sparkle} />
+            <MetricCard label="Creators registrados" value={data.product.registered_creators} icon={Sparkles} />
             <MetricCard label={`Map views (${data.window_days}d)`} value={data.product.map_views_30d} icon={Eye} />
-            <MetricCard label={`Clicks sponsor (${data.window_days}d)`} value={data.product.sponsor_clicks_30d} icon={HandPointing} />
-            <MetricCard label={`Guardados (${data.window_days}d)`} value={data.product.saved_30d} icon={BookmarkSimple} />
+            <MetricCard label={`Clicks sponsor (${data.window_days}d)`} value={data.product.sponsor_clicks_30d} icon={HandHelping} />
+            <MetricCard label={`Guardados (${data.window_days}d)`} value={data.product.saved_30d} icon={Bookmark} />
             <MetricCard label={`Favoritos (${data.window_days}d)`} value={data.product.favorites_30d} icon={Star} />
-            <MetricCard label={`Ver más tarde (${data.window_days}d)`} value={data.product.watch_later_30d} icon={Clock} />
+            <MetricCard label={`Ver más tarde (${data.window_days}d)`} value={data.product.watch_later_30d} icon={Clock3} />
             <MetricCard label={`Horas reproducidas (${data.window_days}d)`} value={data.product.watch_time_hours_30d} icon={Play} />
           </div>
 
@@ -218,7 +179,7 @@ function MetricCard({ label, value, icon: Icon }: { label: string; value: number
         <p className="mt-2 text-2xl font-bold tracking-tight text-[#f5f7fb]">{n(value)}</p>
       </div>
       <div className="rounded-xl bg-white/[0.04] p-3 text-zinc-400 group-hover:text-white transition-colors shrink-0">
-        <Icon size={20} weight="duotone" className="text-[#8ff0ff]" />
+        <Icon size={20} className="text-[#8ff0ff]" />
       </div>
     </div>
   );
@@ -267,5 +228,4 @@ function SimpleTable({ title, headers, rows }: { title: string; headers: string[
 
 function n(value: number) {
   return new Intl.NumberFormat("es-AR").format(Number.isFinite(value) ? value : 0);
-}alue : 0);
 }

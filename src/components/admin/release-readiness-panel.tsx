@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ShieldCheck, ListChecks, CheckCircle, Warning, XCircle, HandPointing, ArrowsClockwise } from "@phosphor-icons/react";
+import { ShieldCheck, ListChecks, CheckCircle2, TriangleAlert, XCircle, HandHelping, RotateCcw } from "lucide-react";
 
 type ReleaseCheckStatus = "pass" | "fail" | "warn" | "manual";
 
@@ -25,7 +25,7 @@ const statusMeta: Record<ReleaseCheckStatus, { label: string; className: string;
   pass: {
     label: "Pasa",
     className: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
-    icon: CheckCircle,
+    icon: CheckCircle2,
   },
   fail: {
     label: "Bloqueante",
@@ -35,12 +35,12 @@ const statusMeta: Record<ReleaseCheckStatus, { label: string; className: string;
   warn: {
     label: "Advertencia",
     className: "border-amber-500/25 bg-amber-500/10 text-amber-300",
-    icon: Warning,
+    icon: TriangleAlert,
   },
   manual: {
     label: "Manual",
     className: "border-slate-500/25 bg-slate-500/10 text-slate-300",
-    icon: HandPointing,
+    icon: HandHelping,
   },
 };
 
@@ -79,7 +79,7 @@ export function ReleaseReadinessPanel() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="tym-overline text-[#8ff0ff] flex items-center gap-1.5">
-            <ShieldCheck size={14} className="text-[#8ff0ff]" weight="duotone" />
+            <ShieldCheck size={14} className="text-[#8ff0ff]" />
             Release Gate
           </p>
           <h2 className="mt-1 text-lg font-semibold text-[#f5f7fb]">Checklist de Producción Go/No-Go</h2>
@@ -90,14 +90,14 @@ export function ReleaseReadinessPanel() {
           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 text-[12px] font-semibold text-[#d8dee6] hover:bg-white/[0.07] hover:text-white transition-all active:scale-95 disabled:opacity-50"
           disabled={loading}
         >
-          <ArrowsClockwise size={13} className={loading ? "animate-spin" : ""} />
+          <RotateCcw size={13} className={loading ? "animate-spin" : ""} />
           {loading ? "Actualizando..." : "Actualizar"}
         </button>
       </div>
 
       {error ? (
         <p className="mt-4 text-sm text-[#ffb0a7] flex items-center gap-1.5">
-          <Warning size={16} />
+          <TriangleAlert size={16} />
           {error}
         </p>
       ) : null}
@@ -135,7 +135,7 @@ export function ReleaseReadinessPanel() {
                         <td className="px-4 py-3.5 font-semibold text-[#f5f7fb]">{check.label}</td>
                         <td className="px-4 py-3.5">
                           <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.06em] ${meta.className}`}>
-                            <Icon size={10} weight="fill" />
+                            <Icon size={10} />
                             {meta.label}
                           </span>
                         </td>

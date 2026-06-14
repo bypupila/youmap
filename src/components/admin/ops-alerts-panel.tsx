@@ -1,19 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-type AlertPayload = {
-  generated_at: string;
-  alerts: Array<{
-    id: string;
-    severity: "critical" | "high";
-    title: string;
-    detail: string;
-  }>;
-};
-
-import { useEffect, useState } from "react";
-import { Warning, WarningCircle, CheckCircle } from "@phosphor-icons/react";
+import { TriangleAlert, AlertCircle, CheckCircle2 } from "lucide-react";
 
 type AlertPayload = {
   generated_at: string;
@@ -68,7 +56,7 @@ export function OpsAlertsPanel() {
       <div className="flex items-center justify-between">
         <div>
           <p className="tym-overline text-[#8ff0ff] flex items-center gap-1.5">
-            <Warning size={14} className="text-[#8ff0ff]" weight="duotone" />
+            <TriangleAlert size={14} className="text-[#8ff0ff]" />
             Alertas operativas
           </p>
           <h2 className="mt-1 text-lg font-semibold text-[#f5f7fb]">Críticas y altas</h2>
@@ -80,7 +68,7 @@ export function OpsAlertsPanel() {
       ) : null}
       {error ? (
         <p className="mt-6 text-sm text-[#ffb0a7] flex items-center gap-1.5">
-          <WarningCircle size={16} />
+          <AlertCircle size={16} />
           {error}
         </p>
       ) : null}
@@ -116,7 +104,7 @@ export function OpsAlertsPanel() {
             ))
           ) : (
             <div className="flex flex-col items-center justify-center py-6 text-center">
-              <CheckCircle size={32} className="text-emerald-500/80 mb-2" weight="duotone" />
+              <CheckCircle2 size={32} className="text-emerald-500/80 mb-2" />
               <p className="text-sm text-[#9aa3af]">Sin alertas críticas o altas.</p>
             </div>
           )}

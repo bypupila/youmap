@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { ShieldCheck, Sparkle, UserCircle, CheckCircle } from "@phosphor-icons/react";
+import { ShieldCheck, Sparkles, UserCircle2, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,7 +57,7 @@ export function RoleManagementCard() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="tym-overline text-[#8ff0ff] flex items-center gap-1">
-              <ShieldCheck size={14} className="text-[#8ff0ff]" weight="duotone" />
+              <ShieldCheck size={14} className="text-[#8ff0ff]" />
               Superadmin
             </p>
             <CardTitle className="mt-1 text-[15px] font-semibold text-[#f5f7fb]">Asignar roles</CardTitle>
@@ -69,7 +69,7 @@ export function RoleManagementCard() {
       </CardHeader>
       <CardContent className="space-y-4 px-5 pb-5 pt-4">
         <div className="flex items-center gap-2 rounded-xl border border-[#8ff0ff]/15 bg-[#8ff0ff]/5 px-3 py-2.5 text-[11px] text-[#b9f7ff] leading-relaxed">
-          <ShieldCheck size={15} weight="fill" className="shrink-0" />
+          <ShieldCheck size={15} className="shrink-0" />
           <span>Acción restringida. Asegúrate de verificar al destinatario antes de guardar.</span>
         </div>
 
@@ -102,7 +102,7 @@ export function RoleManagementCard() {
                         : "text-[#aab2bc] hover:text-white border border-transparent",
                     ].join(" ")}
                   >
-                    {option.value === "viewer" ? <UserCircle size={15} /> : option.value === "creator" ? <Sparkle size={15} /> : <ShieldCheck size={15} />}
+                    {option.value === "viewer" ? <UserCircle2 size={15} /> : option.value === "creator" ? <Sparkles size={15} /> : <ShieldCheck size={15} />}
                     {option.label}
                   </button>
                 );
@@ -117,7 +117,7 @@ export function RoleManagementCard() {
 
         {message ? (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2.5 text-[11px] text-emerald-200">
-            <CheckCircle size={14} className="shrink-0" />
+            <CheckCircle2 size={14} className="shrink-0" />
             <span>{message}</span>
           </div>
         ) : null}

@@ -611,10 +611,7 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
 
       const watchStatus = videoActivity.watchStatusById[videoId];
       const hasStarted = watchStatus === "not_finished" || watchStatus === "watch_later";
-      const shouldPrompt =
-        hasStarted &&
-        watchStatus !== "watched" &&
-        getPlaybackElapsedMs(videoId) >= VIDEO_EXIT_PROMPT_THRESHOLD_MS;
+      const shouldPrompt = hasStarted && getPlaybackElapsedMs(videoId) >= VIDEO_EXIT_PROMPT_THRESHOLD_MS;
 
       if (!shouldPrompt) {
         suppressEndedForVideoIdRef.current = videoId;
