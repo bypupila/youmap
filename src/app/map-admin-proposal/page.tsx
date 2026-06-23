@@ -14,6 +14,7 @@ export const metadata: Metadata = {
   robots: {
     index: false,
     follow: false,
+    nocache: true,
   },
 };
 

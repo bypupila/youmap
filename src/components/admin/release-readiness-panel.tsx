@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ShieldCheck, ListChecks, CheckCircle2, TriangleAlert, XCircle, HandHelping, RotateCcw } from "lucide-react";
+import { ShieldCheck, CheckCircle2, TriangleAlert, XCircle, HandHelping, RotateCcw } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 type ReleaseCheckStatus = "pass" | "fail" | "warn" | "manual";
 
@@ -21,7 +22,7 @@ type ReleasePayload = {
   }>;
 };
 
-const statusMeta: Record<ReleaseCheckStatus, { label: string; className: string; icon: any }> = {
+const statusMeta: Record<ReleaseCheckStatus, { label: string; className: string; icon: LucideIcon }> = {
   pass: {
     label: "Pasa",
     className: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",

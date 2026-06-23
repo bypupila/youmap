@@ -456,7 +456,7 @@ async function buildCreatorBusinessReadiness(): Promise<CreatorBusinessReadiness
     tableExists("public", "sponsor_campaign_balance_items"),
   ]);
 
-  const hasEmailProvider = Boolean(process.env.RESEND_API_KEY && (process.env.REPORT_EMAIL_FROM || process.env.RESEND_FROM_EMAIL));
+  const hasEmailProvider = Boolean(process.env.RESEND_API_KEY);
   const checks: CreatorBusinessReadinessCheck[] = [
     {
       key: "sponsor_reports",
@@ -521,8 +521,8 @@ async function buildCreatorBusinessReadiness(): Promise<CreatorBusinessReadiness
       label: "Email automatico",
       status: hasEmailProvider ? "ready" : "missing",
       detail: hasEmailProvider
-        ? "Resend y remitente configurados."
-        : "Opcional: sin RESEND_API_KEY o remitente, se genera el link del reporte pero el envio queda sin automatizar.",
+        ? "Resend configurado."
+        : "Opcional: sin RESEND_API_KEY, se genera el link del reporte pero el envio queda sin automatizar.",
       required: false,
     },
   ];

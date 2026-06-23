@@ -1,7 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Users, Sparkles, Eye, HandHelping, Bookmark, Star, Clock3, Play, ChartBar, AlertCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 type OverviewPayload = {
   window_days: number;
@@ -171,7 +173,7 @@ export function AdminAnalyticsOverview() {
   );
 }
 
-function MetricCard({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
+function MetricCard({ label, value, icon: Icon }: { label: string; value: number; icon: LucideIcon }) {
   return (
     <div className="rounded-[1.25rem] border border-white/5 bg-white/[0.01] p-4.5 transition-all duration-300 hover:bg-white/[0.03] hover:border-white/10 flex items-center justify-between gap-4">
       <div>
@@ -185,7 +187,7 @@ function MetricCard({ label, value, icon: Icon }: { label: string; value: number
   );
 }
 
-function SimpleTable({ title, headers, rows }: { title: string; headers: string[]; rows: any[][] }) {
+function SimpleTable({ title, headers, rows }: { title: string; headers: string[]; rows: ReactNode[][] }) {
   return (
     <div className="rounded-2xl border border-white/5 bg-white/[0.01] p-5">
       <p className="text-sm font-semibold text-[#f5f7fb] mb-4">{title}</p>

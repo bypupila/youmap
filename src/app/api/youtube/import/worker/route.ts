@@ -10,14 +10,27 @@ const payloadSchema = z.object({
   runId: z.string().uuid().optional(),
 });
 
-function hasInternalWorkerAccess(request: Request) {
-  const configuredToken = String(process.env.YOUTUBE_IMPORT_WORKER_TOKEN || "").trim();
-  if (!configuredToken) return false;
-  const requestToken = String(request.headers.get("x-import-worker-token") || "").trim();
-  return requestToken.length > 0 && requestToken === configuredToken;
+function readRequestToken(request: Request) {
+  const headerToken = String(request.headers.get("x-import-worker-token") || "").trim();
+  if (headerToken) return headerToken;
+  const bearerToken = String(request.headers.get("authorization") || "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  if (bearerToken) return bearerToken;
+  const queryToken = String(new URL(request.url).searchParams.get("token") || "").trim();
+  return queryToken;
 }
 
-export async function POST(request: Request) {
+function hasInternalWorkerAccess(request: Request) {
+  const configuredToken = String(process.env.YOUTUBE_IMPORT_WORKER_TOKEN || "").trim();
+  const cronSecret = String(process.env.CRON_SECRET || "").trim();
+  const requestToken = readRequestToken(request);
+  if (configuredToken && requestToken === configuredToken) return true;
+  if (cronSecret && requestToken === cronSecret) return true;
+  return process.env.NODE_ENV !== "production" && !configuredToken && !cronSecret;
+}
+
+async function handle(request: Request) {
   try {
     const userId = await getValidSessionUserIdFromRequest(request);
     const internalAccess = hasInternalWorkerAccess(request);
@@ -52,4 +65,12 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+}
+
+export async function POST(request: Request) {
+  return handle(request);
+}
+
+export async function GET(request: Request) {
+  return handle(request);
 }

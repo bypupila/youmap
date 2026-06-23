@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ContactStrip } from "@/components/site/contact-strip";
 
 export const metadata: Metadata = {
   title: "Términos | TravelYourMap",
@@ -50,6 +51,15 @@ export default function TermsPage() {
           Ver Política de Privacidad
         </Link>
       </div>
+      <ContactStrip
+        title="Contacto"
+        description="Para soporte o consultas generales, usa los canales públicos oficiales."
+        items={[
+          { label: "Soporte", email: "support" },
+          { label: "General", email: "hello" },
+        ]}
+        tone="light"
+      />
     </main>
   );
 }

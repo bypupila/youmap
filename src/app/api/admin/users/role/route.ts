@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
 import { getSessionUserById, getValidSessionUserIdFromRequest, normalizeAppUserRole, userIsSuperAdmin } from "@/lib/current-user";
-import { ensureUserRoleAuditTable, logUserRoleChange } from "@/lib/admin-role-audit";
+import { logUserRoleChange } from "@/lib/admin-role-audit";
 import { sql } from "@/lib/neon";
 import { revokeUserSessions } from "@/lib/session-revocations";
 
@@ -64,8 +64,6 @@ export async function POST(request: Request) {
         changed: false,
       });
     }
-
-    await ensureUserRoleAuditTable();
 
     const rows = await sql<Array<{ id: string; email: string; username: string; display_name: string; role: string | null }>>`
       update public.users

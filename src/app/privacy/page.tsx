@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ContactStrip } from "@/components/site/contact-strip";
 
 export const metadata: Metadata = {
   title: "Privacidad | TravelYourMap",
@@ -56,6 +57,15 @@ export default function PrivacyPage() {
           Términos de YouTube
         </a>
       </div>
+      <ContactStrip
+        title="Contacto"
+        description="Para dudas sobre privacidad o soporte de producto, usa los canales públicos de BY PUPILA."
+        items={[
+          { label: "General", email: "hello" },
+          { label: "Soporte", email: "support" },
+        ]}
+        tone="light"
+      />
     </main>
   );
 }

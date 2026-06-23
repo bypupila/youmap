@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureUserRoleAuditTable, type UserRoleAuditRow } from "@/lib/admin-role-audit";
+import { type UserRoleAuditRow } from "@/lib/admin-role-audit";
 import { getSessionUserById, getValidSessionUserIdFromServerCookies, userIsSuperAdmin } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 
@@ -15,8 +15,6 @@ export async function GET() {
   if (!userIsSuperAdmin(sessionUser?.role)) {
     return NextResponse.json({ error: "Acceso denegado." }, { status: 403 });
   }
-
-  await ensureUserRoleAuditTable();
 
   const rows = await sql<Array<UserRoleAuditRow>>`
     select

@@ -34,6 +34,7 @@ import {
   updateInquiryStatus,
   updatePayment,
 } from "@/lib/sponsor-crm";
+import { buildBrandPortalAccessEmail, sendAppEmail } from "@/lib/email";
 import { SPONSOR_INQUIRY_STATUSES } from "@/lib/sponsor-inquiries";
 
 export const dynamic = "force-dynamic";
@@ -559,6 +560,28 @@ export async function POST(request: Request) {
     });
 
     const crm = await loadSponsorCrm(payload.channelId);
+    if (payload.action === "create_brand_portal" && actionResult && typeof actionResult === "object") {
+      const portalResult = actionResult as { access_email?: string | null; access_code?: string | null };
+      const campaign = crm?.campaigns.find((entry) => entry.id === payload.campaignId) || null;
+      if (portalResult.access_email && portalResult.access_code && campaign) {
+        const portalEmail = buildBrandPortalAccessEmail({
+          brandName: campaign.brand_name,
+          contactName: campaign.contact_name,
+          portalUrl: String((actionResult as { public_url?: string | null }).public_url || ""),
+          accessCode: portalResult.access_code,
+        });
+        const portalEmailResult = await sendAppEmail({
+          from: "noreply",
+          to: portalResult.access_email,
+          subject: portalEmail.subject,
+          text: portalEmail.text,
+          html: portalEmail.html,
+        });
+        if (!portalEmailResult.sent) {
+          console.warn("[api/creator/sponsor-crm] brand portal email skipped", portalEmailResult.error);
+        }
+      }
+    }
     return NextResponse.json({ ok: true, crm, result: actionResult });
   } catch (error) {
     console.error("[api/creator/sponsor-crm POST]", error);

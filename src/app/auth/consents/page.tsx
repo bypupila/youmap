@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { ContactStrip } from "@/components/site/contact-strip";
 
 type ConsentState = {
   account_operation: { accepted: boolean; consent_version: string; accepted_at: string } | null;
@@ -172,9 +173,19 @@ export default function AuthConsentsPage() {
             </div>
           ) : null}
 
-          {error ? <p className="mt-3 text-sm text-[#ffb0a7]">{error}</p> : null}
-          {message ? <p className="mt-3 text-sm text-[#b7d9ff]">{message}</p> : null}
-        </section>
+        {error ? <p className="mt-3 text-sm text-[#ffb0a7]">{error}</p> : null}
+        {message ? <p className="mt-3 text-sm text-[#b7d9ff]">{message}</p> : null}
+      </section>
+      <ContactStrip
+        title="Contacto"
+        description="Para soporte de cuenta, escribe a support. Para consultas generales, hello sigue siendo el canal principal."
+        items={[
+          { label: "Soporte", email: "support" },
+          { label: "General", email: "hello" },
+        ]}
+        tone="dark"
+        className="mt-6"
+      />
       </div>
     </main>
   );

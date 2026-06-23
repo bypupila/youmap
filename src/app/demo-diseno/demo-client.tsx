@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import type { MouseEvent } from "react";
 import {
@@ -3284,7 +3285,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
 
             {/* Horizontal Scroll Container */}
             <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-thin select-none pr-4">
-              {sampleVideos.map((video, idx) => {
+              {sampleVideos.map((video) => {
                 const isSelected = video.youtube_video_id === currentVideo.youtube_video_id;
                 const durationMinutes = Math.max(1, Math.round(Number(video.duration_seconds || 0) / 60));
                 const watchState = watchStatusById[video.youtube_video_id] || "not_finished";
@@ -3303,11 +3304,13 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
                     )}
                   >
                     {/* Background thumbnail image */}
-                    <img
+                    <Image
                       src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"}
                       alt={video.title}
+                      fill
+                      unoptimized
+                      sizes="(max-width: 768px) 100vw, 230px"
                       className="absolute inset-0 h-full w-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500"
-                      loading="lazy"
                     />
 
                     {/* Ambient backlight simulation */}
@@ -3393,11 +3396,13 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
                   >
                     {/* Embedded Thumbnail Frame */}
                     <div className="relative h-[72px] w-full rounded-xl overflow-hidden bg-black/40 border border-white/5">
-                      <img
+                      <Image
                         src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"}
                         alt={video.title}
+                        fill
+                        unoptimized
+                        sizes="(max-width: 768px) 100vw, 215px"
                         className="absolute inset-0 h-full w-full object-cover opacity-85 group-hover:scale-[1.03] transition-transform duration-500"
-                        loading="lazy"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
 
@@ -3501,11 +3506,13 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
 
                     {/* Grayscale Thumbnail with Sharp Frame */}
                     <div className="relative h-[78px] w-full overflow-hidden border border-zinc-800 rounded-none bg-zinc-950">
-                      <img
+                      <Image
                         src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"}
                         alt={video.title}
+                        fill
+                        unoptimized
+                        sizes="(max-width: 768px) 100vw, 185px"
                         className="absolute inset-0 h-full w-full object-cover filter grayscale group-hover:grayscale-0 transition-all duration-300"
-                        loading="lazy"
                       />
 
                       {/* Tag floating like a designer label */}
@@ -3600,7 +3607,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
 
                 return (
                   <div key={`r4-${video.youtube_video_id}`} onClick={() => setCurrentVideo(video)} className={cn("group relative w-[260px] h-[146px] shrink-0 overflow-hidden rounded-xl border-2 bg-[#050505] transition-all duration-300 cursor-pointer", borderClass)}>
-                    <img src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} className="absolute inset-0 h-full w-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500" loading="lazy" />
+                    <Image src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} fill unoptimized sizes="(max-width: 768px) 100vw, 260px" className="absolute inset-0 h-full w-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/20 z-10" />
 
                     {/* STATUS BADGES SIEMPRE TOP LEFT */}
@@ -3709,7 +3716,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
                 return (
                   <div key={`r5-${video.youtube_video_id}`} onClick={() => setCurrentVideo(video)} className={cn("group relative w-[260px] shrink-0 overflow-hidden rounded-xl border-2 bg-[#050505] transition-all duration-300 cursor-pointer flex flex-col", borderClass)} style={{ height: "165px" }}>
                     <div className="relative flex-1 w-full overflow-hidden">
-                      <img src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                      <Image src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} fill unoptimized sizes="(max-width: 768px) 100vw, 260px" className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent z-10" />
                       
                       <div className="absolute top-2 right-2 z-20 flex gap-1.5 justify-end">
@@ -3828,7 +3835,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
 
                 return (
                   <div key={`r6-${video.youtube_video_id}`} onClick={() => setCurrentVideo(video)} className={cn("group relative w-[260px] h-[146px] shrink-0 overflow-hidden rounded-xl border-2 bg-zinc-950 transition-all duration-300 cursor-pointer", borderClass)}>
-                    <img src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} className="absolute inset-0 h-full w-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-500" loading="lazy" />
+                    <Image src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} fill unoptimized sizes="(max-width: 768px) 100vw, 260px" className="absolute inset-0 h-full w-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-500" />
                     <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0)_40%,rgba(0,0,0,0.9)_100%)] z-10" />
 
                     <div className="absolute top-2 left-2 z-30 flex gap-1 flex-wrap w-[60%]">
@@ -3976,7 +3983,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
                     )}
 
                     <div className="relative flex-1 w-full overflow-hidden">
-                      <img src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                      <Image src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} fill unoptimized sizes="(max-width: 768px) 100vw, 260px" className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" />
 
                       <div className="absolute top-2 left-2 z-20 flex gap-1.5 justify-start">
                         {badges.map((badge, bidx) => (
@@ -4097,7 +4104,7 @@ export function DemoDisenoClient({ videoLocations }: DemoDisenoClientProps) {
                     )}
 
                     <div className="relative flex-1 w-full overflow-hidden">
-                      <img src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                      <Image src={video.thumbnail_url || "/creators/final-cta-map-mockup.png"} alt={video.title} fill unoptimized sizes="(max-width: 768px) 100vw, 260px" className="absolute inset-0 h-full w-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" />
 
                       <div className="absolute top-2 left-2 z-20 flex gap-1.5 justify-start">
                         {badges.map((badge, bidx) => (

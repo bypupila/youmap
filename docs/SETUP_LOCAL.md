@@ -44,7 +44,7 @@ Use the demo route to inspect the product without external credentials:
 6. (Optional tuning) set `YOUTUBE_IMPORT_CONCURRENCY` and `YOUTUBE_IMPORT_MAX_VIDEOS_PER_RUN`.
 7. (Required in production for Vercel cron GET auth) set `CRON_SECRET`.
 8. (Optional for manual/external poll close calls) set `MAP_POLLS_CRON_TOKEN`.
-9. (Optional for automatic sponsor report emails) set `RESEND_API_KEY` and `REPORT_EMAIL_FROM`.
+9. (Optional for automatic sponsor report emails and transactional Resend flows) set `RESEND_API_KEY`.
 10. (Optional for isolated brand portal access cookies) set `BRAND_PORTAL_ACCESS_SECRET`; otherwise `AUTH_SESSION_SECRET` is reused.
 11. `neon/seed/demo.sql` ya carga los Polar product/price IDs del snapshot de lanzamiento para `starter`, `pro` y `creator_plus`. Si el catálogo de Polar cambia, refrescalos con `npm run polar:bootstrap` usando credenciales validas antes de volver a ejecutar el seed.
 
@@ -104,7 +104,6 @@ For stable deploys, configure this in Vercel Project Settings:
    - `MAP_POLLS_CRON_TOKEN` (optional for manual external invocations)
 7. Optional sponsor report email env:
    - `RESEND_API_KEY`
-   - `REPORT_EMAIL_FROM`
    - `SPONSOR_REPORTS_CRON_TOKEN` (optional for manual external invocations of `/api/sponsors/reports/schedules/run`)
 8. Optional brand portal env:
    - `BRAND_PORTAL_ACCESS_SECRET` (optional; falls back to `AUTH_SESSION_SECRET` or `SESSION_SECRET`)
@@ -123,4 +122,4 @@ For stable deploys, configure this in Vercel Project Settings:
 - The runner is also called by the existing `GET /api/youtube/data-expiry/sweep` cron so `vercel.json` stays within the two-cron Hobby limit.
 - In production, cron GET requires `Authorization: Bearer <CRON_SECRET>`.
 - If `SPONSOR_REPORTS_CRON_TOKEN` is set, manual/externals can auth via query `?token=...`, `x-cron-token`, or `Authorization: Bearer <SPONSOR_REPORTS_CRON_TOKEN>`.
-- Automatic email sending requires `RESEND_API_KEY` and `REPORT_EMAIL_FROM`; without them, schedules still generate report links and expose the missing-email configuration as `last_error`.
+- Automatic email sending requires `RESEND_API_KEY`; without it, schedules still generate report links and expose the missing-email configuration as `last_error`.

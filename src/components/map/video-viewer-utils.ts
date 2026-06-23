@@ -6,6 +6,13 @@ export type CountryVideoBucket = {
   videos: TravelVideoLocation[];
 };
 
+export type VideoActivitySnapshot = {
+  seenIds?: Set<string>;
+  watchStatusById?: Record<string, "not_started" | "not_finished" | "watched" | "watch_later">;
+};
+
+export type VideoActivitySortGroup = "new" | "incomplete" | "not_started" | "watched";
+
 const countryDisplayNamesEs =
   typeof Intl !== "undefined" ? new Intl.DisplayNames(["es"], { type: "region" }) : null;
 
@@ -20,6 +27,13 @@ const YOUTUBE_HOSTS = new Set([
 const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 export const YOUTUBE_OFFICIAL_EMBED_HOST = "https://www.youtube.com";
 export const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
+const NEW_VIDEO_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const VIDEO_ACTIVITY_SORT_RANK: Record<VideoActivitySortGroup, number> = {
+  new: 0,
+  incomplete: 1,
+  not_started: 2,
+  watched: 3,
+};
 
 export function buildCountryVideoSections(videos: TravelVideoLocation[], currentVideo: TravelVideoLocation | null) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
@@ -170,6 +184,50 @@ export function sortRecentVideos(a: TravelVideoLocation, b: TravelVideoLocation)
   const aTime = a.published_at ? new Date(a.published_at).getTime() : 0;
   const bTime = b.published_at ? new Date(b.published_at).getTime() : 0;
   return bTime - aTime;
+}
+
+export function getVideoPublishedAtMs(video?: Pick<TravelVideoLocation, "published_at"> | null) {
+  const publishedAt = video?.published_at ? new Date(video.published_at).getTime() : 0;
+  return Number.isFinite(publishedAt) ? publishedAt : 0;
+}
+
+export function isVideoNew(video?: Pick<TravelVideoLocation, "published_at"> | null, nowMs = Date.now()) {
+  const publishedAtMs = getVideoPublishedAtMs(video);
+  if (publishedAtMs <= 0) return false;
+  return nowMs - publishedAtMs < NEW_VIDEO_WINDOW_MS;
+}
+
+function getVideoSortGroup(
+  video: Pick<TravelVideoLocation, "published_at" | "youtube_video_id">,
+  activity?: VideoActivitySnapshot,
+  nowMs = Date.now()
+): VideoActivitySortGroup {
+  if (isVideoNew(video, nowMs)) return "new";
+
+  const videoId = String(video.youtube_video_id || "").trim();
+  const explicitStatus = videoId ? activity?.watchStatusById?.[videoId] : undefined;
+  if (explicitStatus === "not_finished" || explicitStatus === "watch_later") return "incomplete";
+  if (explicitStatus === "watched") return "watched";
+  if (explicitStatus === "not_started") return "not_started";
+  return videoId && activity?.seenIds?.has(videoId) ? "watched" : "not_started";
+}
+
+export function compareVideosByActivityPriority(
+  a: Pick<TravelVideoLocation, "published_at" | "title" | "youtube_video_id">,
+  b: Pick<TravelVideoLocation, "published_at" | "title" | "youtube_video_id">,
+  activity?: VideoActivitySnapshot,
+  nowMs = Date.now()
+) {
+  const rankDiff = VIDEO_ACTIVITY_SORT_RANK[getVideoSortGroup(a, activity, nowMs)] - VIDEO_ACTIVITY_SORT_RANK[getVideoSortGroup(b, activity, nowMs)];
+  if (rankDiff !== 0) return rankDiff;
+
+  const timeDiff = getVideoPublishedAtMs(b) - getVideoPublishedAtMs(a);
+  if (timeDiff !== 0) return timeDiff;
+
+  const titleDiff = stableTextCompare(a.title || "", b.title || "");
+  if (titleDiff !== 0) return titleDiff;
+
+  return stableTextCompare(a.youtube_video_id || "", b.youtube_video_id || "");
 }
 
 function normalizeLocationToken(value?: string | null) {

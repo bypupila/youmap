@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MediaKitInquiryForm } from "@/app/u/[username]/media-kit/media-kit-inquiry-form";
+import { APP_EMAILS } from "@/lib/app-emails";
 import { loadPublicMediaKit, type MediaKitPayload } from "@/lib/media-kit";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -18,7 +19,7 @@ export async function generateMetadata({ params }: MediaKitPageProps): Promise<M
     return {
       title: "Media kit | TravelYourMap",
       description: "Media kit interactivo para creadores de viajes.",
-      robots: { index: false, follow: false },
+      robots: { index: false, follow: false, nocache: true },
     };
   }
 
@@ -28,6 +29,11 @@ export async function generateMetadata({ params }: MediaKitPageProps): Promise<M
   return {
     title,
     description,
+    robots: {
+      index: true,
+      follow: true,
+      nocache: true,
+    },
     alternates: { canonical: canonicalUrl },
     openGraph: {
       title,
@@ -51,6 +57,7 @@ export default async function MediaKitPage({ params }: MediaKitPageProps) {
 
   const absoluteMapUrl = `${siteUrl}${mediaKit.urls.mapUrl}`;
   const absoluteMediaKitUrl = `${siteUrl}${mediaKit.urls.mediaKitUrl}`;
+  const partnershipEmail = mediaKit.settings.partnership_email || APP_EMAILS.marketing;
 
   return (
     <main className="min-h-[100dvh] bg-[#f8fafc] text-[#111827]">
@@ -89,12 +96,15 @@ export default async function MediaKitPage({ params }: MediaKitPageProps) {
                   Ver rate card
                 </a>
               ) : null}
-              {mediaKit.settings.partnership_email ? (
-                <a href={`mailto:${mediaKit.settings.partnership_email}`} className="inline-flex h-11 items-center rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#111827]">
-                  Email directo
-                </a>
-              ) : null}
+              <a href={`mailto:${partnershipEmail}`} className="inline-flex h-11 items-center rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#111827]">
+                Email comercial
+              </a>
             </div>
+            {!mediaKit.settings.partnership_email ? (
+              <p className="mt-2 text-xs text-[#64748b]">
+                Si no hay email comercial configurado en el perfil, el contacto apunta a {APP_EMAILS.marketing}.
+              </p>
+            ) : null}
           </div>
 
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -8,11 +8,18 @@ import { RoleAuditPanel } from "@/components/admin/role-audit-panel";
 import { AdminAnalyticsOverview } from "@/components/admin/admin-analytics-overview";
 import { ReleaseReadinessPanel } from "@/components/admin/release-readiness-panel";
 import { OpsAlertsPanel } from "@/components/admin/ops-alerts-panel";
-import { getRecentRoleChanges, ensureUserRoleAuditTable } from "@/lib/admin-role-audit";
+import { getRecentRoleChanges } from "@/lib/admin-role-audit";
 import { getSessionUserById, getValidSessionUserIdFromServerCookies, userIsSuperAdmin } from "@/lib/current-user";
 import { loadAdminUsersPageData } from "@/lib/admin-users";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
+};
 
 interface AdminPageProps {
   searchParams: Promise<{
@@ -28,8 +35,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const sessionUser = await getSessionUserById(sessionUserId);
   if (!userIsSuperAdmin(sessionUser?.role)) redirect("/dashboard");
-
-  await ensureUserRoleAuditTable();
 
   const pageSize = 20;
   const query = String(resolvedSearchParams.q || "");

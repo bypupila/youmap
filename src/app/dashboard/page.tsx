@@ -12,6 +12,13 @@ import { resolveCheckoutPlanSlug } from "@/lib/plans";
 import type { TravelChannel, TravelVideoLocation } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
+};
 
 interface DashboardPageProps {
   searchParams: Promise<{

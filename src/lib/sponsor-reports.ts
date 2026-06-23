@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { tableExists } from "@/lib/db-schema";
+import { buildSponsorReportEmail, sendAppEmail } from "@/lib/email";
 import { sql } from "@/lib/neon";
 
 export interface SponsorReportLinkSummary {
@@ -1103,64 +1104,20 @@ async function sendSponsorReportEmail({
   sponsorName: string;
   publicUrl: string;
 }): Promise<{ sent: boolean; error: string | null }> {
-  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
-  const from = String(process.env.REPORT_EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "").trim();
-  if (!apiKey || !from) {
-    return {
-      sent: false,
-      error: "Email transaccional no configurado. Define RESEND_API_KEY y REPORT_EMAIL_FROM para enviar reportes automaticamente.",
-    };
-  }
-
-  const subject = `Reporte de resultados - ${sponsorName}`;
-  const text = [
-    "Hola,",
-    "",
-    `Te compartimos el reporte privado de resultados de ${sponsorName} en TravelYourMap:`,
+  const email = buildSponsorReportEmail({
+    sponsorName,
     publicUrl,
-    "",
-    "Incluye clicks, actividad en el mapa, videos destacados, paises principales y contexto importado desde YouTube.",
-  ].join("\n");
-  const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827">
-      <h1 style="font-size:20px;margin:0 0 12px">Reporte de resultados - ${escapeHtml(sponsorName)}</h1>
-      <p>Te compartimos el reporte privado de resultados de ${escapeHtml(sponsorName)} en TravelYourMap.</p>
-      <p><a href="${escapeHtml(publicUrl)}" style="display:inline-block;background:#111827;color:#ffffff;padding:12px 16px;border-radius:8px;text-decoration:none;font-weight:700">Abrir reporte privado</a></p>
-      <p style="color:#4b5563">Incluye clicks, actividad en el mapa, videos destacados, paises principales y contexto importado desde YouTube.</p>
-    </div>
-  `;
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to,
-      subject,
-      text,
-      html,
-    }),
+  });
+  const result = await sendAppEmail({
+    from: "marketing",
+    to,
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
   });
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    return {
-      sent: false,
-      error: `Resend no pudo enviar el reporte (${response.status}). ${body.slice(0, 180)}`.trim(),
-    };
-  }
-
-  return { sent: true, error: null };
-}
-
-function escapeHtml(value: string) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+  return {
+    sent: result.sent,
+    error: result.error,
+  };
 }

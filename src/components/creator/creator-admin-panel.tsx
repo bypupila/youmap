@@ -26,6 +26,9 @@ type PollOptionInput = {
   cities: Array<{ city: string; sort_order: number }>;
 };
 
+type SponsorDetectionStatus = "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible";
+type BulkSponsorFilter = "all" | SponsorDetectionStatus;
+
 interface CreatorAdminPanelProps {
   activeTab: CreatorPanelTab;
   channelId: string;
@@ -84,7 +87,7 @@ export function CreatorAdminPanel({
   const [confirmingSponsorRemovalId, setConfirmingSponsorRemovalId] = useState<string | null>(null);
   const [bulkCountryFilter, setBulkCountryFilter] = useState<string>("all");
   const [bulkTitleFilter, setBulkTitleFilter] = useState("");
-  const [bulkStatusFilter, setBulkStatusFilter] = useState<"all" | "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible">("all");
+  const [bulkStatusFilter, setBulkStatusFilter] = useState<BulkSponsorFilter>("all");
   const [bulkSelectedSponsorId, setBulkSelectedSponsorId] = useState<string>("");
   const [bulkSelectedVideoIds, setBulkSelectedVideoIds] = useState<string[]>([]);
   const [bulkPage, setBulkPage] = useState(1);
@@ -134,15 +137,6 @@ export function CreatorAdminPanel({
         sponsor_names: Array.from(new Set(sponsorNamesByVideoId.get(entry.videoId) || [])),
       }));
   }, [videos, sponsorNamesByVideoId]);
-  const sponsorVideoTitleById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const video of videos) {
-      const id = String(video.id || "").trim();
-      if (!id) continue;
-      map.set(id, video.title);
-    }
-    return map;
-  }, [videos]);
   const directSponsorByVideoId = useMemo(() => {
     const map = new Map<string, string>();
     for (const sponsor of sponsors) {
@@ -1085,7 +1079,7 @@ export function CreatorAdminPanel({
                   </select>
                 </div>
                 <div className="flex items-center px-3 py-1.5 md:border-r border-white/10 w-full md:w-auto md:flex-1">
-                  <select value={bulkStatusFilter} onChange={(e) => { setBulkStatusFilter(e.target.value as any); setBulkPage(1); }} className="w-full bg-transparent text-xs font-medium text-white outline-none cursor-pointer">
+                  <select value={bulkStatusFilter} onChange={(e) => { setBulkStatusFilter(e.target.value as BulkSponsorFilter); setBulkPage(1); }} className="w-full bg-transparent text-xs font-medium text-white outline-none cursor-pointer">
                     <option value="all" className="bg-[#0a0a0b]">⚪️ Cualquier estado</option>
                     <option value="confirmado" className="bg-[#0a0a0b]">🟢 Confirmado</option>
                     <option value="detectado_automaticamente" className="bg-[#0a0a0b]">🟡 Detectado</option>
@@ -1304,50 +1298,7 @@ function formatDateShort(value: string | null) {
   return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
-function formatSponsorStatus(status: "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible") {
-  switch (status) {
-    case "confirmado":
-      return "Confirmado";
-    case "detectado_automaticamente":
-      return "Detectado automáticamente";
-    case "pendiente_revision":
-      return "Pendiente revisión";
-    default:
-      return "No disponible";
-  }
-}
-
-function formatSponsorCoverage(sponsor: MapRailSponsor, videoTitleById: Map<string, string>) {
-  const scope = sponsor.scope || ((sponsor.video_ids || []).length > 0 ? "video" : (sponsor.country_codes || []).length > 0 ? "country" : "global");
-  if (scope === "video") {
-    const videoIds = sponsor.video_ids || [];
-    const firstTitle = videoIds[0] ? videoTitleById.get(videoIds[0]) : null;
-    if (!videoIds.length) return "VIDEO · sin videos";
-    if (firstTitle && videoIds.length === 1) return `VIDEO · ${firstTitle}`;
-    if (firstTitle) return `VIDEO · ${firstTitle} +${videoIds.length - 1}`;
-    return `VIDEO · ${videoIds.length} videos`;
-  }
-  if (scope === "country") {
-    const countryCodes = sponsor.country_codes || [];
-    return `PAIS · ${countryCodes.join(", ") || "sin países"}`;
-  }
-  return "GLOBAL";
-}
-
-function getBulkPillToneClasses(status: "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible") {
-  switch (status) {
-    case "confirmado":
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-200";
-    case "detectado_automaticamente":
-      return "border-amber-500/20 bg-amber-500/10 text-amber-100";
-    case "pendiente_revision":
-      return "border-[#ff5a3d]/20 bg-[#ff5a3d]/10 text-[#ffd0c6]";
-    default:
-      return "border-white/10 bg-white/[0.03] text-[#d8dfe6]";
-  }
-}
-
-function getBulkSponsorPillClasses(status: "confirmado" | "detectado_automaticamente" | "pendiente_revision" | "no_disponible") {
+function getBulkSponsorPillClasses(status: SponsorDetectionStatus) {
   switch (status) {
     case "confirmado":
       return "border-emerald-500/20 bg-emerald-500/8 text-emerald-100";

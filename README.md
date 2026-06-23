@@ -234,8 +234,7 @@ Si quieres proteger el cron de cierre de votaciones:
 - `neon/seed`: datos de prueba para desarrollo local.
 - `data/processed`: datasets exportados (`json/csv`) para mapas locales.
 - `scripts`: extracción local de canales y generación de datasets de demo.
-- `docs/design-system.md`: reglas del sistema visual.
-- `docs/apple-ui-principles.md`: traducción de principios Apple a parámetros implementables.
+- `Design.MD`: contrato único de marca, sistema visual y compliance.
 - `docs/PROJECT_MEMORY.md`: memoria viva de procesos de desarrollo, QA, operación y release.
 
 ## APIs de mapa (operacion)

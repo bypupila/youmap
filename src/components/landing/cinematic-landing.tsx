@@ -16,6 +16,7 @@ import {
   YoutubeLogo,
 } from "@phosphor-icons/react/dist/ssr";
 import { MiniMapModel } from "@/components/landing/mini-map-model";
+import { ContactStrip } from "@/components/site/contact-strip";
 import { DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import type { TravelVideoLocation } from "@/lib/types";
 
@@ -539,6 +540,19 @@ function FinalCta() {
           </div>
           <div className="mt-5 flex flex-wrap gap-6 text-[12px] text-white/52"><span>Requiere tarjeta de crédito</span><span>Configuración en minutos</span></div>
         </div>
+      </div>
+      <div className="mx-auto max-w-[1500px] px-5 pb-14 sm:px-8 lg:px-14">
+        <ContactStrip
+          title="Contacto"
+          description="Escribe a soporte si algo no funciona, a marketing para alianzas o a hello para consultas generales."
+          items={[
+            { label: "General", email: "hello" },
+            { label: "Marketing", email: "marketing" },
+            { label: "Soporte", email: "support" },
+          ]}
+          tone="dark"
+          className="mt-0 border-t-white/10"
+        />
       </div>
     </section>
   );

@@ -8,6 +8,12 @@ import {
   resolvePathFromRequest,
   resolveReferrerFromRequest,
 } from "@/lib/map-events";
+import {
+  buildSponsorInquiryNotificationEmail,
+  buildSponsorInquiryReceiptEmail,
+  sendAppEmail,
+} from "@/lib/email";
+import { APP_EMAILS } from "@/lib/app-emails";
 import { sql } from "@/lib/neon";
 import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 
@@ -47,8 +53,8 @@ export async function POST(request: Request) {
 
     const payload = payloadSchema.parse(await request.json());
 
-    const channelRows = await sql<Array<{ id: string; user_id: string }>>`
-      select id, user_id
+    const channelRows = await sql<Array<{ id: string; user_id: string; channel_name: string | null }>>`
+      select id, user_id, channel_name
       from public.channels
       where id = ${payload.channelId}
       limit 1
@@ -58,6 +64,7 @@ export async function POST(request: Request) {
     if (!channel?.id) {
       return NextResponse.json({ error: "Canal no encontrado" }, { status: 404 });
     }
+    const creatorName = channel.channel_name || "TravelYourMap creator";
 
     const requestHashes = getRequestHashesFromHeaders(request.headers);
 
@@ -91,6 +98,45 @@ export async function POST(request: Request) {
         ${requestHashes.userAgentHash}
       )
     `;
+
+    const adminEmail = buildSponsorInquiryNotificationEmail({
+      brandName: payload.brandName,
+      contactName: payload.contactName,
+      contactEmail: payload.contactEmail,
+      proposedBudgetUsd: payload.proposedBudgetUsd || null,
+      brief: payload.brief,
+      mapUrl: payload.mapUrl,
+    });
+    const receiptEmail = buildSponsorInquiryReceiptEmail({
+      brandName: payload.brandName,
+      contactName: payload.contactName,
+      creatorName,
+      mapUrl: payload.mapUrl,
+    });
+
+    const [adminResult, receiptResult] = await Promise.all([
+      sendAppEmail({
+        from: "admin",
+        to: APP_EMAILS.admin,
+        replyTo: payload.contactEmail,
+        subject: adminEmail.subject,
+        text: adminEmail.text,
+        html: adminEmail.html,
+      }),
+      sendAppEmail({
+        from: "noreply",
+        to: payload.contactEmail,
+        subject: receiptEmail.subject,
+        text: receiptEmail.text,
+        html: receiptEmail.html,
+      }),
+    ]);
+    if (!adminResult.sent || !receiptResult.sent) {
+      console.warn("[api/sponsors/inquiry] email delivery issue", {
+        adminError: adminResult.error,
+        receiptError: receiptResult.error,
+      });
+    }
 
     const path = resolvePathFromRequest(request, payload.mapUrl);
     if (isPublicMapPath(path) && !(await requestUserOwnsChannel(request, payload.channelId))) {

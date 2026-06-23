@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { ContactStrip } from "@/components/site/contact-strip";
 import { getBrandPortalAccessCookieName, loadBrandPortalByToken, type SponsorCrmCampaign } from "@/lib/sponsor-crm";
 import { BrandPortalAccessForm } from "./brand-portal-access-form";
 
@@ -26,7 +27,18 @@ export default async function BrandPortalPage({ params }: { params: Promise<{ to
   if (portalResult.status === "access_required") {
     return (
       <main className="min-h-[100dvh] bg-[#f6f7f2] px-4 py-10 text-[#151515]">
-        <BrandPortalAccessForm token={cleanToken} brandName={portalResult.brand_name} emailHint={portalResult.access_email_hint} />
+        <div className="mx-auto flex w-full max-w-6xl flex-col">
+          <BrandPortalAccessForm token={cleanToken} brandName={portalResult.brand_name} emailHint={portalResult.access_email_hint} />
+          <ContactStrip
+            title="Contacto"
+            description="Si necesitas ayuda con acceso o revisión de campaña, usa soporte. Para campañas y renovaciones, marketing es el canal correcto."
+            items={[
+              { label: "Soporte", email: "support" },
+              { label: "Marketing", email: "marketing" },
+            ]}
+            tone="light"
+          />
+        </div>
       </main>
     );
   }
@@ -117,6 +129,15 @@ export default async function BrandPortalPage({ params }: { params: Promise<{ to
             </div>
           </Panel>
         </section>
+        <ContactStrip
+          title="Contacto"
+          description="Para soporte de portal privado, acceso o seguimiento comercial, usa los canales oficiales."
+          items={[
+            { label: "Soporte", email: "support" },
+            { label: "Marketing", email: "marketing" },
+          ]}
+          tone="light"
+        />
       </section>
     </main>
   );

@@ -13,6 +13,7 @@ const blockedEnvFiles = trackedFiles.filter((file) => /^\.env(\..+)?$/.test(file
 const suspiciousPatterns = [
   { name: "Google API key", regex: /AIza[0-9A-Za-z_-]{35}/g },
   { name: "OpenAI key", regex: /sk-[A-Za-z0-9]{20,}/g },
+  { name: "Resend API key", regex: /\bre_[A-Za-z0-9._-]{20,}\b/g },
   { name: "GitHub token", regex: /ghp_[A-Za-z0-9]{20,}/g },
   { name: "Polar access token", regex: /polar_oat_[A-Za-z0-9._-]{20,}/g },
   { name: "Polar webhook secret", regex: /polar_whs_[A-Za-z0-9._-]{20,}/g },
@@ -30,6 +31,7 @@ const sensitiveEnvKeys = new Set([
   "GOOGLE_API_KEY",
   "POLAR_ACCESS_TOKEN",
   "POLAR_WEBHOOK_SECRET",
+  "RESEND_API_KEY",
   "OPENAI_API_KEY",
   "NEON_API_KEY",
   "VERCEL_OIDC_TOKEN",

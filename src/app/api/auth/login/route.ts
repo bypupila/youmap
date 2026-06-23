@@ -5,6 +5,7 @@ import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
 import { verifyPassword } from "@/lib/auth-password";
 import { setSessionCookie } from "@/lib/auth-session";
 import { normalizeAttributionChannelId, upsertCreatorViewerSubscription } from "@/lib/creator-viewer-subscriptions";
+import { tableExists } from "@/lib/db-schema";
 import { normalizeAppUserRole } from "@/lib/current-user";
 import { sql } from "@/lib/neon";
 import { getPostHogClient } from "@/lib/posthog-server";
@@ -22,7 +23,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const LOGIN_WINDOW_MINUTES = 15;
 const MAX_FAILED_ATTEMPTS_PER_WINDOW = 10;
-let ensureLoginAttemptsTablePromise: Promise<void> | null = null;
 
 function hashValue(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -36,38 +36,11 @@ function readClientIp(request: Request) {
   return String(request.headers.get("x-real-ip") || "").trim();
 }
 
-async function ensureLoginAttemptsTable() {
-  if (!ensureLoginAttemptsTablePromise) {
-    ensureLoginAttemptsTablePromise = (async () => {
-      await sql`
-        create table if not exists public.auth_login_attempts (
-          id bigserial primary key,
-          identifier_hash text not null,
-          ip_hash text null,
-          created_at timestamptz not null default now()
-        )
-      `;
-      await sql`
-        create index if not exists auth_login_attempts_identifier_created_idx
-        on public.auth_login_attempts (identifier_hash, created_at desc)
-      `;
-      await sql`
-        create index if not exists auth_login_attempts_ip_created_idx
-        on public.auth_login_attempts (ip_hash, created_at desc)
-      `;
-      await sql`
-        create index if not exists auth_login_attempts_created_idx
-        on public.auth_login_attempts (created_at desc)
-      `;
-    })();
-  }
-
-  return ensureLoginAttemptsTablePromise;
-}
-
 async function hasTooManyRecentFailures(identifierHash: string, ipHash: string | null) {
   try {
-    await ensureLoginAttemptsTable();
+    if (!(await tableExists("public", "auth_login_attempts"))) {
+      return false;
+    }
     const rows = ipHash
       ? await sql<Array<{ attempts: number }>>`
           select count(*)::int as attempts
@@ -90,7 +63,9 @@ async function hasTooManyRecentFailures(identifierHash: string, ipHash: string |
 
 async function recordFailedLoginAttempt(identifierHash: string, ipHash: string | null) {
   try {
-    await ensureLoginAttemptsTable();
+    if (!(await tableExists("public", "auth_login_attempts"))) {
+      return;
+    }
     await sql`
       insert into public.auth_login_attempts (identifier_hash, ip_hash, created_at)
       values (${identifierHash}, ${ipHash}, now())
@@ -102,7 +77,9 @@ async function recordFailedLoginAttempt(identifierHash: string, ipHash: string |
 
 async function clearRecentFailedAttempts(identifierHash: string, ipHash: string | null) {
   try {
-    await ensureLoginAttemptsTable();
+    if (!(await tableExists("public", "auth_login_attempts"))) {
+      return;
+    }
     if (ipHash) {
       await sql`
         delete from public.auth_login_attempts

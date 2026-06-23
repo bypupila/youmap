@@ -2591,6 +2591,7 @@ function MapTopBar({
   canToggleViewerPreview,
   isPreviewingViewer,
   headerEyebrow,
+  isDemoMode,
 }: MapShellProps) {
   const lastExtractionAt = channel.last_synced_at || youtubeDataHealth.latestRefreshedAt || null;
 
@@ -2654,9 +2655,9 @@ function MapTopBar({
           </Button>
           {showCreateMapCta ? (
             <Button asChild size="sm" variant="outline" className="shrink-0">
-              <Link href="/onboarding">
+              <Link href={isDemoMode ? "/onboarding?demo=1" : "/onboarding"}>
                 <Plus size={14} />
-                Crear mapa
+                {isDemoMode ? "Crear cuenta gratis" : "Crear mapa"}
               </Link>
             </Button>
           ) : null}

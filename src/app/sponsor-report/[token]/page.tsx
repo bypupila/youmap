@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { ContactStrip } from "@/components/site/contact-strip";
 import { loadSponsorReportByToken, type SponsorReportVideoMetric } from "@/lib/sponsor-reports";
 import { SponsorReportActions } from "./sponsor-report-actions";
 
@@ -141,6 +142,15 @@ export default async function SponsorReportPage({ params }: SponsorReportPagePro
           <p className="font-black text-[#16120d]">TravelYourMap sponsor report</p>
           <p>Documento privado generado desde metricas first-party del mapa y datos importados del canal. No distribuir fuera del equipo de la marca sin permiso del creador.</p>
         </footer>
+        <ContactStrip
+          title="Contacto"
+          description="Para soporte del reporte privado, acceso o interpretación de métricas, usa los canales oficiales."
+          items={[
+            { label: "Soporte", email: "support" },
+            { label: "Marketing", email: "marketing" },
+          ]}
+          tone="light"
+        />
       </section>
     </main>
   );

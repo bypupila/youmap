@@ -6,6 +6,7 @@ import { normalizeEmail, normalizeUsername } from "@/lib/auth-identifiers";
 import { setSessionCookie } from "@/lib/auth-session";
 import { normalizeAttributionChannelId } from "@/lib/creator-viewer-subscriptions";
 import { normalizeAppUserRole } from "@/lib/current-user";
+import { buildWelcomeEmail, sendAppEmail } from "@/lib/email";
 import { sql } from "@/lib/neon";
 import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
 
@@ -290,6 +291,22 @@ export async function POST(request: Request) {
       creator_subscription_id: creatorSubscriptionId,
     });
     setSessionCookie(response, userId, request.headers.get("host"));
+
+    const welcomeEmail = buildWelcomeEmail({
+      displayName: payload.displayName.trim(),
+      role: "viewer",
+    });
+    const emailResult = await sendAppEmail({
+      from: "noreply",
+      to: email,
+      subject: welcomeEmail.subject,
+      text: welcomeEmail.text,
+      html: welcomeEmail.html,
+    });
+    if (!emailResult.sent) {
+      console.warn("[api/auth/register-viewer] welcome email skipped", emailResult.error);
+    }
+
     return response;
   } catch (error) {
     console.error("[api/auth/register-viewer POST]", error);

@@ -7,6 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ContactStrip } from "@/components/site/contact-strip";
 import {
   buildViewerRegisterHref,
   readViewerAuthAttribution,
@@ -194,6 +195,18 @@ function AuthPageContent() {
             TravelYourMap no está afiliado, patrocinado ni respaldado por YouTube ni por Google.
           </p>
         </section>
+      </div>
+      <div className="relative z-10 mx-auto max-w-[1400px] px-4 pb-6 lg:px-6">
+        <ContactStrip
+          title="Ayuda"
+          description="Si no puedes entrar, usa soporte técnico. Para consultas generales o comerciales, usa los correos públicos."
+          items={[
+            { label: "Soporte", email: "support" },
+            { label: "General", email: "hello" },
+          ]}
+          tone="dark"
+          className="mt-0 border-t-white/10"
+        />
       </div>
     </main>
   );

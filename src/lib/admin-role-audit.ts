@@ -1,4 +1,5 @@
 import { sql } from "@/lib/neon";
+import { tableExists } from "@/lib/db-schema";
 import type { AdminAppUserRole } from "@/lib/admin-roles";
 
 export interface UserRoleAuditRow {
@@ -17,44 +18,10 @@ export interface UserRoleAuditRow {
 
 type AuditInsertInput = Omit<UserRoleAuditRow, "id" | "created_at">;
 
-let ensureAuditTablePromise: Promise<void> | null = null;
-
-export function ensureUserRoleAuditTable() {
-  if (!ensureAuditTablePromise) {
-    ensureAuditTablePromise = (async () => {
-      await sql`
-        create table if not exists public.user_role_audit (
-          id bigserial primary key,
-          target_user_id uuid not null,
-          target_user_email text not null,
-          target_user_username text not null,
-          target_display_name text not null,
-          previous_role text not null,
-          new_role text not null,
-          changed_by_user_id uuid not null,
-          changed_by_username text not null,
-          changed_by_display_name text not null,
-          created_at timestamptz not null default now()
-        )
-      `;
-
-      await sql`
-        create index if not exists user_role_audit_created_at_idx
-        on public.user_role_audit (created_at desc)
-      `;
-
-      await sql`
-        create index if not exists user_role_audit_target_user_id_idx
-        on public.user_role_audit (target_user_id)
-      `;
-    })();
-  }
-
-  return ensureAuditTablePromise;
-}
-
 export async function logUserRoleChange(entry: AuditInsertInput) {
-  await ensureUserRoleAuditTable();
+  if (!(await tableExists("public", "user_role_audit"))) {
+    return null;
+  }
 
   const rows = await sql<Array<UserRoleAuditRow>>`
     insert into public.user_role_audit (
@@ -86,7 +53,9 @@ export async function logUserRoleChange(entry: AuditInsertInput) {
 }
 
 export async function getRecentRoleChanges(limit = 20) {
-  await ensureUserRoleAuditTable();
+  if (!(await tableExists("public", "user_role_audit"))) {
+    return [];
+  }
 
   const rows = await sql<Array<UserRoleAuditRow>>`
     select

@@ -1,7 +1,6 @@
 import { createHash } from "crypto";
+import { tableExists } from "@/lib/db-schema";
 import { sql } from "@/lib/neon";
-
-let ensureRequestRateLimitTablePromise: Promise<void> | null = null;
 
 function hashValue(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -17,31 +16,6 @@ function readClientIp(request: Request) {
 
 function readUserAgent(request: Request) {
   return String(request.headers.get("user-agent") || "").trim();
-}
-
-async function ensureRequestRateLimitTable() {
-  if (!ensureRequestRateLimitTablePromise) {
-    ensureRequestRateLimitTablePromise = (async () => {
-      await sql`
-        create table if not exists public.security_request_rate_limits (
-          id bigserial primary key,
-          scope text not null,
-          actor_hash text not null,
-          created_at timestamptz not null default now()
-        )
-      `;
-      await sql`
-        create index if not exists security_request_rate_limits_scope_actor_created_idx
-        on public.security_request_rate_limits (scope, actor_hash, created_at desc)
-      `;
-      await sql`
-        create index if not exists security_request_rate_limits_created_idx
-        on public.security_request_rate_limits (created_at desc)
-      `;
-    })();
-  }
-
-  return ensureRequestRateLimitTablePromise;
 }
 
 function resolveActorHash(request: Request) {
@@ -68,7 +42,9 @@ export async function enforceRequestRateLimit(params: {
   }
 
   try {
-    await ensureRequestRateLimitTable();
+    if (!(await tableExists("public", "security_request_rate_limits"))) {
+      return { allowed: true as const, retryAfterSeconds: null as number | null };
+    }
     const rows = await sql<Array<{ attempts: number }>>`
       select count(*)::int as attempts
       from public.security_request_rate_limits

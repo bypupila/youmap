@@ -52,7 +52,7 @@ export default async function MapPage({ searchParams }: MapPageProps) {
         }));
   const isDemoMap = requestedChannelId === DEMO_CHANNEL_SLUG || payload?.channel.id === DEMO_CHANNEL_ID;
   const forceViewerMode = isDemoMap || isPublicReadOnlyHandle(payload?.channel.canonicalHandle || null);
-  const headerEyebrow = requestedChannelId === payload?.channel.id ? "Mapa público" : isDemoMap ? "Mapa demo" : "Demo de respaldo";
+  const headerEyebrow = requestedChannelId === payload?.channel.id ? "Mapa público" : isDemoMap ? "Modo demo · sin persistencia" : "Demo de respaldo";
   if (!payload) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center px-4 text-foreground">

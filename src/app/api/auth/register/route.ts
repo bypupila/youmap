@@ -5,6 +5,7 @@ import { importYoutubeChannel } from "@/lib/youtube-import";
 import { hashPassword } from "@/lib/auth-password";
 import { setSessionCookie } from "@/lib/auth-session";
 import { isValidUsername, normalizeEmail, normalizeUsername, toPublicMapPath } from "@/lib/auth-identifiers";
+import { buildWelcomeEmail, sendAppEmail } from "@/lib/email";
 import { sql } from "@/lib/neon";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { enforceRequestRateLimit } from "@/lib/request-rate-limit";
@@ -320,6 +321,22 @@ export async function POST(request: Request) {
       request_id: randomUUID(),
     });
     setSessionCookie(response, userId, request.headers.get("host"));
+
+    const welcomeEmail = buildWelcomeEmail({
+      displayName,
+      role: "creator",
+    });
+    const emailResult = await sendAppEmail({
+      from: "noreply",
+      to: email,
+      subject: welcomeEmail.subject,
+      text: welcomeEmail.text,
+      html: welcomeEmail.html,
+    });
+    if (!emailResult.sent) {
+      console.warn("[api/auth/register] welcome email skipped", emailResult.error);
+    }
+
     return response;
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -1017,7 +1017,7 @@ function buildPointLabel(point: GlobePoint) {
 
   if (point.kind === "video") {
     const video = point.videos[0];
-    const thumb = toCompactYouTubeThumbnail(video?.thumbnail_url) || "https://via.placeholder.com/360x202/111827/9CA3AF?text=Video";
+    const thumb = toCompactYouTubeThumbnail(video?.thumbnail_url) || "/creators/final-cta-map-mockup.png";
     const views = formatNumber(Number(video?.view_count || 0));
     const likes = formatNumber(Number(video?.like_count || 0));
     const comments = formatNumber(Number(video?.comment_count || 0));

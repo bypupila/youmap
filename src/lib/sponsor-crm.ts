@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomInt, randomUUID } from "crypto";
 import { columnExists, tableExists } from "@/lib/db-schema";
+import { buildCampaignRenewalEmail, sendAppEmail } from "@/lib/email";
 import { sql } from "@/lib/neon";
 import { normalizeSponsorInquiryStatus, type SponsorInquiryStatus } from "@/lib/sponsor-inquiries";
 
@@ -1261,8 +1262,7 @@ export async function createCampaignRenewalWithEmail({
   }
 
   const recipientEmail = normalizeEmail(renewal.contact_email);
-  const subject = `Propuesta de renovacion - ${renewal.brand_name}`;
-  const body = buildRenewalEmailBody({
+  const email = buildCampaignRenewalEmail({
     contactName: renewal.contact_name,
     brandName: renewal.brand_name,
     budgetUsd: renewal.budget_usd,
@@ -1270,7 +1270,7 @@ export async function createCampaignRenewalWithEmail({
     accessCode,
   });
   const mailtoUrl = recipientEmail
-    ? `mailto:${encodeURIComponent(recipientEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    ? `mailto:${encodeURIComponent(recipientEmail)}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.text)}`
     : null;
 
   if (!recipientEmail) {
@@ -1284,13 +1284,12 @@ export async function createCampaignRenewalWithEmail({
     };
   }
 
-  const emailResult = await sendRenewalEmail({
+  const emailResult = await sendAppEmail({
+    from: "marketing",
     to: recipientEmail,
-    subject,
-    body,
-    brandName: renewal.brand_name,
-    portalUrl,
-    accessCode,
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
   });
 
   return {
@@ -1933,92 +1932,4 @@ function isValidBrandPortalAccessCookie({
   if (payload !== `${token}.${linkId}.${accessCodeHash}`) return false;
   const expected = createHmac("sha256", brandPortalAccessSecret()).update(payload).digest("base64url");
   return signature === expected;
-}
-
-function buildRenewalEmailBody({
-  contactName,
-  brandName,
-  budgetUsd,
-  portalUrl,
-  accessCode,
-}: {
-  contactName: string | null;
-  brandName: string;
-  budgetUsd: number | null;
-  portalUrl: string | null;
-  accessCode: string | null;
-}) {
-  return [
-    contactName ? `Hola ${contactName},` : "Hola,",
-    "",
-    `Te comparto una propuesta de renovacion para ${brandName} en TravelYourMap.`,
-    budgetUsd ? `Budget sugerido para la nueva etapa: $${budgetUsd} USD.` : "El budget queda abierto para ajustar segun objetivos y destinos.",
-    portalUrl ? `Puedes revisar la propuesta y el estado de la campaña en este portal privado: ${portalUrl}` : null,
-    accessCode ? `Codigo de acceso: ${accessCode}` : null,
-    "",
-    "La idea es sostener presencia en el mapa, sumar nuevos contenidos/destinos y mantener reportes de resultados para la marca.",
-    "",
-    "Quedo atento/a para avanzar.",
-  ].filter(Boolean).join("\n");
-}
-
-async function sendRenewalEmail({
-  to,
-  subject,
-  body,
-  brandName,
-  portalUrl,
-  accessCode,
-}: {
-  to: string;
-  subject: string;
-  body: string;
-  brandName: string;
-  portalUrl: string | null;
-  accessCode: string | null;
-}): Promise<{ sent: boolean; error: string | null }> {
-  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
-  const from = String(process.env.REPORT_EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "").trim();
-  if (!apiKey || !from) {
-    return {
-      sent: false,
-      error: "Email transaccional no configurado. Define RESEND_API_KEY y REPORT_EMAIL_FROM; se preparo un mailto como fallback.",
-    };
-  }
-
-  const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827">
-      <h1 style="font-size:20px;margin:0 0 12px">Propuesta de renovacion - ${escapeHtml(brandName)}</h1>
-      <p>${escapeHtml(body).replaceAll("\n", "<br />")}</p>
-      ${accessCode ? `<p style="font-size:16px;font-weight:700">Codigo de acceso: ${escapeHtml(accessCode)}</p>` : ""}
-      ${portalUrl ? `<p><a href="${escapeHtml(portalUrl)}" style="display:inline-block;background:#111827;color:#ffffff;padding:12px 16px;border-radius:8px;text-decoration:none;font-weight:700">Abrir portal privado</a></p>` : ""}
-    </div>
-  `;
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from, to, subject, text: body, html }),
-  });
-  if (!response.ok) {
-    const responseBody = await response.text().catch(() => "");
-    return {
-      sent: false,
-      error: `Resend no pudo enviar la renovacion (${response.status}). ${responseBody.slice(0, 180)}`.trim(),
-    };
-  }
-
-  return { sent: true, error: null };
-}
-
-function escapeHtml(value: string) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }

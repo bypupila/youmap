@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { getDemoMapPreviewImage } from "@/lib/demo-video-previews";
 import type { SponsorBannerColors } from "@/lib/sponsor-banner-colors";
 import { resolveSponsorCardVariant } from "@/lib/sponsor-card-style";
-import { formatVideoDuration, getCountryNameInSpanish } from "@/components/map/video-viewer-utils";
+import { formatVideoDuration, getCountryNameInSpanish, isVideoNew } from "@/components/map/video-viewer-utils";
 
 type WatchStatus = "not_started" | "not_finished" | "watched" | "watch_later";
 
@@ -56,6 +56,7 @@ export function MapVideoCard({
   const isWatchLater = explicitWatchStatus === "watch_later";
   const isFeatured = Boolean(videoId && activity?.featuredIds?.has(videoId));
   const isHighlighted = Boolean(videoId) && videoId === String(highlightedVideoId || "").trim();
+  const isNew = isVideoNew(video);
   const sponsorVariant = resolveSponsorCardVariant(video.sponsor_card_style, sponsorNames.length);
   const thumbnailSrc = isDemoMode
     ? getDemoMapPreviewImage(video.youtube_video_id)
@@ -77,21 +78,29 @@ export function MapVideoCard({
 
   const cardShellClassName = cn(
     "group relative w-[260px] shrink-0 overflow-hidden rounded-xl border-2 bg-transparent transition-all duration-300 cursor-pointer flex flex-col",
-    isWatched
-      ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-      : isWatchLater
-        ? "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
-      : isFeatured
-        ? "border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
-      : isStarted
-        ? "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]"
-        : isHighlighted
-          ? "border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35)]"
-          : "border-white/[0.1] hover:border-white/30 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]",
+    isNew
+      ? "border-violet-400 shadow-[0_0_18px_rgba(168,85,247,0.25)]"
+      : isWatched
+        ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+        : isWatchLater
+          ? "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+          : isFeatured
+            ? "border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+            : isStarted
+              ? "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+              : isHighlighted
+                ? "border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35)]"
+                : "border-white/[0.1] hover:border-white/30 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]",
     className
   );
 
   const badges: Array<{ text: string; color: string }> = [];
+  if (isNew) {
+    badges.push({
+      text: "NUEVO",
+      color: "bg-violet-500/15 text-violet-100 border-violet-400/60 shadow-[0_0_0_1px_rgba(168,85,247,0.18)]",
+    });
+  }
   if (isWatched) {
     badges.push({
       text: "COMPLETADO",

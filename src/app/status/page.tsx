@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { ContactStrip } from "@/components/site/contact-strip";
 import { loadPublicStatus, type PublicServiceStatus } from "@/lib/public-status";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,16 @@ export default async function StatusPage() {
             <IndicatorCard label="Eventos internos" value={status.indicators.map_events_24h} />
           </div>
         </section>
+        <ContactStrip
+          title="Contacto"
+          description="Si el estado muestra degradación y necesitas ayuda, contacta soporte técnico."
+          items={[
+            { label: "Soporte", email: "support" },
+            { label: "Admin", email: "admin" },
+          ]}
+          tone="dark"
+          className="mt-6"
+        />
       </div>
     </main>
   );
