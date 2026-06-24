@@ -51,7 +51,13 @@ interface DesktopVideoMapCardProps {
   onOpenInYouTube?: (video: TravelVideoLocation) => void;
   openButtonLabel?: string;
   playbackCommand?: { id: number; action: "pause" | "play" } | null;
+  initialStartSeconds?: number | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
+  onPlaybackProgress?: (progress: {
+    positionSeconds: number;
+    durationSeconds: number;
+    watchedDeltaSeconds: number;
+  }) => void;
   variant?: "default" | "youtube-theater";
   isDemoMode?: boolean;
 }
@@ -95,7 +101,9 @@ export function DesktopVideoMapCard({
   onOpenInYouTube,
   openButtonLabel,
   playbackCommand,
+  initialStartSeconds = null,
   onPlaybackStateChange,
+  onPlaybackProgress,
   variant = "default",
   isDemoMode = false,
 }: DesktopVideoMapCardProps) {
@@ -499,9 +507,12 @@ export function DesktopVideoMapCard({
                   openButtonLabel="YouTube"
                   frameClassName="rounded-none border-0"
                   hideFooter
+                  fullscreenOnPlay
                   playbackCommand={playbackCommand}
+                  initialStartSeconds={initialStartSeconds}
                   onOpenInYouTube={openYouTubeVideo}
                   onPlaybackStateChange={onPlaybackStateChange}
+                  onPlaybackProgress={onPlaybackProgress}
                   isMadeForKids={Boolean(selectedVideo.made_for_kids)}
                 />
               )}
@@ -752,9 +763,12 @@ export function DesktopVideoMapCard({
               youtubeHref={youtubeHref}
               thumbnailUrl={selectedVideo.thumbnail_url}
               openButtonLabel={openButtonLabel || (isOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
+              fullscreenOnPlay
               playbackCommand={playbackCommand}
+              initialStartSeconds={initialStartSeconds}
               onOpenInYouTube={openYouTubeVideo}
               onPlaybackStateChange={onPlaybackStateChange}
+              onPlaybackProgress={onPlaybackProgress}
               isMadeForKids={Boolean(selectedVideo.made_for_kids)}
             />
           )}

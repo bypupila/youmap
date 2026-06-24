@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowSquareOut, WarningCircle } from "@phosphor-icons/react";
 import {
   getOfficialYouTubeEmbedPlayerVars,
@@ -21,8 +21,15 @@ interface YouTubeEmbedPlayerProps {
   isMadeForKids?: boolean;
   openButtonLabel?: string;
   hideFooter?: boolean;
+  fullscreenOnPlay?: boolean;
   playbackCommand?: { id: number; action: "pause" | "play" } | null;
+  initialStartSeconds?: number | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
+  onPlaybackProgress?: (progress: {
+    positionSeconds: number;
+    durationSeconds: number;
+    watchedDeltaSeconds: number;
+  }) => void;
   onOpenInYouTube?: () => void;
 }
 
@@ -33,6 +40,9 @@ type YTPlayerInstance = {
   destroy: () => void;
   pauseVideo?: () => void;
   playVideo?: () => void;
+  getCurrentTime?: () => number;
+  getDuration?: () => number;
+  seekTo?: (seconds: number, allowSeekAhead: boolean) => void;
 };
 
 type YTPlayerOptions = {
@@ -116,15 +126,25 @@ export function YouTubeEmbedPlayer({
   isMadeForKids = false,
   openButtonLabel = "Abrir en YouTube",
   hideFooter = false,
+  fullscreenOnPlay = false,
   playbackCommand = null,
+  initialStartSeconds = null,
   onPlaybackStateChange,
+  onPlaybackProgress,
   onOpenInYouTube,
 }: YouTubeEmbedPlayerProps) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayerInstance | null>(null);
   const hasObservedPlayingRef = useRef(false);
+  const hasRequestedFullscreenRef = useRef(false);
   const onPlaybackStateChangeRef = useRef(onPlaybackStateChange);
+  const onPlaybackProgressRef = useRef(onPlaybackProgress);
+  const initialStartSecondsRef = useRef(initialStartSeconds);
   const isDestroyingRef = useRef(false);
+  const progressIntervalRef = useRef<number | null>(null);
+  const lastProgressTickMsRef = useRef<number | null>(null);
+  const hasAppliedInitialStartRef = useRef(false);
   const normalizedVideoId = normalizeYouTubeVideoId(videoId);
   const [status, setStatus] = useState<EmbedStatus>(normalizedVideoId ? "loading" : "error");
   const [errorReason, setErrorReason] = useState<EmbedErrorReason>(normalizedVideoId ? null : "invalid_id");
@@ -132,6 +152,60 @@ export function YouTubeEmbedPlayer({
   useEffect(() => {
     onPlaybackStateChangeRef.current = onPlaybackStateChange;
   }, [onPlaybackStateChange]);
+
+  useEffect(() => {
+    onPlaybackProgressRef.current = onPlaybackProgress;
+  }, [onPlaybackProgress]);
+
+  useEffect(() => {
+    initialStartSecondsRef.current = initialStartSeconds;
+  }, [initialStartSeconds]);
+
+  const stopProgressTracking = useCallback(() => {
+    if (progressIntervalRef.current !== null) {
+      window.clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    lastProgressTickMsRef.current = null;
+  }, []);
+
+  const emitPlaybackProgress = useCallback((includeWatchedDelta: boolean) => {
+    if (isMadeForKids) return;
+    const player = playerRef.current;
+    const positionSeconds = player?.getCurrentTime?.();
+    if (typeof positionSeconds !== "number" || !Number.isFinite(positionSeconds)) return;
+
+    const durationSeconds = player?.getDuration?.();
+    const nowMs = Date.now();
+    const previousTickMs = lastProgressTickMsRef.current;
+    const watchedDeltaSeconds = includeWatchedDelta && previousTickMs !== null
+      ? Math.max(0, Math.round((nowMs - previousTickMs) / 1000))
+      : 0;
+
+    if (includeWatchedDelta) lastProgressTickMsRef.current = nowMs;
+
+    onPlaybackProgressRef.current?.({
+      positionSeconds: Math.max(0, Math.round(positionSeconds)),
+      durationSeconds: typeof durationSeconds === "number" && Number.isFinite(durationSeconds)
+        ? Math.max(0, Math.round(durationSeconds))
+        : 0,
+      watchedDeltaSeconds,
+    });
+  }, [isMadeForKids]);
+
+  const startProgressTracking = useCallback(() => {
+    if (isMadeForKids) return;
+    if (progressIntervalRef.current !== null) return;
+    lastProgressTickMsRef.current = Date.now();
+    progressIntervalRef.current = window.setInterval(() => {
+      emitPlaybackProgress(true);
+    }, 5000);
+  }, [emitPlaybackProgress, isMadeForKids]);
+
+  const flushPlaybackProgress = useCallback(() => {
+    emitPlaybackProgress(true);
+    stopProgressTracking();
+  }, [emitPlaybackProgress, stopProgressTracking]);
 
   useEffect(() => {
     if (!playbackCommand || !playerRef.current) return;
@@ -142,13 +216,29 @@ export function YouTubeEmbedPlayer({
     playerRef.current.playVideo?.();
   }, [playbackCommand]);
 
+  const requestFullscreenOnPlay = useCallback(() => {
+    if (!fullscreenOnPlay || hasRequestedFullscreenRef.current) return;
+    if (typeof document === "undefined" || document.fullscreenElement) return;
+
+    const frame = frameRef.current;
+    if (!frame?.requestFullscreen) return;
+
+    hasRequestedFullscreenRef.current = true;
+    void frame.requestFullscreen({ navigationUI: "hide" }).catch(() => {
+      // Browsers may reject fullscreen when the YouTube play gesture happens inside the cross-origin iframe.
+    });
+  }, [fullscreenOnPlay]);
+
   useEffect(() => {
     let cancelled = false;
 
     playerRef.current?.destroy();
     playerRef.current = null;
     hasObservedPlayingRef.current = false;
+    hasRequestedFullscreenRef.current = false;
+    hasAppliedInitialStartRef.current = false;
     isDestroyingRef.current = false;
+    stopProgressTracking();
 
     if (!normalizedVideoId) {
       setStatus("error");
@@ -174,7 +264,14 @@ export function YouTubeEmbedPlayer({
           playerVars: getOfficialYouTubeEmbedPlayerVars(window.location.origin, allowFullscreen),
           events: {
             onReady: () => {
-              if (!cancelled) setStatus("ready");
+              if (cancelled) return;
+              const startSeconds = Math.max(0, Math.round(Number(initialStartSecondsRef.current || 0)));
+              if (!isMadeForKids && startSeconds > 0 && !hasAppliedInitialStartRef.current) {
+                hasAppliedInitialStartRef.current = true;
+                playerRef.current?.seekTo?.(startSeconds, true);
+                emitPlaybackProgress(false);
+              }
+              setStatus("ready");
             },
             onError: (event) => {
               if (cancelled || isDestroyingRef.current) return;
@@ -187,12 +284,20 @@ export function YouTubeEmbedPlayer({
               if (cancelled || isDestroyingRef.current) return;
               if (event.data === 1) {
                 hasObservedPlayingRef.current = true;
+                requestFullscreenOnPlay();
+                startProgressTracking();
                 onPlaybackStateChangeRef.current?.("playing");
               }
-              if (event.data === 2) onPlaybackStateChangeRef.current?.("paused");
+              if (event.data === 2) {
+                flushPlaybackProgress();
+                onPlaybackStateChangeRef.current?.("paused");
+              }
               // YouTube can emit "ended" during init on some embeds.
               // Only treat it as real completion after actual playback started.
-              if (event.data === 0 && hasObservedPlayingRef.current) onPlaybackStateChangeRef.current?.("ended");
+              if (event.data === 0 && hasObservedPlayingRef.current) {
+                flushPlaybackProgress();
+                onPlaybackStateChangeRef.current?.("ended");
+              }
             },
           },
         });
@@ -206,10 +311,11 @@ export function YouTubeEmbedPlayer({
     return () => {
       cancelled = true;
       isDestroyingRef.current = true;
+      flushPlaybackProgress();
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [allowFullscreen, normalizedVideoId]);
+  }, [allowFullscreen, emitPlaybackProgress, flushPlaybackProgress, isMadeForKids, normalizedVideoId, requestFullscreenOnPlay, startProgressTracking, stopProgressTracking]);
 
   function openInYoutube() {
     if (onOpenInYouTube) {
@@ -225,9 +331,11 @@ export function YouTubeEmbedPlayer({
   return (
     <div className={cn("space-y-2", className)}>
       <div
-        className={cn("relative aspect-video min-h-[202px] overflow-hidden rounded-xl border border-white/10 bg-black", frameClassName)}
+        ref={frameRef}
+        className={cn("yt-fullscreen-frame relative aspect-video min-h-[202px] overflow-hidden rounded-xl border border-white/10 bg-black", frameClassName)}
         onPointerDownCapture={() => {
           if (showFallback) return;
+          requestFullscreenOnPlay();
           onPlaybackStateChangeRef.current?.("playing");
         }}
       >

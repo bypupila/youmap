@@ -63,6 +63,11 @@ type LocalVotePrompt = {
 };
 
 type VideoPlaybackState = "playing" | "paused" | "ended";
+type VideoPlaybackProgressEvent = {
+  positionSeconds: number;
+  durationSeconds: number;
+  watchedDeltaSeconds: number;
+};
 
 type VideoExitPromptState = {
   videoId: string;
@@ -726,6 +731,39 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
     [commitPlaybackElapsed, videoActivity]
   );
 
+  const getVideoResumeSeconds = useCallback(
+    (video: TravelVideoLocation | null | undefined) => {
+      const videoId = String(video?.youtube_video_id || "").trim();
+      if (!videoId || video?.made_for_kids) return null;
+      if (videoActivity.watchStatusById[videoId] === "watched") return null;
+
+      const progress = videoActivity.playbackProgressById[videoId];
+      const lastPositionSeconds = Math.round(Number(progress?.lastPositionSeconds || 0));
+      const durationSeconds = Math.round(Number(progress?.durationSeconds || video?.duration_seconds || 0));
+      if (lastPositionSeconds < 5) return null;
+      if (durationSeconds > 0 && durationSeconds - lastPositionSeconds <= 15) return null;
+
+      return lastPositionSeconds;
+    },
+    [videoActivity.playbackProgressById, videoActivity.watchStatusById]
+  );
+
+  const handleVideoPlaybackProgress = useCallback(
+    (video: TravelVideoLocation, progress: VideoPlaybackProgressEvent) => {
+      const videoId = String(video.youtube_video_id || "").trim();
+      if (!videoId || video.made_for_kids) return;
+
+      const previous = videoActivity.playbackProgressById[videoId];
+      videoActivity.updateVideoPlaybackProgress(videoId, {
+        lastPositionSeconds: progress.positionSeconds,
+        watchedDeltaSeconds: progress.watchedDeltaSeconds,
+        watchedSeconds: previous?.watchedSeconds || 0,
+        durationSeconds: progress.durationSeconds || Number(video.duration_seconds || 0),
+      });
+    },
+    [videoActivity]
+  );
+
   const requestVideoExit = useCallback(
     (action: () => void) => {
       const currentVideo = pinnedVideo;
@@ -994,9 +1032,14 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
                       openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
                       playbackCommand={videoPlaybackCommand}
                       isDemoMode={useDemoMapEmbedPreviews}
+                      initialStartSeconds={getVideoResumeSeconds(pinnedVideo)}
                       onPlaybackStateChange={(state) => {
                         if (!pinnedVideo) return;
                         handleVideoPlaybackStateChange(pinnedVideo, state);
+                      }}
+                      onPlaybackProgress={(progress) => {
+                        if (!pinnedVideo) return;
+                        handleVideoPlaybackProgress(pinnedVideo, progress);
                       }}
                     />
                   </div>
@@ -1211,9 +1254,14 @@ export function MapExperienceCore({ channel, videoLocations, sponsors = [], view
         openButtonLabel={videoActivity.openedIds.has(String(pinnedVideo?.youtube_video_id || "")) ? "Abierto en YouTube" : "Abrir en YouTube"}
         playbackCommand={videoPlaybackCommand}
         isDemoMode={useDemoMapEmbedPreviews}
+        initialStartSeconds={getVideoResumeSeconds(pinnedVideo)}
         onPlaybackStateChange={(state) => {
           if (!pinnedVideo) return;
           handleVideoPlaybackStateChange(pinnedVideo, state);
+        }}
+        onPlaybackProgress={(progress) => {
+          if (!pinnedVideo) return;
+          handleVideoPlaybackProgress(pinnedVideo, progress);
         }}
       />
 

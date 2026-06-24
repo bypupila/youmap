@@ -37,11 +37,17 @@ interface VideoSelectionSheetProps {
   onOpenInYouTube?: (video: TravelVideoLocation) => void;
   openButtonLabel?: string;
   playbackCommand?: { id: number; action: "pause" | "play" } | null;
+  initialStartSeconds?: number | null;
   onPlaybackStateChange?: (state: "playing" | "paused" | "ended") => void;
+  onPlaybackProgress?: (progress: {
+    positionSeconds: number;
+    durationSeconds: number;
+    watchedDeltaSeconds: number;
+  }) => void;
   isDemoMode?: boolean;
 }
 
-export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsorNames, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, playbackCommand, onPlaybackStateChange, isDemoMode = false }: VideoSelectionSheetProps) {
+export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsorNames, activity, onClose, onChangeVideo, onOpenInYouTube, openButtonLabel, playbackCommand, initialStartSeconds = null, onPlaybackStateChange, onPlaybackProgress, isDemoMode = false }: VideoSelectionSheetProps) {
   const currentCountryCode = String(currentVideo?.country_code || "").toUpperCase();
   const sections = useMemo(() => buildCountryVideoSections(videos, currentVideo), [currentVideo, videos]);
 
@@ -155,9 +161,12 @@ export function VideoSelectionSheet({ open, videos, currentVideo, resolveSponsor
                       youtubeHref={youtubeHref}
                       thumbnailUrl={currentVideo?.thumbnail_url || null}
                       openButtonLabel={openButtonLabel || (currentOpenedInYoutube ? "Visto en YouTube" : "Abrir en YouTube")}
+                      fullscreenOnPlay
                       playbackCommand={playbackCommand}
+                      initialStartSeconds={initialStartSeconds}
                       onOpenInYouTube={openYouTubeVideo}
                       onPlaybackStateChange={onPlaybackStateChange}
+                      onPlaybackProgress={onPlaybackProgress}
                       isMadeForKids={Boolean(currentVideo?.made_for_kids)}
                       frameClassName="max-h-[32dvh] lg:max-h-none"
                     />

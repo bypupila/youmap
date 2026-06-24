@@ -7,10 +7,6 @@
     {
       "path": "/api/youtube/data-expiry/sweep",
       "schedule": "20 6 * * *"
-    },
-    {
-      "path": "/api/youtube/import/worker",
-      "schedule": "*/10 * * * *"
     }
   ]
 }

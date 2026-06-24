@@ -18,6 +18,9 @@ const changeSchema = z.object({
   markSeen: z.boolean().optional().nullable(),
   markOpened: z.boolean().optional().nullable(),
   markStarted: z.boolean().optional().nullable(),
+  lastPositionSeconds: z.number().finite().min(0).max(604800).optional().nullable(),
+  watchedSeconds: z.number().finite().min(0).max(604800).optional().nullable(),
+  durationSeconds: z.number().finite().min(0).max(604800).optional().nullable(),
 });
 
 const postSchema = z.object({
