@@ -3,20 +3,22 @@ import Image from "next/image";
 import {
   ArrowRight,
   ChartBar,
-  CheckCircle,
-  Copy,
   CurrencyDollar,
   GlobeHemisphereWest,
   MapPin,
   Play,
   RocketLaunch,
+  Users,
   UsersThree,
   Video,
+  CheckCircle,
   XCircle,
   YoutubeLogo,
 } from "@phosphor-icons/react/dist/ssr";
 import { MiniMapModel } from "@/components/landing/mini-map-model";
+import { PricingSection } from "@/components/landing/pricing-section";
 import { ContactStrip } from "@/components/site/contact-strip";
+import { DemoChannelShowcase } from "@/components/landing/demo-channel-showcase";
 import { DEMO_VIDEO_LOCATIONS } from "@/lib/demo-data";
 import type { TravelVideoLocation } from "@/lib/types";
 
@@ -26,10 +28,25 @@ const creatorStats = [
 ];
 
 const BRAND_PROFILE_IMAGE = "/creators/by-pupila.png";
-const DESTINATION_PREVIEW_IMAGE = "/creators/demo-country-landscape.svg";
-const FINAL_CTA_IMAGE = "/creators/final-cta-influencer-mountain.svg";
+const DESTINATION_PREVIEW_IMAGE = "/creators/travelyourmap-influencer.png";
+const FINAL_CTA_IMAGE = "/creators/demo-hero-mountain.png";
+const CREATOR_AVATARS = [
+  { src: BRAND_PROFILE_IMAGE, alt: "BY PUPILA" },
+  { src: "/creators/drew-binsky.png", alt: "Drew Binsky" },
+  { src: "/creators/alan-por-el-mundo.png", alt: "Alan por el Mundo" },
+  { src: "/creators/misias-pero-viajeras.png", alt: "Misias pero Viajeras" },
+];
 
-const sponsorLogos = ["Booking.com", "GoPro", "airbnb", "NordVPN", "LATAM AIRLINES", "SafetyWing"];
+const keyFeatures = [
+  "Influencers de viajes",
+  "Agencias",
+  "Sponsors",
+  "Colaboraciones",
+  "Mapas interactivos",
+];
+
+const keyFeatureIcons = [UsersThree, Users, CurrencyDollar, RocketLaunch, GlobeHemisphereWest, Video];
+const DEMO_MAP_HREF = "/map?channelId=demo-channel";
 
 const steps = [
   { title: "Conecta tu canal de YouTube", icon: YoutubeLogo },
@@ -71,14 +88,6 @@ const features = [
   },
 ];
 
-const profileDestinations = [
-  ["Japón", "41 videos"],
-  ["Argentina", "22 videos"],
-  ["Italia", "19 videos"],
-  ["Tailandia", "17 videos"],
-  ["México", "13 videos"],
-];
-
 const planRows = ["Videos ilimitados", "Competitor analytics", "Sponsor hub", "Sync prioritaria", "Página pública avanzada"];
 
 const faqs = [
@@ -90,19 +99,8 @@ const faqs = [
   "¿Cuánto tarda configurarlo?",
 ];
 
-const DEMO_MAP_HREF = "/map?channelId=demo-channel";
-
-type PreviewVideo = {
-  country: string;
-  title: string;
-  styleClass: string;
-  glowClass: string;
-  imageSrc?: string;
-};
-
 export async function CinematicLanding() {
   const videoLocations = DEMO_VIDEO_LOCATIONS;
-  const previewVideos = buildPreviewVideos(videoLocations);
 
   return (
     <main className="creator-landing min-h-[100dvh] overflow-x-clip bg-[#070a0d] text-[#f5f2ed]">
@@ -114,8 +112,8 @@ export async function CinematicLanding() {
         <HowItWorks />
         <FeatureGrid />
         <SponsorComparison />
-        <PublicPagePreview previewVideos={previewVideos} />
-        <PricingSection />
+        <DemoChannelShowcase />
+        <PricingSection planRows={planRows} />
         <FaqSection />
       </div>
       <FinalCta />
@@ -161,7 +159,7 @@ function HeroSection({
   videoLocations: TravelVideoLocation[];
 }) {
   return (
-    <section className="relative mt-[30px] grid min-h-[860px] items-start gap-10 pb-12 pt-20 lg:min-h-[820px] lg:grid-cols-[0.92fr_1.08fr] lg:pt-4">
+    <section className="relative mt-[30px] grid min-h-[720px] items-start gap-10 pb-6 pt-20 lg:min-h-[680px] lg:grid-cols-[0.92fr_1.08fr] lg:pt-4">
       <div className="relative z-10 max-w-[620px]">
         <p className="mb-5 text-[12px] font-extrabold uppercase tracking-[0.2em] text-[#ff473b]">El media kit interactivo para creadores de viajes</p>
         <h1 className="max-w-[11ch] text-[46px] font-extrabold leading-[0.98] tracking-[-0.055em] text-white sm:text-[68px] lg:text-[76px]">
@@ -170,26 +168,31 @@ function HeroSection({
         <p className="mt-7 max-w-[48ch] text-[16px] leading-8 text-white/66">
           Importa tu canal de YouTube, detectamos destinos y crea tu página web interactiva lista para marcas y sponsors.
         </p>
-        <div className="mt-9 flex flex-wrap items-center gap-4">
-          <Link href="/onboarding?lang=es" className="inline-flex items-center gap-3 rounded-full bg-[#ff473b] px-8 py-4 text-[14px] font-bold text-white shadow-[0_20px_46px_-24px_rgba(255,71,59,0.85)] transition hover:-translate-y-0.5 hover:bg-[#ff5b50] active:translate-y-0 active:scale-[0.98]">
-            Crear mi mapa <ArrowRight size={17} weight="bold" />
-          </Link>
-        </div>
-        <div className="mt-10 flex items-center gap-4">
-          <div className="relative h-11 w-11 overflow-hidden rounded-[12px] border border-white/20 bg-[#101419] shadow-[0_8px_20px_rgba(0,0,0,0.45)]">
-            <Image src={BRAND_PROFILE_IMAGE} alt="BY PUPILA" fill sizes="44px" className="object-cover" />
+        <div className="mt-10 flex flex-col gap-4">
+          <div className="flex items-center -space-x-3.5">
+            {CREATOR_AVATARS.map((creator, index) => (
+              <div
+                key={creator.alt}
+                className="relative h-11 w-11 overflow-hidden rounded-[12px] border border-white/20 bg-[#101419] shadow-[0_8px_20px_rgba(0,0,0,0.45)]"
+                style={{ zIndex: CREATOR_AVATARS.length - index }}
+              >
+                <Image src={creator.src} alt={creator.alt} fill sizes="44px" className="object-cover" />
+              </div>
+            ))}
           </div>
-          <div>
+          <div className="max-w-[310px]">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#ff473b]/35 bg-[#ff473b]/12 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#ff6a60]">
               <RocketLaunch size={14} weight="fill" />
               Creator Mode
             </div>
-            <p className="mt-2 max-w-[250px] text-[13px] leading-5 text-white/68">Únete a creadores que ya están cerrando mejores deals.</p>
+            <p className="mt-2 text-[13px] leading-5 text-white/68">
+              Únete a una red de creadores ficticios y reales que ya están cerrando mejores deals.
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="relative min-h-[660px] lg:min-h-[900px]">
+      <div className="relative min-h-[560px] lg:min-h-[760px]">
         <CreatorGlobe videoLocations={videoLocations} />
         <div className="absolute right-0 top-10 z-20 flex w-full max-w-[430px] flex-col gap-4 sm:right-4 lg:right-0">
           <div className="grid w-full max-w-[410px] grid-cols-2 gap-4 self-end lg:w-[410px]">
@@ -206,7 +209,7 @@ function HeroSection({
 
 function CreatorGlobe({ videoLocations }: { videoLocations: TravelVideoLocation[] }) {
   return (
-    <div className="creator-real-globe absolute -left-[14%] top-0 h-[780px] w-[780px] overflow-hidden rounded-full lg:-left-[8%] lg:h-[980px] lg:w-[980px]">
+    <div className="creator-real-globe absolute -left-[14%] -top-[180px] h-[780px] w-[780px] overflow-hidden rounded-full lg:-left-[8%] lg:-top-[196px] lg:h-[980px] lg:w-[980px]">
       <MiniMapModel
         videoLocations={videoLocations}
         markerMode="videos"
@@ -241,14 +244,20 @@ function DestinationCard() {
         />
       </div>
       <div className="px-3 pb-1 pt-4">
-        <p className="text-[13px] font-bold text-white/55">Canal Demo</p>
-        <p className="mt-1 flex items-center gap-2 text-[17px] font-bold">Prueba la Plataforma</p>
-        <Link
-          href={DEMO_MAP_HREF}
-          className="mt-3 inline-flex items-center gap-4 rounded-full border border-white/18 bg-white/[0.025] px-8 py-4 text-[14px] font-bold text-white transition hover:bg-white/[0.07] active:scale-[0.98]"
-        >
-          Ver demo <Play size={15} weight="fill" />
-        </Link>
+        <div className="grid gap-3">
+          <Link
+            href={DEMO_MAP_HREF}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-full border border-white/18 bg-white/[0.03] px-8 py-4 text-[14px] font-bold text-white transition hover:bg-white/[0.07] active:translate-y-0 active:scale-[0.98]"
+          >
+            Ver mapa demo <Play size={15} weight="fill" />
+          </Link>
+          <Link
+            href={DEMO_MAP_HREF}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-full bg-[#ff473b] px-8 py-4 text-[14px] font-bold text-white shadow-[0_20px_46px_-24px_rgba(255,71,59,0.85)] transition hover:-translate-y-0.5 hover:bg-[#ff5b50] active:translate-y-0 active:scale-[0.98]"
+          >
+            Crear mi mapa <ArrowRight size={17} weight="bold" />
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -257,13 +266,26 @@ function DestinationCard() {
 function BrandStrip() {
   return (
     <section className="border-y border-white/8 py-9">
-      <p className="text-center text-[11px] font-bold uppercase tracking-[0.28em] text-white/56">Creado para trabajar con</p>
-      <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        {sponsorLogos.map((logo) => (
-          <div key={logo} className="grid h-20 place-items-center rounded-[16px] border border-white/9 bg-white/[0.035] px-4 text-center text-[20px] font-extrabold tracking-[-0.04em] text-white/58 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            {logo}
-          </div>
-        ))}
+      <div className="mx-auto grid max-w-[980px] gap-6">
+        <div className="mx-auto max-w-[620px] text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/55">Perfil comercial</p>
+          <p className="mt-3 text-[34px] font-extrabold leading-[1.05] tracking-[-0.045em] text-white sm:text-[40px]">Trabajamos con</p>
+          <p className="mt-4 text-[15px] leading-7 text-white/58">
+            Influencers de viajes, agencias y sponsors que necesitan presentar su cobertura con contexto geográfico.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 justify-items-center gap-4 md:grid-cols-3 lg:grid-cols-5">
+          {keyFeatures.map((feature, index) => {
+            const Icon = keyFeatureIcons[index] ?? GlobeHemisphereWest;
+
+            return (
+              <div key={feature} className="grid min-h-20 w-full place-items-center rounded-[16px] border border-white/9 bg-white/[0.035] px-4 py-4 text-center text-[14px] font-extrabold leading-5 tracking-[-0.03em] text-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                <Icon size={28} weight="fill" className="mb-3 text-[#ff473b]" />
+                {feature}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -352,151 +374,6 @@ function ComparisonPanel({ title, items, bad = false }: { title: string; items: 
         ))}
       </div>
     </div>
-  );
-}
-
-function PublicPagePreview({ previewVideos }: { previewVideos: PreviewVideo[] }) {
-  return (
-    <section id="examples" className="grid gap-10 py-12 lg:grid-cols-[1.32fr_0.9fr] lg:items-center">
-      <div className="rounded-[20px] border border-white/12 bg-[#0c1014] p-4 shadow-[0_32px_90px_-54px_rgba(0,0,0,0.95)]">
-        <div className="mb-4 flex gap-2"><span className="h-2 w-2 rounded-full bg-white/20" /><span className="h-2 w-2 rounded-full bg-white/20" /><span className="h-2 w-2 rounded-full bg-white/20" /></div>
-        <div className="grid min-h-[470px] gap-5 rounded-[16px] bg-[radial-gradient(circle_at_65%_48%,rgba(56,143,205,0.34),transparent_28%),radial-gradient(circle_at_62%_50%,#19314a,#071018_58%,#05070a)] p-7 md:grid-cols-[190px_1fr]">
-          <aside className="relative z-10">
-            <div className="relative h-24 w-24 rounded-full border-4 border-white overflow-hidden bg-[#101419] shadow-lg">
-              <Image src={BRAND_PROFILE_IMAGE} alt="Canal de referencia by.pupila" fill sizes="96px" className="object-cover" />
-            </div>
-            <h3 className="mt-5 text-[20px] font-extrabold">BY PUPILA</h3>
-            <p className="text-[12px] text-white/62">@by.pupila</p>
-            <p className="mt-2 text-[12px] text-white/62">Canal real autorizado · modo lectura pública</p>
-            <div className="mt-7 grid gap-2 rounded-[14px] bg-[#0b1116]/78 p-3">
-              {profileDestinations.map(([country, count]) => <p key={country} className="flex justify-between gap-3 text-[12px]"><span>{country}</span><span className="text-white/52">{count}</span></p>)}
-              <Link
-                href={DEMO_MAP_HREF}
-                className="mt-3 inline-flex items-center justify-center rounded-[9px] bg-[#ff473b] px-3 py-2 text-[12px] font-extrabold text-white transition hover:bg-[#ff5b50] active:scale-[0.98]"
-              >
-                Ver demo
-              </Link>
-            </div>
-          </aside>
-          <div className="relative min-h-[320px] overflow-hidden rounded-[18px] bg-[#05070a] p-3">
-            <div className="grid h-full min-h-[320px] grid-cols-2 gap-3">
-              {previewVideos.map((video, index) => (
-                <article
-                  key={`${video.country}-${video.title}`}
-                  className={`${index === 0 ? "col-span-2" : ""} relative overflow-hidden rounded-[14px] border border-white/12 ${video.styleClass}`}
-                >
-                  {video.imageSrc ? (
-                    <Image
-                      src={video.imageSrc}
-                      alt={`Paisaje de ${video.country}`}
-                      fill
-                      sizes="(max-width: 768px) 50vw, 320px"
-                      className="object-cover"
-                    />
-                  ) : null}
-                  <div className={`absolute -right-6 -top-8 h-24 w-24 rounded-full blur-2xl ${video.glowClass}`} />
-                  <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.08),transparent_40%)]" />
-                  <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_40%,rgba(5,8,13,0.88))]" />
-                  <div className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full border border-white/25 bg-black/25 text-white/90">
-                    <Play size={12} weight="fill" />
-                  </div>
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <p className="text-[11px] font-extrabold uppercase text-[#ff473b]">{video.country}</p>
-                    <h4 className="mt-1 line-clamp-2 text-[13px] font-extrabold leading-4 text-white">{video.title}</h4>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div>
-        <p className="text-[12px] font-extrabold uppercase tracking-[0.22em] text-white/52">Tu página. Tu marca.</p>
-        <h2 className="mt-5 text-[38px] font-extrabold leading-[1.05] tracking-[-0.05em] text-white">Una página profesional para mostrar <span className="text-[#ff473b]">tu mundo.</span></h2>
-        <div className="mt-8 grid gap-4">
-          {["Tu link personalizado", "Mapa 3D con todos tus destinos", "Sponsors visibles por país o ciudad", "Tus videos con el embed oficial", "Optimizada para SEO"].map((item) => (
-            <p key={item} className="flex items-center gap-3 text-[15px] text-white/72"><CheckCircle size={20} className="text-[#ff473b]" />{item}</p>
-          ))}
-        </div>
-        <div className="mt-8 flex items-center justify-between rounded-[12px] border border-white/12 bg-white/[0.035] px-5 py-4 text-[14px] text-white/72">
-          TravelYourMap.bypupila.com/u/by.pupila <Copy size={20} />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function buildPreviewVideos(videoLocations: TravelVideoLocation[]): PreviewVideo[] {
-  const preferredCountries = ["JP", "AR", "IT", "TH"];
-  const countryImageMap: Record<string, string> = {
-    JP: "/creators/japan-preview.svg",
-    AR: "/creators/argentina-preview.svg",
-  };
-  const stylePresets = [
-    {
-      styleClass: "bg-[radial-gradient(circle_at_18%_20%,rgba(255,147,84,0.35),transparent_40%),linear-gradient(140deg,#2d1a16,#101a27_52%,#090c12)]",
-      glowClass: "bg-[#ff6a3d]/60",
-    },
-    {
-      styleClass: "bg-[radial-gradient(circle_at_75%_22%,rgba(136,197,255,0.38),transparent_42%),linear-gradient(145deg,#102233,#131a23_58%,#0a0f16)]",
-      glowClass: "bg-[#50b7ff]/60",
-    },
-    {
-      styleClass: "bg-[radial-gradient(circle_at_68%_75%,rgba(255,204,120,0.32),transparent_42%),linear-gradient(145deg,#2b2417,#151922_56%,#090c13)]",
-      glowClass: "bg-[#ffb45a]/55",
-    },
-    {
-      styleClass: "bg-[radial-gradient(circle_at_26%_70%,rgba(142,255,206,0.28),transparent_45%),linear-gradient(145deg,#11241f,#141a24_58%,#090c13)]",
-      glowClass: "bg-[#66f0c1]/55",
-    },
-  ];
-
-  return preferredCountries.flatMap((countryCode) => {
-    const video = videoLocations.find((item) => item.country_code?.toUpperCase() === countryCode);
-    if (!video) return [];
-    const preset = stylePresets[preferredCountries.indexOf(countryCode) % stylePresets.length];
-    return [{
-      country: video.country_name || countryCode,
-      title: video.title,
-      styleClass: preset.styleClass,
-      glowClass: preset.glowClass,
-      imageSrc: countryImageMap[countryCode],
-    }];
-  });
-}
-
-function PricingSection() {
-  return (
-    <section id="pricing" className="border-t border-white/8 py-12">
-      <div className="mb-9 flex flex-wrap items-end justify-between gap-5">
-        <h2 className="text-[36px] font-extrabold tracking-[-0.05em] text-white">Elige el plan perfecto para ti</h2>
-        <div className="rounded-full border border-white/10 bg-white/[0.035] p-1 text-[12px] font-bold"><span className="inline-flex rounded-full bg-[#ff473b]/14 px-4 py-2 text-[#ff473b]">Mensual</span><span className="inline-flex px-4 py-2 text-white/58">Anual</span><span className="inline-flex px-4 py-2 text-white/58">Ahorra 20%</span></div>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1fr_1fr_1fr]">
-        <div className="py-5">
-          <h3 className="text-[25px] font-extrabold leading-tight text-white">Las marcas compran <span className="text-[#ff473b]">destinos</span>, no solo views.</h3>
-          <p className="mt-5 text-[14px] leading-7 text-white/62">TravelYourMap te ayuda a mostrar tu cobertura, experiencia y posicionamiento de forma clara y profesional para que cierres mejores deals.</p>
-        </div>
-        <PlanCard title="Sin TravelYourMap" price="" rows={["PDFs y documentos", "Links desordenados", "Información difícil de entender", "Propuesta poco profesional"]} muted />
-        <PlanCard title="Creator Pro" price="$79" rows={planRows} featured />
-        <PlanCard title="Agency" price="$199" rows={["Portafolio de canales", "API de acceso", "Portal de marcas", "Soporte dedicado"]} />
-      </div>
-    </section>
-  );
-}
-
-function PlanCard({ title, price, rows, featured = false, muted = false }: { title: string; price?: string; rows: string[]; featured?: boolean; muted?: boolean }) {
-  return (
-    <article className={`relative rounded-[17px] border p-7 ${featured ? "border-[#ff473b]/70 bg-[#121014]" : "border-white/10 bg-white/[0.035]"}`}>
-      {featured ? <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-[#ff473b]/70 bg-[#2b1210] px-4 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white">Más popular</span> : null}
-      <h3 className="text-[14px] font-extrabold text-white/82">{title}</h3>
-      {price ? <p className="mt-3 text-[34px] font-extrabold tracking-[-0.04em] text-white">{price}<span className="text-[13px] font-medium text-white/55"> /mes</span></p> : null}
-      <div className="mt-6 grid gap-3">
-        {rows.map((row) => <p key={row} className="flex items-center gap-2 text-[13px] text-white/68">{muted ? <XCircle size={16} className="text-[#ff473b]" /> : <CheckCircle size={16} className="text-[#ff735f]" />}{row}</p>)}
-      </div>
-      {featured ? <Link href="/onboarding?lang=es" className="mt-7 inline-flex w-full justify-center rounded-[9px] bg-[#ff473b] px-4 py-3 text-[13px] font-extrabold text-white">Comenzar ahora</Link> : null}
-      {!featured && !muted ? <Link href="/pricing" className="mt-7 inline-flex w-full justify-center rounded-[9px] border border-white/14 px-4 py-3 text-[13px] font-extrabold text-white/78">Contactar ventas</Link> : null}
-    </article>
   );
 }
 

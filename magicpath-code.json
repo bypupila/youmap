@@ -1,0 +1,24 @@
+{
+  "mode": "create",
+  "componentId": "420361441963569152",
+  "projectId": "420358937792118784",
+  "selectedRevisionId": "420361441963569153",
+  "jobId": "365616684586897408-external-agent-420361441963569153",
+  "generatedName": "quietly-air-1580",
+  "name": "Midnight Relay",
+  "selectedImages": [],
+  "editableFiles": [
+    {
+      "path": "src/App.tsx",
+      "sha256": "d0aba258d756e0c6e9c7de8679265d18653ee8dbea25976355a2648b4204d6fb"
+    },
+    {
+      "path": "src/index.css",
+      "sha256": "3af92f9f6b5e93767188381bda25e0b3e26d2885569cffb8b46ff6d8966b1860"
+    },
+    {
+      "path": "src/components/generated/MidnightRelay.tsx",
+      "sha256": "891333ea4158e2f72bf980fc3d1d3f4db6a7ccd383a68339db146f0151b51358"
+    }
+  ]
+}
